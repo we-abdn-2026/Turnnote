@@ -6,10 +6,14 @@ Turnnote 采用 Electron、React、TypeScript 和 Node.js 构建桌面应用，�
 
 ## 文档
 
-- [技术方案](docs/technical-solution.md)：技术选型、职责边界、数据、安全、降级和验证范围。
-- [系统架构图](docs/architecture.md)：系统组件和数据流示意图。
-- [工程说明](docs/development.md)：目录结构、环境要求、命令和实现约束。
-- [项目 Proposal](proposal.md)：项目目标、功能范围、收益、时间线和行动计划。
+完整文档索引见 [docs/README.md](docs/README.md)
+
+核心文档：
+- [项目 Proposal](proposal.md)：产品目标、MVP 范围、时间线和行动计划
+- [开发路线图](docs/roadmap.md)：Phase 3–6 开发计划、模块分工，按前端、后端、测试、部署分类
+- [技术方案](docs/technical-solution.md)：技术选型、职责边界、数据、安全、降级和验证范围
+- [系统架构图](docs/architecture.md)：系统组件和数据流示意图
+- [工程说明](docs/development.md)：目录结构、环境要求、命令和实现约束
 
 ## 技术栈
 
@@ -23,8 +27,11 @@ ScreenCaptureKit / WASAPI Loopback
 
 ## 开发命令
 
+环境初始化和协作流程见 [工程说明](docs/development.md)。
+
 ```bash
-npm install
+npm run dev:web     # 浏览器 + mock，不需要 Electron 和 Python
+npm run lint
 npm run typecheck
 npm run test
 npm run build

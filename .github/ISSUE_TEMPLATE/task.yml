@@ -1,0 +1,58 @@
+name: 开发任务
+description: roadmap 中的开发任务
+title: '[Task] '
+labels: ['task']
+body:
+  - type: dropdown
+    id: group
+    attributes:
+      label: 分组
+      options:
+        - 前端
+        - 后端
+        - 测试
+        - 部署
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: 阶段
+      description: 与 GitHub Milestone 同名
+      options:
+        - Phase 3 · W1
+        - Phase 3 · W2
+        - Phase 3 · W3
+        - Phase 4
+        - Phase 5
+        - Phase 6
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 任务内容
+      description: 对应 docs/roadmap.md 中的条目
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 可观察、可验证的完成条件
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 前置依赖
+      placeholder: '#12'
+  - type: checkboxes
+    id: contracts
+    attributes:
+      label: 涉及契约
+      options:
+        - label: '`packages/contracts` 类型'
+        - label: Sidecar 协议
+        - label: 数据库 schema
+        - label: IPC 通道

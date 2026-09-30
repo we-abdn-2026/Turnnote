@@ -48,10 +48,10 @@ Sidecar 由 Main Process 按任务启动，通过标准输入接收 JSON Lines �
 
 ### 3.5 平台音频适配器
 
-平台适配器向 Main Process 提供统一的设备枚举、开始采集、停止采集和错误转换接口，平台 API 的具体类型不得进入 Renderer 或共享业务契约。
+系统音频通过 `electron-audio-loopback` 获取，底层由 Chromium 调用 macOS ScreenCaptureKit / Core Audio 和 Windows WASAPI Loopback。Renderer 负责混音和重采样，Main Process 负责写入 WAV 和权限检查。详见 [Platform Audio 接口](platform-audio.md)。
 
-- macOS 使用 ScreenCaptureKit 采集系统音频，并处理系统录屏和麦克风权限。
-- Windows 使用 WASAPI Loopback 采集系统音频，并处理系统麦克风权限。
+- macOS 需要麦克风和屏幕录制权限。
+- Windows 需要麦克风权限。
 
 ## 4. 数据与状态
 

@@ -1,0 +1,86 @@
+name: 缺陷报告
+description: 报告功能异常、崩溃或数据问题
+title: '[Bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: 请勿粘贴 API Key、会议转写原文或包含用户名的完整本地路径。
+  - type: dropdown
+    id: module
+    attributes:
+      label: 模块
+      options:
+        - 音频采集
+        - 本地转写（sidecar）
+        - 纪要生成（DeepSeek）
+        - 编辑与导出
+        - 会议管理
+        - 设置与凭证
+        - 安装与启动
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - macOS arm64
+        - macOS x64
+        - Windows x64
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: 系统版本
+      placeholder: macOS 14.5 / Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本或 commit
+      placeholder: 0.1.0 / 9415c47
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+  - type: dropdown
+    id: data-loss
+    attributes:
+      label: 是否丢失数据
+      description: 录音、转写或纪要编辑内容是否丢失
+      options:
+        - 否
+        - 是
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或错误码
+      description: 已去除敏感信息的相关日志
+      render: text

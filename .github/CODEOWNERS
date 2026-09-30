@@ -1,0 +1,28 @@
+# 分组确定后，把每行末尾替换为 GitHub 用户名（如 @user）并取消注释。
+# 仓库规则已开启「需要 Code Owner 审核」，填写后自动生效。
+# 后面的规则优先级更高。
+
+# 跨进程契约：前端和后端各一人
+# /packages/contracts/             @前端负责人 @后端负责人
+# /docs/sidecar-protocol.md        @后端负责人
+# /docs/database-schema.md         @后端负责人
+# /docs/platform-audio.md          @前端负责人 @后端负责人
+
+# 前端
+# /apps/desktop/renderer/          @前端负责人
+
+# 后端
+# /apps/desktop/main/              @后端负责人
+# /apps/desktop/preload/           @后端负责人
+# /services/                       @后端负责人
+# /requirements*.txt               @后端负责人
+# /requirements.in                 @后端负责人
+
+# 测试
+# /tests/                          @测试负责人
+
+# 部署和工程配置
+# /.github/                        @部署负责人
+# /package.json                    @部署负责人
+# /package-lock.json               @部署负责人
+# /electron.vite.config.ts         @部署负责人
