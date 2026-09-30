@@ -78,6 +78,31 @@ uv pip compile requirements.in --universal --python-version 3.12 -o requirements
 
 `main` 和 `dev` 禁止直接推送和强制推送。
 
+## 标签
+
+标签定义在 `.github/labels.json`，修改后由管理员同步：
+
+```bash
+npm run labels:sync              # 预览
+npm run labels:sync -- --apply   # 应用
+```
+
+| 前缀 | 含义 | 来源 |
+|---|---|---|
+| `type/` | bug、feature、task、chore | issue 模板自动添加 |
+| `group/` | frontend、backend、testing、deploy | 表单「分组」自动添加 |
+| `area/` | audio、asr、deepseek、database、ipc、ui、export、security、packaging、ci、docs | 表单「模块」自动添加 |
+| `priority/` | P0–P3 | 表单「优先级」自动添加；bug 未选时由维护者补充 |
+
+| 优先级 | 标准 |
+|---|---|
+| P0 | 主流程不可用或数据丢失，立即处理 |
+| P1 | 影响当前里程碑，本周处理 |
+| P2 | 当前阶段内处理 |
+| P3 | 有空再做 |
+
+PR 手动添加 `type/` 和 `area/` 标签。
+
 ## 实现约束
 
 1. UI 通过 Preload IPC 调用 Main，不直接使用 Node.js 能力。

@@ -14,6 +14,7 @@ export default tseslint.config(
       'apps/desktop/preload/**/*.ts',
       '*.config.ts',
       'tests/**/*.mjs',
+      'scripts/**/*.mjs',
     ],
     languageOptions: { globals: globals.node },
   },
