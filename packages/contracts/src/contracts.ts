@@ -26,12 +26,16 @@ export interface TranscriptSegment {
 export interface MeetingNote {
   summary: string;
   keyTopics: string[];
-  decisions: string[];
+  decisions: Array<{
+    text: string;
+    timestampMs?: number;
+  }>;
   openQuestions: string[];
   actionItems: Array<{
     task: string;
     owner: string | 'unspecified';
     dueDate: string | 'unspecified';
+    timestampMs?: number;
   }>;
 }
 
