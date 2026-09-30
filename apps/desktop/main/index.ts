@@ -1,10 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import type { MeetingSummary, TurnnoteApi } from '@shared/contracts';
+import { ok, registerIpc } from './ipc';
 
 let window: BrowserWindow | undefined;
-
-const meetings: MeetingSummary[] = [];
 
 function createWindow(): void {
   window = new BrowserWindow({
@@ -25,13 +23,20 @@ function createWindow(): void {
   }
 }
 
-function registerIpc(): void {
-  ipcMain.handle('app:get-info', () => ({ name: 'Turnnote', version: app.getVersion() } satisfies Awaited<ReturnType<TurnnoteApi['getAppInfo']>>));
-  ipcMain.handle('meetings:list', () => meetings satisfies Awaited<ReturnType<TurnnoteApi['listMeetings']>>);
-}
-
 void app.whenReady().then(() => {
-  registerIpc();
+  registerIpc({
+    app: {
+      getInfo: async () =>
+        ok({
+          name: 'Turnnote',
+          version: app.getVersion(),
+          platform: process.platform as 'darwin' | 'win32' | 'linux',
+        }),
+    },
+    meetings: {
+      list: async () => ok([]),
+    },
+  });
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
