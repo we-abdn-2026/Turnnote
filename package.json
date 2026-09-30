@@ -16,7 +16,8 @@
     "lint:js": "eslint . && prettier --check .",
     "lint:py": "ruff check services && ruff format --check services",
     "format": "eslint . --fix && prettier --write . && ruff check --fix services && ruff format services",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "labels:sync": "node scripts/sync-labels.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
