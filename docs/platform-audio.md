@@ -1,79 +1,83 @@
 # Platform Audio 接口
 
-macOS 和 Windows 音频采集通过 `electron-audio-loopback` 插件统一处理。
+系统音频使用 [`electron-audio-loopback`](https://github.com/alectrocute/electron-audio-loopback)，底层由 Chromium 调用 macOS ScreenCaptureKit / Core Audio 和 Windows WASAPI Loopback。麦克风使用 `getUserMedia`。
 
-## 统一接口
+## 进程职责
 
-`apps/desktop/main/platform/audio.ts` 提供：
+| 进程 | 职责 |
+|---|---|
+| Main | 启动前调用 `initMain()`；接收 PCM 分块写入 WAV；管理文件路径 |
+| Preload | 暴露 `enableLoopbackAudio`、`disableLoopbackAudio`、`audio:chunk` 等类型化 IPC |
+| Renderer | 获取麦克风和系统音频 MediaStream；混音、重采样、转 PCM16；分块发送给 Main |
+
+Renderer 不接触文件路径，只提交 `meetingId` 和 PCM 数据。
+
+## 采集流程
+
+1. Renderer 调用 `enableLoopbackAudio()`
+2. `getDisplayMedia({ video: true, audio: true })`，立即停止并移除视频轨
+3. 调用 `disableLoopbackAudio()`
+4. `getUserMedia({ audio: { deviceId } })` 获取麦克风
+5. `new AudioContext({ sampleRate: 16000 })`，两路 `MediaStreamAudioSourceNode` 接入同一个 `AudioWorkletNode`
+6. Worklet 混为单声道、转 Int16，每约 1 秒通过 IPC 发送一个分块
+7. 停止时关闭所有轨道和 `AudioContext`，通知 Main 完成写入
+
+## 接口
 
 ```typescript
-interface AudioDevice {
-  id: string;
-  name: string;
-  kind: 'microphone' | 'system';
-}
-
-interface AudioCapture {
-  listDevices(): Promise<AudioDevice[]>;
-  startCapture(config: CaptureConfig): Promise<CaptureSession>;
-}
-
-interface CaptureConfig {
-  microphoneId: string | null;
+// Renderer: apps/desktop/renderer/audio/capture.ts
+interface CaptureOptions {
+  meetingId: string;
+  microphoneDeviceId: string | null; // null 表示不录麦克风
   includeSystemAudio: boolean;
-  outputPath: string;
 }
 
 interface CaptureSession {
   stop(): Promise<void>;
-  onData(callback: (buffer: Buffer) => void): void;
-  onError(callback: (error: Error) => void): void;
 }
+
+function startCapture(options: CaptureOptions): Promise<CaptureSession>;
+```
+
+```typescript
+// Main: apps/desktop/main/platform/audio-writer.ts
+interface AudioWriter {
+  append(chunk: Int16Array): void;
+  finalize(): Promise<void>; // 回写 WAV header 中的数据长度
+}
+
+function createAudioWriter(outputPath: string): AudioWriter;
+function repairWavHeader(path: string): Promise<boolean>; // 崩溃恢复用
 ```
 
 ## 输出格式
 
-- 采样率：16000 Hz
-- 通道：Mono
-- 位深：16-bit PCM
-- 格式：WAV
-
-麦克风和系统音频混合为单轨，由 `electron-audio-loopback` 内部处理。
+16000 Hz、单声道、16-bit PCM、WAV。
 
 ## 权限
 
-macOS：需要麦克风权限和屏幕录制权限（系统音频）
-
-Windows：需要麦克风权限
-
-权限检查在 `startCapture` 前完成，拒绝时返回 `PERMISSION_DENIED` 错误。
-
-## 错误处理
-
-| 错误 | 说明 |
+| 平台 | 需要 |
 |---|---|
-| `PERMISSION_DENIED` | 用户拒绝音频或屏幕录制权限 |
-| `DEVICE_NOT_FOUND` | 指定设备不存在 |
-| `CAPTURE_FAILED` | 采集启动失败 |
-| `WRITE_FAILED` | 写入音频文件失败 |
+| macOS | 麦克风权限；屏幕录制权限（系统音频）；`Info.plist` 声明 `NSMicrophoneUsageDescription`、`NSAudioCaptureUsageDescription` |
+| Windows | 麦克风权限 |
 
-## 实现方案
+macOS 权限状态用 `systemPreferences.getMediaAccessStatus('microphone' | 'screen')` 检查，被拒时引导用户打开系统设置。`NSAudioCaptureUsageDescription` 在不同 macOS 版本上的实际要求需真机确认。
 
-使用 Web Audio API 在 Renderer 处理音频流：
-- `AudioContext` 混合多轨并重采样到 16kHz
-- `ScriptProcessorNode` 或 `AudioWorkletNode` 提取 PCM 数据
-- 通过 IPC 发送到 Main Process 写入 WAV
+## 错误码
 
-参考实现：[electron-audio-loopback](https://github.com/alectrocute/electron-audio-loopback)、[mic-speaker-streamer](https://github.com/alectrocute/mic-speaker-streamer)
+| 错误码 | 含义 |
+|---|---|
+| `PERMISSION_DENIED` | 麦克风或屏幕录制权限被拒 |
+| `DEVICE_NOT_FOUND` | 指定麦克风不存在 |
+| `CAPTURE_FAILED` | 获取 MediaStream 或启动 AudioContext 失败 |
+| `WRITE_FAILED` | 写入 WAV 失败（含磁盘空间不足） |
 
-## 降级方案
+## 降级
 
-系统音频权限被拒时，只录制麦克风。
+- 系统音频不可用：只录麦克风，界面提示
+- 采集完全不可用：导入本地音频文件（`.wav`、`.mp3`、`.m4a`），复制到应用管理目录后直接交给 sidecar，由 faster-whisper 解码
 
-采集完全失败时，允许导入外部音频文件（`.wav`, `.mp3`, `.m4a`），Main Process 用 `fluent-ffmpeg` 转换为 16kHz mono WAV。
+## 测试
 
-## 测试隔离
-
-测试时通过依赖注入 mock `AudioCapture` 接口，不依赖真实音频设备。
-
-CI 不运行需要音频设备的集成测试。
+- `AudioWriter` 和 `repairWavHeader`：Node 单元测试，覆盖 header 正确性和截断文件修复
+- 真实采集：只做 macOS / Windows 真机手动测试，CI 不运行

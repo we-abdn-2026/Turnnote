@@ -16,8 +16,8 @@
 
 ### Week 1
 - [ ] 实现 `storage/` 数据库层（schema、migrations、CRUD）
-- [ ] 实现 Renderer 音频采集（desktopCapturer + getUserMedia + Web Audio API 混音重采样）
-- [ ] 实现 Main Process 音频写入（IPC 接收 PCM 数据、写入 WAV）
+- [ ] 集成 `electron-audio-loopback`，实现 Renderer 音频采集（麦克风 + 系统音频混音、16kHz 重采样）
+- [ ] 实现 Main Process `AudioWriter`（IPC 接收 PCM 分块、写入 WAV、header 修复）
 - [ ] 实现 sidecar 生命周期管理（spawn、健康检查、重启）
 - [ ] 实现 Python sidecar `transcribe` 请求处理和 faster-whisper 集成
 
@@ -90,7 +90,7 @@
 ### Week 1-2
 - [ ] 编写 sidecar 协议单元测试（ping、transcribe、错误响应）
 - [ ] 编写数据库 CRUD 和状态机单元测试
-- [ ] 编写 Mock AudioCapture 的录音流程测试
+- [ ] 编写 `AudioWriter` 和 WAV header 修复单元测试
 
 **验收**：`npm run test` 通过，覆盖协议、数据库、状态转换。
 

@@ -107,22 +107,39 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 
 ```
 created → recording → captured → transcribing → transcribed → generating → ready
-          ↓           ↓           ↓                ↓            ↓
-          failed      failed      failed           failed       failed
+            ↓                         ↓                           ↓
+          failed                    failed                      failed
 ```
 
-`failed` 状态时 `processing_jobs` 记录失败阶段和原因。
+| 转换 | 条件 |
+|---|---|
+| `failed → transcribing` | 最近失败 job 的 `kind='transcribing'`，且音频仍存在 |
+| `failed → generating` | 最近失败 job 的 `kind='generating'` |
+| `ready → generating` | 用户重新生成（如修改关键词） |
+| 任意 → `deleted` | 用户删除会议 |
+
+`failed` 的失败阶段和原因记录在 `processing_jobs`。生成失败不影响已保存的转写和纪要版本。
+
+## 删除
+
+1. 会议标记 `deleted`
+2. 删除音频文件
+3. 删除 `meetings` 行，级联删除关联数据
+
+`deleted` 只是删除过程中的中间状态，列表查询排除该状态。
 
 ## 崩溃恢复
 
 应用启动时检查：
-- `status='recording'`：尝试修复 WAV header，成功改为 `captured`，失败改为 `failed`
-- `status='transcribing'` 或 `'generating'`：标记 `failed`，创建 `error_code='INTERRUPTED'` 的失败 job
 
-## 音频删除策略
+| 状态 | 处理 |
+|---|---|
+| `recording` | 调用 `repairWavHeader`，成功改为 `captured`，失败改为 `failed` |
+| `transcribing` / `generating` | 改为 `failed`，写入 `error_code='INTERRUPTED'` 的失败 job |
+| `deleted` | 继续执行删除步骤 2、3 |
 
-成功转写后，若 `retain_audio=0`，删除 `audio_assets` 行和对应文件。
+## 音频保留
 
-转写失败时保留音频，允许重试。
-
-删除会议时级联删除所有关联数据。
+- 转写成功且 `retain_audio=0`：删除音频文件和 `audio_assets` 行
+- 转写失败：保留音频，允许重试
+- `audio_assets` 行存在即表示音频已保留

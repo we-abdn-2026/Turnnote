@@ -4,7 +4,9 @@ Node.js Main Process 与 Python ASR Worker 通过 stdin/stdout 的 JSON Lines �
 
 ## 生命周期
 
-1. Main Process 按任务启动 sidecar：`spawn('python3', ['services/asr-worker/worker.py'])`
+1. Main Process 按任务启动 sidecar
+   - 开发：`python3 services/asr-worker/worker.py`（使用 `.venv`）
+   - 安装包：`resources/asr-worker/asr-worker[.exe]`（PyInstaller 产物）
 2. 启动后发送 `ping`，10 秒内收到 `pong` 视为就绪
 3. 发送 `transcribe` 请求
 4. Sidecar 流式返回 `progress` 和 `segment` 事件，最后返回 `done`
@@ -30,12 +32,13 @@ Sidecar 每任务单次启动，不常驻。
   "type":"transcribe",
   "audioPath":"/absolute/path/to/audio.wav",
   "language":"en",
-  "model":"base"
+  "modelPath":"/absolute/path/to/models/small"
 }
 ```
 
-- `language`: `"en"` | `"zh"` | `"auto"`
-- `model`: faster-whisper 模型名，如 `"base"`, `"small"`, `"medium"`
+- `audioPath`：应用管理目录内的绝对路径，支持 `.wav`、`.mp3`、`.m4a`
+- `language`：`"en"` | `"zh"` | `"auto"`
+- `modelPath`：已下载的 faster-whisper 模型目录
 
 ### shutdown
 
@@ -109,9 +112,17 @@ Sidecar 每任务单次启动，不常驻。
 
 ## 超时和取消
 
-Main Process 启动 120 秒无响应超时，直接 `SIGTERM` 杀死进程，记录 `SIDECAR_TIMEOUT`。
+| 场景 | 处理 |
+|---|---|
+| 10 秒内无 `pong` | 杀进程，记录 `SIDECAR_START_FAILED` |
+| 转写中 120 秒无任何输出 | 杀进程，记录 `SIDECAR_TIMEOUT` |
+| 进程意外退出 | 记录 `SIDECAR_CRASHED`，附 stderr 末尾 |
+| stdout 出现非 JSON 行 | 记录 `SIDECAR_PROTOCOL_ERROR`，杀进程 |
+| 用户取消 | 直接杀进程，不发送取消消息 |
 
-用户取消时直接杀进程，不发送取消消息。
+以上错误码由 Main 生成，不由 sidecar 返回。所有失败都保留音频，允许重试。
+
+转写片段在收到 `done` 后一次性写入数据库；失败时不写入部分片段。
 
 ## 诊断日志
 
@@ -121,8 +132,6 @@ stdout 只输出 JSON Lines 响应。
 
 ## 模型存储
 
-模型存储在 `userData/models/`，路径由 Main Process 管理。
+模型存储在 `userData/models/<model>/`。首次使用时 Main Process 下载并校验。
 
-首次运行时 Main Process 从 Hugging Face 下载模型并校验 SHA256。
-
-Sidecar 接收完整模型路径，不自行下载。
+Sidecar 只读取 `modelPath`，不访问网络。

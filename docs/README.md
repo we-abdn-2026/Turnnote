@@ -5,7 +5,6 @@
 ## 产品和架构
 
 - [项目 Proposal](../proposal.md)：产品目标、MVP 范围、时间线和行动计划
-- [Granola 功能对比](granola-comparison.md)：对标产品分析和差异化策略
 - [技术方案](technical-solution.md)：技术选型、职责边界、数据、安全、降级和验证范围
 - [系统架构图](architecture.md)：系统组件和数据流示意图
 - [开发路线图](roadmap.md)：一个月开发计划，按前端、后端、测试、部署分类
