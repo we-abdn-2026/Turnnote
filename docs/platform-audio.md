@@ -7,20 +7,20 @@
 | 进程 | 职责 |
 |---|---|
 | Main | 启动前调用 `initMain()`；接收 PCM 分块写入 WAV；管理文件路径 |
-| Preload | 暴露 `enableLoopbackAudio`、`disableLoopbackAudio`、`audio:chunk` 等类型化 IPC |
+| Preload | 暴露 `turnnote.loopback.enable/disable` 和 `turnnote.recording.*`（见 `packages/contracts`） |
 | Renderer | 获取麦克风和系统音频 MediaStream；混音、重采样、转 PCM16；分块发送给 Main |
 
 Renderer 不接触文件路径，只提交 `meetingId` 和 PCM 数据。
 
 ## 采集流程
 
-1. Renderer 调用 `enableLoopbackAudio()`
-2. `getDisplayMedia({ video: true, audio: true })`，立即停止并移除视频轨
-3. 调用 `disableLoopbackAudio()`
+1. `turnnote.recording.start(meetingId)`，Main 创建 `AudioWriter`
+2. `turnnote.loopback.enable()`，然后 `getDisplayMedia({ video: true, audio: true })`，立即停止并移除视频轨
+3. `turnnote.loopback.disable()`
 4. `getUserMedia({ audio: { deviceId } })` 获取麦克风
 5. `new AudioContext({ sampleRate: 16000 })`，两路 `MediaStreamAudioSourceNode` 接入同一个 `AudioWorkletNode`
-6. Worklet 混为单声道、转 Int16，每约 1 秒通过 IPC 发送一个分块
-7. 停止时关闭所有轨道和 `AudioContext`，通知 Main 完成写入
+6. Worklet 混为单声道、转 Int16，每约 1 秒调用一次 `turnnote.recording.appendChunk`
+7. 停止时关闭所有轨道和 `AudioContext`，调用 `turnnote.recording.stop`，Main 完成写入并开始转写
 
 ## 接口
 

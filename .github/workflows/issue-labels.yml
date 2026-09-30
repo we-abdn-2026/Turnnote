@@ -1,0 +1,28 @@
+name: Issue labels
+
+# 根据 issue 表单的「分组」「涉及分组」字段自动添加分组标签
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const groups = ['前端', '后端', '测试', '部署'];
+            const body = context.payload.issue.body ?? '';
+            const section = body.match(/###\s*(?:涉及)?分组\s*\n+([^#]*)/);
+            if (!section) return;
+            const labels = groups.filter((group) => section[1].includes(group));
+            if (labels.length === 0) return;
+            await github.rest.issues.addLabels({
+              ...context.repo,
+              issue_number: context.payload.issue.number,
+              labels,
+            });

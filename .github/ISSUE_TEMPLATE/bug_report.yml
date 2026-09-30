@@ -1,7 +1,7 @@
 name: 缺陷报告
 description: 报告功能异常、崩溃或数据问题
-title: "[Bug] "
-labels: ["bug"]
+title: '[Bug] '
+labels: ['bug']
 body:
   - type: markdown
     attributes:

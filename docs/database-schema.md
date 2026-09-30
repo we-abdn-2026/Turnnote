@@ -116,6 +116,7 @@ created → recording → captured → transcribing → transcribed → generati
 | `failed → transcribing` | 最近失败 job 的 `kind='transcribing'`，且音频仍存在 |
 | `failed → generating` | 最近失败 job 的 `kind='generating'` |
 | `ready → generating` | 用户重新生成（如修改关键词） |
+| `transcribing → captured` | 用户取消转写 |
 | 任意 → `deleted` | 用户删除会议 |
 
 `failed` 的失败阶段和原因记录在 `processing_jobs`。生成失败不影响已保存的转写和纪要版本。

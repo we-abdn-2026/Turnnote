@@ -124,6 +124,12 @@ Sidecar 每任务单次启动，不常驻。
 
 转写片段在收到 `done` 后一次性写入数据库；失败时不写入部分片段。
 
+## Fake 模式
+
+`worker.py --fake` 不加载模型，对合法的 `transcribe` 请求返回固定的 3 个片段，仍执行参数校验和音频文件存在检查。
+
+用于 CI 和没有下载模型的开发环境。Main 在环境变量 `TURNNOTE_ASR_FAKE=1` 时带 `--fake` 启动 sidecar。
+
 ## 诊断日志
 
 Sidecar 将诊断信息写入 stderr，Main Process 捕获并记录。
