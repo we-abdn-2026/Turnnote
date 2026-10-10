@@ -42,7 +42,7 @@ function generateNoteFromTranscript(transcriptText) {
   const decisions = [];
   const decisionPatterns = [
     /(?:decided|agreed|will)\s+(?:to\s+)?([^.!?]+)/gi,
-    /(?:我们|团队)(?:决定|同意|将要)([^。！？]+)/gi
+    /(?:我们|团队)(?:决定|同意|将要)([^。！？]+)/gi,
   ];
 
   for (const pattern of decisionPatterns) {
@@ -64,7 +64,7 @@ function generateNoteFromTranscript(transcriptText) {
   const actionItems = [];
   const actionPatterns = [
     /([A-Z][a-z]+)\s+(?:will|should|needs to)\s+([^.!?]+)/g,
-    /([A-Z][a-z]+)\s+(?:负责|将要|需要)([^。！？]+)/g
+    /([A-Z][a-z]+)\s+(?:负责|将要|需要)([^。！？]+)/g,
   ];
 
   for (const pattern of actionPatterns) {
@@ -76,7 +76,7 @@ function generateNoteFromTranscript(transcriptText) {
         actionItems.push({
           task,
           owner,
-          dueDate: 'unspecified'
+          dueDate: 'unspecified',
         });
         if (actionItems.length >= 3) break;
       }
@@ -87,7 +87,7 @@ function generateNoteFromTranscript(transcriptText) {
     actionItems.push({
       task: 'Follow up on discussed topics',
       owner: 'unspecified',
-      dueDate: 'unspecified'
+      dueDate: 'unspecified',
     });
   }
 
@@ -101,7 +101,10 @@ function generateNoteFromTranscript(transcriptText) {
     }
   }
 
-  if (openQuestions.length === 0 && (text.includes('unclear') || text.includes('tbd') || text.includes('open'))) {
+  if (
+    openQuestions.length === 0 &&
+    (text.includes('unclear') || text.includes('tbd') || text.includes('open'))
+  ) {
     openQuestions.push('Some details remain to be clarified');
   }
 
@@ -113,7 +116,7 @@ function generateNoteFromTranscript(transcriptText) {
     keyTopics,
     decisions,
     openQuestions,
-    actionItems
+    actionItems,
   };
 }
 
@@ -132,7 +135,7 @@ function handleRequest(req, res) {
 
   // Parse request body
   let body = '';
-  req.on('data', chunk => {
+  req.on('data', (chunk) => {
     body += chunk.toString();
   });
 
@@ -169,14 +172,16 @@ function handleRequest(req, res) {
           handleNormalMode(res, transcriptText);
           break;
       }
-    } catch (err) {
+    } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        error: {
-          message: 'Invalid JSON in request body',
-          type: 'invalid_request_error'
-        }
-      }));
+      res.end(
+        JSON.stringify({
+          error: {
+            message: 'Invalid JSON in request body',
+            type: 'invalid_request_error',
+          },
+        }),
+      );
     }
   });
 }
@@ -198,16 +203,16 @@ function handleNormalMode(res, transcriptText) {
         index: 0,
         message: {
           role: 'assistant',
-          content: JSON.stringify(note)
+          content: JSON.stringify(note),
         },
-        finish_reason: 'stop'
-      }
+        finish_reason: 'stop',
+      },
     ],
     usage: {
       prompt_tokens: Math.floor(transcriptText.length / 4),
       completion_tokens: 150,
-      total_tokens: Math.floor(transcriptText.length / 4) + 150
-    }
+      total_tokens: Math.floor(transcriptText.length / 4) + 150,
+    },
   };
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -222,13 +227,13 @@ function handleRateLimitMode(res) {
     error: {
       message: 'Rate limit exceeded. Please try again later.',
       type: 'rate_limit_error',
-      code: 'rate_limit_exceeded'
-    }
+      code: 'rate_limit_exceeded',
+    },
   };
 
   res.writeHead(429, {
     'Content-Type': 'application/json',
-    'Retry-After': '60'
+    'Retry-After': '60',
   });
   res.end(JSON.stringify(response));
 }

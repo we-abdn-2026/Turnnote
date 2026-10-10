@@ -3,7 +3,7 @@
  */
 
 import { test } from 'node:test';
-import { strictEqual, ok, deepStrictEqual } from 'node:assert';
+import { strictEqual, ok } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -16,7 +16,7 @@ const { startServer } = await import('./support/deepseek-mock-server.mjs');
 // Load test fixtures
 const fixturesPath = join(__dirname, 'fixtures');
 const sampleTranscript = JSON.parse(
-  await readFile(join(fixturesPath, 'sample-transcript.json'), 'utf-8')
+  await readFile(join(fixturesPath, 'sample-transcript.json'), 'utf-8'),
 );
 
 /**
@@ -27,21 +27,22 @@ async function callMockApi(port, transcriptText, mode = 'normal') {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Mock-Mode': mode
+      'X-Mock-Mode': mode,
     },
     body: JSON.stringify({
       model: 'deepseek-chat',
       messages: [
         {
           role: 'system',
-          content: 'You are a meeting note generator. Extract structured information from the transcript.'
+          content:
+            'You are a meeting note generator. Extract structured information from the transcript.',
         },
         {
           role: 'user',
-          content: transcriptText
-        }
-      ]
-    })
+          content: transcriptText,
+        },
+      ],
+    }),
   });
 
   return response;
@@ -56,7 +57,7 @@ async function withMockServer(testFn) {
 
   try {
     // Wait a bit for server to start
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     await testFn(port);
   } finally {
     server.close();
@@ -119,7 +120,7 @@ test('mock server - timeout mode delays response', async () => {
 
     // Use a race with 2 second timeout to verify it doesn't respond immediately
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Expected timeout')), 2000)
+      setTimeout(() => reject(new Error('Expected timeout')), 2000),
     );
 
     const requestPromise = callMockApi(port, sampleTranscript.fullText, 'timeout');
@@ -171,7 +172,8 @@ test('mock server - handles empty transcript gracefully', async () => {
 
 test('mock server - extracts decisions from transcript', async () => {
   await withMockServer(async (port) => {
-    const transcript = 'We decided to launch next week. The team agreed to use React for the frontend.';
+    const transcript =
+      'We decided to launch next week. The team agreed to use React for the frontend.';
     const response = await callMockApi(port, transcript, 'normal');
 
     const data = await response.json();
@@ -185,7 +187,7 @@ test('mock server - extracts decisions from transcript', async () => {
 test('mock server - returns 404 for unknown endpoints', async () => {
   await withMockServer(async (port) => {
     const response = await fetch(`http://localhost:${port}/unknown`, {
-      method: 'POST'
+      method: 'POST',
     });
 
     strictEqual(response.status, 404);
