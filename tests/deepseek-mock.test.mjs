@@ -22,7 +22,7 @@ const sampleTranscript = JSON.parse(
 /**
  * Helper to make HTTP request to mock server
  */
-async function callMockApi(port, transcriptText, mode = 'normal') {
+async function callMockApi(port, transcriptText, mode = 'normal', options = {}) {
   const response = await fetch(`http://localhost:${port}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -43,6 +43,7 @@ async function callMockApi(port, transcriptText, mode = 'normal') {
         },
       ],
     }),
+    signal: options.signal,
   });
 
   return response;
@@ -117,13 +118,19 @@ test('mock server - rate-limit mode returns 429', async () => {
 test('mock server - timeout mode delays response', async () => {
   await withMockServer(async (port) => {
     const startTime = Date.now();
+    const controller = new AbortController();
 
     // Use a race with 2 second timeout to verify it doesn't respond immediately
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Expected timeout')), 2000),
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error('Expected timeout'));
+      }, 2000),
     );
 
-    const requestPromise = callMockApi(port, sampleTranscript.fullText, 'timeout');
+    const requestPromise = callMockApi(port, sampleTranscript.fullText, 'timeout', {
+      signal: controller.signal,
+    });
 
     try {
       await Promise.race([requestPromise, timeoutPromise]);

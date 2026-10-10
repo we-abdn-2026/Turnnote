@@ -1,9 +1,12 @@
 {
-  "summary": "Meeting discussion covered product launch, pricing strategy with 1 key decision(s) and 2 action item(s).",
+  "summary": "Meeting discussion covered product launch, pricing strategy with 2 key decision(s) and 3 action item(s).",
   "keyTopics": ["Product Launch", "Pricing Strategy"],
   "decisions": [
     {
-      "text": "to ship the beta on Friday"
+      "text": "ship the beta on Friday"
+    },
+    {
+      "text": "prepare the release notes by Thursday"
     }
   ],
   "openQuestions": ["What should we charge?"],
@@ -14,7 +17,12 @@
       "dueDate": "unspecified"
     },
     {
-      "task": "to research competitor pricing before we finalize",
+      "task": "we charge",
+      "owner": "What",
+      "dueDate": "unspecified"
+    },
+    {
+      "task": "research competitor pricing before we finalize",
       "owner": "Sarah",
       "dueDate": "unspecified"
     }

@@ -242,9 +242,14 @@ function handleRateLimitMode(res) {
  * Timeout mode: Delay response by 30 seconds
  */
 function handleTimeoutMode(res, transcriptText) {
-  setTimeout(() => {
+  const timerId = setTimeout(() => {
     handleNormalMode(res, transcriptText);
   }, TIMEOUT_DELAY_MS);
+
+  // Clear timeout if client disconnects
+  res.on('close', () => {
+    clearTimeout(timerId);
+  });
 }
 
 /**
@@ -269,15 +274,6 @@ function startServer(port = DEFAULT_PORT) {
     console.log(`Control via header: X-Mock-Mode: <mode>`);
   });
 
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('\nShutting down mock server...');
-    server.close(() => {
-      console.log('Server closed');
-      process.exit(0);
-    });
-  });
-
   return server;
 }
 
@@ -293,7 +289,16 @@ for (const arg of args) {
 
 // Start server if run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer(port);
+  const server = startServer(port);
+
+  // Graceful shutdown for CLI usage
+  process.on('SIGINT', () => {
+    console.log('\nShutting down mock server...');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
 }
 
 // Export for testing
