@@ -1,0 +1,27 @@
+{
+  "summary": "Meeting discussion covered product launch, pricing strategy with 1 key decision(s) and 2 action item(s).",
+  "keyTopics": [
+    "Product Launch",
+    "Pricing Strategy"
+  ],
+  "decisions": [
+    {
+      "text": "to ship the beta on Friday"
+    }
+  ],
+  "openQuestions": [
+    "What should we charge?"
+  ],
+  "actionItems": [
+    {
+      "task": "prepare the release notes by Thursday",
+      "owner": "Alex",
+      "dueDate": "unspecified"
+    },
+    {
+      "task": "to research competitor pricing before we finalize",
+      "owner": "Sarah",
+      "dueDate": "unspecified"
+    }
+  ]
+}
