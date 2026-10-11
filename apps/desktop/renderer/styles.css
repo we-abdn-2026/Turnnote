@@ -50,19 +50,6 @@ button:disabled {
   letter-spacing: 0.12em;
   margin: 0 0 8px;
 }
-.header .recording-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  max-width: 640px;
-}
-.header .recording-controls p {
-  flex-basis: 100%;
-  text-align: right;
-  margin: 0;
-}
 h1,
 h2 {
   margin: 0;

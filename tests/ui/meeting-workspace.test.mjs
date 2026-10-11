@@ -55,27 +55,16 @@ test('create → start → stop shows Main-driven recording, captured and transc
   assert.deepEqual(page.errors, []);
 });
 
-test('capture entry and workspace survive StrictMode with one listener each', async () => {
+test('workspace has one recording owner and cleans subscriptions in StrictMode', async () => {
   const page = await browser.open();
   await createMeeting(page, 'Cleanup');
-  assert.equal(
-    await page.eval(`document.querySelectorAll('[aria-label="Audio recording"]').length`),
-    1,
-  );
+  assert.equal(await page.eval(`document.querySelectorAll('.recording-controls').length`), 1);
   assert.equal(await page.eval(`document.querySelectorAll('.device-selector').length`), 1);
-  assert.deepEqual(
-    await page.eval(`[
-      getComputedStyle(document.querySelector('.header .recording-controls')).display,
-      getComputedStyle(document.querySelector('.workspace .recording-controls')).display,
-    ]`),
-    ['flex', 'block'],
-  );
-  // 音频入口和会议工作区各订阅一次；StrictMode 重挂载必须清理旧订阅。
   const { subscribed, unsubscribed } = await page.eval(
     '({ subscribed: __ui.subscribed, unsubscribed: __ui.unsubscribed })',
   );
-  assert.ok(subscribed >= 4, `subscribed ${subscribed}`);
-  assert.equal(subscribed - unsubscribed, 2);
+  assert.ok(subscribed >= 2, `subscribed ${subscribed}`);
+  assert.equal(subscribed - unsubscribed, 1);
   assert.deepEqual(page.errors, []);
 });
 

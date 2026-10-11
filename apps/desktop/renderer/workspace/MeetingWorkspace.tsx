@@ -5,7 +5,9 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { MeetingStatus } from '@shared/contracts';
+import type { MeetingStatus, TurnnoteApi } from '@shared/contracts';
+import { createCaptureRecording } from '../audio/meeting-recording';
+import type { MeetingRecording } from './meeting-session';
 import { availableActions, createMeetingSession, isRecording } from './meeting-session';
 import { RecordingControls } from './RecordingControls';
 
@@ -21,8 +23,14 @@ export const STATUS_LABELS: Record<MeetingStatus, string> = {
   deleted: '已删除',
 };
 
-export function MeetingWorkspace(): ReactElement {
-  const [session] = useState(() => createMeetingSession(window.turnnote));
+export function MeetingWorkspace({
+  recordingFactory = createCaptureRecording,
+}: {
+  recordingFactory?: (api: TurnnoteApi) => MeetingRecording;
+}): ReactElement {
+  const [session] = useState(() =>
+    createMeetingSession(window.turnnote, recordingFactory(window.turnnote)),
+  );
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const [title, setTitle] = useState('');
 
@@ -65,6 +73,8 @@ export function MeetingWorkspace(): ReactElement {
           <p>{state.error}</p>
         </div>
       )}
+
+      {state.warning && <p role="status">{state.warning}</p>}
 
       {meeting && (
         <div className="meeting-panel">

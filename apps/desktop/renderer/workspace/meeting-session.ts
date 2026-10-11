@@ -3,7 +3,17 @@
 import type { MeetingDetail, Result, TurnnoteApi } from '@shared/contracts';
 import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 
-type SessionApi = Pick<TurnnoteApi, 'meetings' | 'recording' | 'events'>;
+type SessionApi = Pick<TurnnoteApi, 'meetings' | 'events'>;
+
+export interface MeetingRecording {
+  start(
+    id: string,
+    notify: { warning(message: string): void; error(message: string): void },
+  ): Promise<Result<MeetingDetail>>;
+  stop(id: string, jobId: string): Promise<Result<MeetingDetail>>;
+  discard(id: string, jobId: string): Promise<Result<MeetingDetail>>;
+  disconnect(): void;
+}
 
 export type SessionAction = 'create' | 'start' | 'stop' | 'discard';
 
@@ -15,6 +25,7 @@ export interface SessionState {
   error: string | null;
   /** 每次替换会议快照时递增；updatedAt 可能在同一毫秒内重复，不能用来区分快照 */
   revision: number;
+  warning: string | null;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
@@ -50,9 +61,15 @@ export interface MeetingSession {
   discard(): Promise<boolean>;
 }
 
-const INITIAL: SessionState = { meeting: null, pending: null, error: null, revision: 0 };
+const INITIAL: SessionState = {
+  meeting: null,
+  pending: null,
+  error: null,
+  revision: 0,
+  warning: null,
+};
 
-export function createMeetingSession(api: SessionApi): MeetingSession {
+export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
   let state = INITIAL;
   const listeners = new Set<() => void>();
   // 当前会议收到事件的次数；请求期间有更新事件时以事件为准，丢弃较旧的响应快照
@@ -81,7 +98,7 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
     if (!availableActions(state)[action]) return false;
     const token = generation;
     const seq = eventSeq;
-    set({ pending: action, error: null });
+    set({ pending: action, error: null, warning: null });
     let result: Result<MeetingDetail> | null;
     try {
       result = await request();
@@ -129,18 +146,30 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
       return () => {
         unsubscribe();
         generation += 1;
+        recording.disconnect();
         if (state.pending) set({ pending: null });
       };
     },
     create: (title) => run('create', () => api.meetings.create(title), { switchesMeeting: true }),
-    start: () => run('start', () => api.recording.start(state.meeting!.id)),
-    stop: () =>
-      run('stop', () => api.recording.stop(state.meeting!.id, state.meeting!.activeJobId!)),
+    start() {
+      const token = generation;
+      return run('start', () =>
+        recording.start(state.meeting!.id, {
+          warning: (warning) => {
+            if (token === generation) set({ warning });
+          },
+          error: (error) => {
+            if (token === generation) set({ error });
+          },
+        }),
+      );
+    },
+    stop: () => run('stop', () => recording.stop(state.meeting!.id, state.meeting!.activeJobId!)),
     discard() {
       const meeting = state.meeting;
       const jobId = meeting?.activeJobId ?? meeting?.lastError?.jobId;
       if (!meeting || !jobId) return Promise.resolve(false);
-      return run('discard', () => api.recording.cancel(meeting.id, jobId));
+      return run('discard', () => recording.discard(meeting.id, jobId));
     },
   };
 }
