@@ -203,13 +203,14 @@ test('failed Result and rejection report a safe error and keep the last confirme
   const session = createMeetingSession(api);
   const disconnect = session.connect();
   await session.create('Errors');
-  const created = session.getState().meeting;
+  const { meeting: created, revision } = session.getState();
 
   assert.equal(await session.start(), false);
   assert.deepEqual(session.getState(), {
     meeting: created,
     pending: null,
     error: 'Not available yet.',
+    revision,
   });
   mode = 'reject';
   assert.equal(await session.start(), false);

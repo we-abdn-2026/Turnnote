@@ -7,6 +7,10 @@ export {
   availableActions,
   createMeetingSession,
 } from '../../apps/desktop/renderer/workspace/meeting-session';
+export {
+  activeConfirmation,
+  deriveRecordingControls,
+} from '../../apps/desktop/renderer/workspace/recording-controls';
 export { createInvokeApi } from '../../packages/contracts/src/bridge';
 export { createDispatcher } from '../../packages/contracts/src/invoke';
 export {

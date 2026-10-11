@@ -13,6 +13,8 @@ export interface SessionState {
   pending: SessionAction | null;
   /** 最近一次操作失败的安全信息；下一次操作开始时清除 */
   error: string | null;
+  /** 每次替换会议快照时递增；updatedAt 可能在同一毫秒内重复，不能用来区分快照 */
+  revision: number;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
@@ -43,7 +45,7 @@ export interface MeetingSession {
   discard(): Promise<boolean>;
 }
 
-const INITIAL: SessionState = { meeting: null, pending: null, error: null };
+const INITIAL: SessionState = { meeting: null, pending: null, error: null, revision: 0 };
 
 export function createMeetingSession(api: SessionApi): MeetingSession {
   let state = INITIAL;
@@ -53,8 +55,9 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
   // 断开连接、切换会议后递增，使旧请求的响应失效
   let generation = 0;
 
-  function set(patch: Partial<SessionState>): void {
-    state = { ...state, ...patch };
+  function set(patch: Partial<Omit<SessionState, 'revision'>>): void {
+    const revision = 'meeting' in patch ? state.revision + 1 : state.revision;
+    state = { ...state, ...patch, revision };
     for (const listener of [...listeners]) listener();
   }
 
