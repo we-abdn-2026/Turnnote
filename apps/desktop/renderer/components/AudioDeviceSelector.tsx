@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { AppSettings, CapturePermissions } from '@shared/contracts';
 
 interface AudioDeviceSelectorProps {
@@ -11,44 +11,37 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSettingsAndPermissions = useCallback(async (): Promise<void> => {
-    const [settingsResult, permissionsResult] = await Promise.all([
-      window.turnnote.settings.get(),
-      window.turnnote.recording.getPermissions(),
-    ]);
-
-    if (settingsResult.ok) {
-      setSettings(settingsResult.value);
-    }
-
-    if (permissionsResult.ok) {
-      setPermissions(permissionsResult.value);
-    }
-  }, []);
-
-  const loadDevices = useCallback(async (): Promise<void> => {
-    try {
-      const deviceList = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = deviceList.filter((d) => d.kind === 'audioinput');
-      setDevices(audioInputs);
-      setError(null);
-    } catch {
-      setError('无法获取音频设备列表');
-      setDevices([]);
-    }
-  }, []);
-
   // 加载设置和权限
   useEffect(() => {
-    void loadSettingsAndPermissions();
-  }, [loadSettingsAndPermissions]);
+    void Promise.all([
+      window.turnnote.settings.get(),
+      window.turnnote.recording.getPermissions(),
+    ]).then(([settingsResult, permissionsResult]) => {
+      if (settingsResult.ok) {
+        setSettings(settingsResult.value);
+      }
+      if (permissionsResult.ok) {
+        setPermissions(permissionsResult.value);
+      }
+    });
+  }, []);
 
   // 加载可用的音频设备
   useEffect(() => {
     if (permissions?.microphone === 'granted') {
-      void loadDevices();
+      void navigator.mediaDevices
+        .enumerateDevices()
+        .then((deviceList) => {
+          const audioInputs = deviceList.filter((d) => d.kind === 'audioinput');
+          setDevices(audioInputs);
+          setError(null);
+        })
+        .catch(() => {
+          setError('无法获取音频设备列表');
+          setDevices([]);
+        });
     }
-  }, [permissions, loadDevices]);
+  }, [permissions]);
 
   async function handleMicrophoneChange(deviceId: string): Promise<void> {
     const update = { microphoneDeviceId: deviceId || null };
