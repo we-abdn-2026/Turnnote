@@ -8,6 +8,7 @@ Turnnote/
 ├── apps/
 │   └── desktop/
 │       ├── main/           # Electron Main / Node.js
+│       │   └── storage/    # MeetingStore、IPC handlers、编号 SQL migrations
 │       ├── preload/        # 安全 IPC bridge
 │       └── renderer/       # React + TypeScript
 │           └── mock/       # dev:web 使用的内存 API
@@ -52,11 +53,18 @@ pip install -r requirements.txt -r requirements-dev.txt
 | `npm run format` | 自动修复格式 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run test` | Node 测试 |
+| `npm run test:electron` | 用 Electron Node 运行时验证原生 SQLite 加载、迁移和持久化，不打开 GUI |
 | `npm run build` | 构建到 `out/` |
 
 `npm run lint` 和 `npm run format` 需要先激活 `.venv`。
 
 测试中的 Python 解释器按顺序选择：环境变量 `TURNNOTE_PYTHON`、`.venv`、系统 `python3`。
+
+`npm test -- tests/storage.test.mjs` 可运行指定测试。测试脚本用 esbuild 将 TypeScript 和正式 SQL migrations 构建到 out/tests，再运行 Node test runner，不使用测试专用 schema。
+
+better-sqlite3 13 使用 Node-API 预编译模块；当前依赖不需要在 Node 和 Electron ABI 间反复重编译。仍须在打包验证中确认三个目标平台的原生模块加载和资源布局，不能用 Node 单测替代安装包验收。
+
+Main 启动时迁移数据库、结束中断的转写/生成任务并继续未完成的删除。录音 header 修复等待 AudioWriter 接入；失败不重建或静默清空数据库。
 
 ## 更新依赖
 
@@ -111,3 +119,4 @@ PR 手动添加 `type/` 和 `area/` 标签。
 4. 共享类型和 schema 放在 `packages/contracts`，禁止在多个进程重复定义协议。
 5. 失败任务必须保留可恢复数据，不得用静默清理掩盖错误。
 6. 新增 IPC 方法：在 `packages/contracts` 添加类型和 `invokeChannels`，Main 通过 `registerIpc` 实现，同步更新 `renderer/mock/mock-api.ts`。Preload 自动暴露。
+7. IPC 运行时参数校验放在共享 invokeSchemas；状态与任务身份遵循 [W1 IPC 契约基线](ipc-contract.md)。未实现方法保持 NOT_IMPLEMENTED。契约变更同步 schema、mock 和测试，前后端各一人审核。

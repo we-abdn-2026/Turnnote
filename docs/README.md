@@ -11,6 +11,7 @@
 
 ## 实现契约
 
+- [W1 IPC 契约基线](ipc-contract.md)：接口冻结候选、状态与取消、任务身份、事务边界、当前实现范围
 - [数据库 Schema](database-schema.md)：表结构、索引、状态机、崩溃恢复
 - [Sidecar 协议](sidecar-protocol.md)：Python 转写进程通信协议
 - [Platform Audio 接口](platform-audio.md)：跨平台音频采集统一接口

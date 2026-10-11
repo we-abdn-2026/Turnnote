@@ -11,19 +11,13 @@
 │ Electron Main Process                                        │
 │ Node.js + TypeScript                                         │
 │ 会话编排 · 文件管理 · SQLite · DeepSeek · sidecar 生命周期管理   │
-└──────────────┬───────────────────────┬───────────────────────┘
-               │ JSON Lines             │ HTTPS
-               ▼                       ▼
-┌──────────────────────────┐  ┌───────────────────────────────┐
-│ Python ASR Sidecar       │  │ DeepSeek API                   │
-│ faster-whisper           │  │ 转写文本 -> 结构化会议纪要       │
-└──────────────┬───────────┘  └───────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────┐
-│ Local Storage             │
-│ SQLite + managed files   │
-└──────────────────────────┘
+└──────────────┬──────────────────┬──────────────────┬─────────┘
+               │ JSON Lines       │ HTTPS            │ 本地读写
+               ▼                  ▼                  ▼
+┌──────────────────────┐ ┌───────────────────┐ ┌──────────────────┐
+│ Python ASR Sidecar   │ │ DeepSeek API      │ │ Local Storage    │
+│ faster-whisper       │ │ 转写 -> 结构化纪要 │ │ SQLite + files   │
+└──────────────────────┘ └───────────────────┘ └──────────────────┘
 
 Platform adapters, coordinated by Electron Main:
   macOS: ScreenCaptureKit + microphone input
