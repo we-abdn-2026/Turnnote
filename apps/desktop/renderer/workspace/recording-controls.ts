@@ -58,19 +58,20 @@ export function deriveRecordingControls(
     indicator,
     showConsent: confirming === 'start' && actions.start,
     showDiscardConfirm: confirming === 'discard' && actions.discard,
+    // 按钮是否显示只看会议状态：响应到达前 Main 的事件已推进状态时，旧按钮立即消失
     start: {
-      visible: meeting?.status === 'created' || pending === 'start',
+      visible: meeting?.status === 'created',
       enabled: actions.start && confirming === null,
       busy: pending === 'start',
     },
     stop: {
-      visible: meeting?.status === 'recording' || pending === 'stop',
+      visible: meeting?.status === 'recording',
       enabled: actions.stop,
       busy: pending === 'stop',
     },
     // 只为失败的录音提供丢弃入口；录音中的取消不在本界面提供
     discard: {
-      visible: failedRecording || pending === 'discard',
+      visible: failedRecording,
       enabled: failedRecording && actions.discard && confirming === null,
       busy: pending === 'discard',
     },

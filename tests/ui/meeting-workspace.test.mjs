@@ -23,13 +23,19 @@ async function createMeeting(page, title) {
   })()`);
 }
 
+/** 点击开始录音并确认参会者授权提醒（#10） */
+async function startRecording(page) {
+  await page.eval(`__ui.click('开始录音')`);
+  await page.eval(`__ui.click('已告知，开始录音')`);
+}
+
 test('create → start → stop shows Main-driven recording, captured and transcribing updates', async () => {
   const page = await browser.open();
   const id = await createMeeting(page, 'Weekly planning');
   assert.match(id, /^mock-/);
   assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'Weekly planning');
 
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.status() === '录音中'`);
   await page.eval(`__ui.click('停止录音')`);
   await page.waitFor(`__ui.status() === '转写完成'`, { timeout: 8000 });
@@ -80,7 +86,7 @@ test('updates and failures of other meetings do not change the workspace', async
 test('switching to a new meeting ignores late events from the previous one', async () => {
   const page = await browser.open();
   const first = await createMeeting(page, 'First');
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.status() === '录音中'`);
   await createMeeting(page, 'Second');
   // 第一场会议此后停止并转写，第二场的界面不受影响
@@ -100,7 +106,7 @@ test('duplicate start clicks while pending send one request', async () => {
   const page = await browser.open();
   await createMeeting(page, 'Double click');
   await page.eval(`__ui.faults['recording.start'] = { type: 'hold' }`);
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.buttons().some((b) => b.label === '正在开始...' && b.disabled)`);
   await page.eval(`__ui.click('正在开始...')`);
   assert.equal(await page.eval(`__ui.calls['recording.start']`), 1);
@@ -113,12 +119,12 @@ test('start failure Result and rejection show a safe error and keep the meeting'
   const page = await browser.open();
   await createMeeting(page, 'Errors');
   await page.eval(`__ui.faults['recording.start'] = { type: 'result', error: ${NOT_IMPLEMENTED} }`);
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.alerts().some((a) => a.includes('Not available yet.'))`);
   assert.equal(await page.eval('__ui.status()'), '已创建，未开始录音');
 
   await page.eval(`__ui.faults['recording.start'] = { type: 'reject' }`);
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.alerts().some((a) => a.includes('操作失败，请重试。'))`);
   const text = await page.eval('__ui.text()');
   assert.equal(text.includes('/private/path'), false);
@@ -126,7 +132,7 @@ test('start failure Result and rejection show a safe error and keep the meeting'
 
   // 恢复后可以正常开始，错误被清除
   await page.eval(`delete __ui.faults['recording.start']`);
-  await page.eval(`__ui.click('开始录音')`);
+  await startRecording(page);
   await page.waitFor(`__ui.status() === '录音中'`);
   assert.deepEqual(await page.eval('__ui.alerts()'), []);
   assert.deepEqual(page.errors, []);

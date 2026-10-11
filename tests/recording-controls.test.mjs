@@ -146,6 +146,39 @@ test('start failure keeps the meeting startable and leaves the error to the work
   disconnect();
 });
 
+test('when the captured event arrives before the stop response, stop disappears immediately', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  let release;
+  const api = {
+    ...base,
+    recording: {
+      ...base.recording,
+      // Main 已提交并发布 captured 事件，响应稍后才到达
+      stop: async (id, job) => {
+        const result = await base.recording.stop(id, job);
+        await new Promise((resolve) => (release = resolve));
+        return result;
+      },
+    },
+  };
+  const session = createMeetingSession(api);
+  const disconnect = session.connect();
+  await session.create('Event first');
+  await session.start();
+  const stopping = session.stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.getState().pending, 'stop');
+  // mock 的自动转写可能已把 captured 推进到 transcribing，两者都是处理中
+  assert.ok(['captured', 'transcribing'].includes(session.getState().meeting.status));
+  const v = view(session);
+  assert.equal(v.indicator, 'processing');
+  assert.equal(v.stop.visible, false);
+  assert.equal(v.start.visible, false);
+  release();
+  await stopping;
+  disconnect();
+});
+
 test('stop failure keeps showing recording so the user can retry stop', async () => {
   const base = createMockApi({ seed: false, delayMs: 1 });
   let failStop = true;
