@@ -18,7 +18,6 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
 
   // 加载设置和权限
   useEffect(() => {
-    setLoadingState('loading');
     void Promise.all([
       window.turnnote.settings.get(),
       window.turnnote.recording.getPermissions(),
