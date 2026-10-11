@@ -3,7 +3,8 @@
  */
 
 import { test } from 'node:test';
-import { strictEqual, ok } from 'node:assert';
+import { strictEqual, ok, rejects } from 'node:assert';
+import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -53,15 +54,16 @@ async function callMockApi(port, transcriptText, mode = 'normal', options = {}) 
  * Helper to start server and ensure cleanup
  */
 async function withMockServer(testFn) {
-  const port = 3456 + Math.floor(Math.random() * 1000); // Random port to avoid conflicts
-  const server = startServer(port);
-
+  const server = startServer(0);
+  await once(server, 'listening');
   try {
-    // Wait a bit for server to start
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await testFn(port, server);
+    await testFn(server.address().port, server);
   } finally {
-    server.close();
+    const closed = new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    server.closeAllConnections();
+    await closed;
   }
 }
 
@@ -96,8 +98,6 @@ test('mock server - normal mode returns valid note structure', async () => {
       ok(item.owner !== undefined, 'Action item should have owner');
       ok(item.dueDate !== undefined, 'Action item should have dueDate');
     }
-
-    console.log('Generated note:', JSON.stringify(note, null, 2));
   });
 });
 
@@ -106,7 +106,7 @@ test('mock server - rate-limit mode returns 429', async () => {
     const response = await callMockApi(port, sampleTranscript.fullText, 'rate-limit');
 
     strictEqual(response.status, 429);
-    ok(response.headers.get('retry-after'), 'Should include Retry-After header');
+    strictEqual(response.headers.get('retry-after'), '60');
 
     const data = await response.json();
     ok(data.error, 'Response should have error');
@@ -116,30 +116,15 @@ test('mock server - rate-limit mode returns 429', async () => {
 });
 
 test('mock server - timeout mode delays response', async () => {
-  await withMockServer(async (port) => {
-    const startTime = Date.now();
-    const controller = new AbortController();
-
-    // Use a race with 2 second timeout to verify it doesn't respond immediately
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error('Expected timeout'));
-      }, 2000),
+  await withMockServer(async (port, server) => {
+    await rejects(
+      callMockApi(port, sampleTranscript.fullText, 'timeout', {
+        signal: AbortSignal.timeout(200),
+      }),
+      { name: 'TimeoutError' },
     );
-
-    const requestPromise = callMockApi(port, sampleTranscript.fullText, 'timeout', {
-      signal: controller.signal,
-    });
-
-    try {
-      await Promise.race([requestPromise, timeoutPromise]);
-      throw new Error('Should have timed out');
-    } catch (err) {
-      strictEqual(err.message, 'Expected timeout', 'Should timeout before response');
-      const elapsed = Date.now() - startTime;
-      ok(elapsed >= 2000, 'Should wait at least 2 seconds');
-    }
+    strictEqual(server.getRequests()[0].mode, 'timeout');
+    strictEqual(server.getRequests()[0].messages[1].content, sampleTranscript.fullText);
   });
 });
 
@@ -218,9 +203,9 @@ test('mock server - captures request messages for inspection', async () => {
     // Verify system message
     const systemMsg = captured.messages.find((m) => m.role === 'system');
     ok(systemMsg, 'Should have system message');
-    ok(
-      systemMsg.content.includes('meeting note generator'),
-      'System message should contain expected instruction',
+    strictEqual(
+      systemMsg.content,
+      'You are a meeting note generator. Extract structured information from the transcript.',
     );
 
     // Verify user message

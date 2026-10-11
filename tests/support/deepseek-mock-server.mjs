@@ -23,7 +23,7 @@
  */
 
 import { createServer } from 'node:http';
-import { parse as parseUrl } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 const DEFAULT_PORT = 3456;
 const TIMEOUT_DELAY_MS = 30000;
@@ -130,10 +130,10 @@ function generateNoteFromTranscript(transcriptText) {
  */
 function createRequestHandler(requestLog) {
   return function handleRequest(req, res) {
-    const url = parseUrl(req.url, true);
+    const pathname = req.url.split('?')[0];
 
     // Only handle POST /v1/chat/completions
-    if (req.method !== 'POST' || url.pathname !== '/v1/chat/completions') {
+    if (req.method !== 'POST' || pathname !== '/v1/chat/completions') {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'Not found', type: 'invalid_request_error' } }));
       return;
@@ -141,8 +141,10 @@ function createRequestHandler(requestLog) {
 
     // Parse request body
     let body = '';
+    // Decode across chunk boundaries so split multibyte characters remain intact.
+    req.setEncoding('utf8');
     req.on('data', (chunk) => {
-      body += chunk.toString();
+      body += chunk;
     });
 
     req.on('end', () => {
@@ -285,14 +287,14 @@ function startServer(port = DEFAULT_PORT) {
   const server = createServer(createRequestHandler(requestLog));
 
   server.listen(port, () => {
-    console.log(`DeepSeek mock server running on http://localhost:${port}`);
+    console.log(`DeepSeek mock server running on http://localhost:${server.address().port}`);
     console.log(`Endpoint: POST /v1/chat/completions`);
     console.log(`Modes: normal (default), rate-limit, timeout, invalid-json`);
     console.log(`Control via header: X-Mock-Mode: <mode>`);
   });
 
-  // Expose request log for test inspection
-  server.getRequests = () => requestLog;
+  // Deep snapshots cannot mutate this instance's log or observe later requests.
+  server.getRequests = () => structuredClone(requestLog);
 
   return server;
 }
@@ -308,17 +310,21 @@ for (const arg of args) {
 }
 
 // Start server if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const server = startServer(port);
 
-  // Graceful shutdown for CLI usage
-  process.on('SIGINT', () => {
+  // Stop accepting requests before destroying active timeout/partial requests.
+  // Let Node exit naturally: leaked sockets or timeout timers must not be hidden.
+  let stopping = false;
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
     console.log('\nShutting down mock server...');
-    server.close(() => {
-      console.log('Server closed');
-      process.exit(0);
-    });
-  });
+    server.close(() => console.log('Server closed'));
+    server.closeAllConnections();
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 // Export for testing

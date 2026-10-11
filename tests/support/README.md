@@ -1,277 +1,141 @@
 # DeepSeek Mock Server
 
-Mock HTTP server that simulates the DeepSeek Chat Completion API for testing purposes.
+Local HTTP test utility for `POST /v1/chat/completions`. Requires Node.js 24,
+uses only Node standard libraries, and needs no API key or external service.
+Use synthetic meeting content only. This is not a production service: the Node
+listener uses the default host (all interfaces), so use an isolated dev/CI host.
 
-## Features
-
-- ✅ Simulates DeepSeek API `/v1/chat/completions` endpoint
-- ✅ Four response modes: normal, rate-limit, timeout, invalid-json
-- ✅ Keyword-based note generation from transcript text
-- ✅ No external dependencies (uses Node.js built-in modules only)
-- ✅ Controllable via request headers
-
-## Usage
-
-### Starting the Server
+## CLI startup and shutdown
 
 ```bash
-# Default port (3456)
-node tests/support/deepseek-mock-server.mjs
-
-# Custom port
-node tests/support/deepseek-mock-server.mjs --port=8080
+node tests/support/deepseek-mock-server.mjs             # port 3456
+node tests/support/deepseek-mock-server.mjs --port=8080 # chosen port
+node tests/support/deepseek-mock-server.mjs --port=0    # OS-assigned free port
 ```
 
-### Making Requests
+Wait for `DeepSeek mock server running on http://localhost:<actual-port>` before
+sending requests. An occupied port produces a listen error rather than readiness.
+On POSIX, Ctrl+C (`SIGINT`) or `SIGTERM` stops listening, destroys active connections
+(including unfinished requests and timeout responses), and prints `Server closed`.
+The process exits naturally; response timers are cancelled on disconnect. Wait for
+process exit before reusing the port. Windows POSIX signal delivery is not portable;
+use the programmatic cleanup pattern below there. Signal tests skip on Windows.
 
-The server exposes a single endpoint: `POST /v1/chat/completions`
+## Deterministic response selection
 
-#### Normal Mode (Default)
+Set `X-Mock-Mode` on each request; there is no random fault injection.
 
-Returns a structured meeting note generated from the transcript.
+| Header value | Response | What to assert |
+|---|---|---|
+| `normal` (default) | HTTP 200, OpenAI-compatible completion envelope | `choices[0].message.content` is a JSON-stringified meeting note |
+| `rate-limit` | HTTP 429, `Retry-After: 60` | Error type `rate_limit_error`, code `rate_limit_exceeded` |
+| `timeout` | Response delayed 30 seconds | A shorter client deadline aborts; disconnect cancels the response timer |
+| `invalid-json` | HTTP 200 with malformed outer JSON | Response JSON parsing fails |
+
+Missing or unknown mode headers produce a normal response. An unknown header value
+is still recorded as supplied. IDs, creation times and capture timestamps depend on
+the clock; assert payload semantics, not fixed values for these fields.
 
 ```bash
+# Replace normal with rate-limit or invalid-json to exercise those modes.
 curl -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Mock-Mode: normal" \
-  -d '{
-    "model": "deepseek-chat",
-    "messages": [
-      {
-        "role": "user",
-        "content": "We decided to launch next week. Alex will prepare the documentation."
-      }
-    ]
-  }'
+  -H 'Content-Type: application/json' \
+  -H 'X-Mock-Mode: normal' \
+  -d '{"model":"deepseek-chat","messages":[{"role":"system","content":"Generate meeting notes."},{"role":"user","content":"We decided to launch next week. Alex will prepare documentation."}]}'
+
+# Expected curl exit code 28 after two seconds; no response yet.
+curl --max-time 2 -X POST http://localhost:3456/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H 'X-Mock-Mode: timeout' \
+  -d '{"messages":[{"role":"user","content":"Synthetic meeting transcript"}]}'
 ```
 
-**Response:**
-```json
-{
-  "id": "chatcmpl-mock-1234567890",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "deepseek-chat",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "{\"summary\":\"Meeting discussion covered...\",\"keyTopics\":[...],\"decisions\":[...],\"openQuestions\":[...],\"actionItems\":[...]}"
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 50,
-    "completion_tokens": 150,
-    "total_tokens": 200
-  }
-}
-```
+Normal notes contain `summary`, `keyTopics`, `decisions`, `openQuestions` and
+`actionItems`. Generation uses simple keyword/pattern extraction, not inference.
+See [sample-transcript.json](../fixtures/sample-transcript.json) and
+[expected-note.json](../fixtures/expected-note.json) for synthetic fixtures.
 
-#### Rate Limit Mode
+## Request capture and lifecycle
 
-Returns a 429 error to simulate API rate limiting.
-
-```bash
-curl -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Mock-Mode: rate-limit" \
-  -d '{...}'
-```
-
-**Response (429):**
-```json
-{
-  "error": {
-    "message": "Rate limit exceeded. Please try again later.",
-    "type": "rate_limit_error",
-    "code": "rate_limit_exceeded"
-  }
-}
-```
-
-#### Timeout Mode
-
-Delays the response by 30 seconds to simulate network timeout.
-
-```bash
-curl -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Mock-Mode: timeout" \
-  -d '{...}'
-```
-
-#### Invalid JSON Mode
-
-Returns malformed JSON to simulate parsing errors.
-
-```bash
-curl -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Mock-Mode: invalid-json" \
-  -d '{...}'
-```
-
-## Response Modes
-
-| Mode | Header Value | Description | Use Case |
-|------|-------------|-------------|----------|
-| Normal | `normal` | Returns valid structured note | Happy path testing |
-| Rate Limit | `rate-limit` | Returns 429 with retry-after | Test rate limit handling |
-| Timeout | `timeout` | Delays response 30 seconds | Test timeout handling |
-| Invalid JSON | `invalid-json` | Returns malformed JSON | Test error recovery |
-
-## Note Generation Logic
-
-The mock server uses simple keyword extraction to generate meeting notes:
-
-### Key Topics
-- Detects: launch, release, pricing, budget, timeline
-- Default: "General Discussion"
-
-### Decisions
-- Pattern: "decided", "agreed", "will"
-- Extracts text following decision keywords
-
-### Action Items
-- Pattern: "[Name] will/should/needs to [task]"
-- Extracts owner and task
-- Sets dueDate to "unspecified"
-
-### Open Questions
-- Extracts sentences ending with "?"
-- Detects: "unclear", "TBD", "open"
-
-## Integration with Tests
-
-See [tests/deepseek-mock.test.mjs](../deepseek-mock.test.mjs) for integration test examples.
-
-### Basic Test Pattern
+Save this runnable example under `tests/` and run `node --test tests/<file>.test.mjs`:
 
 ```javascript
+import { test } from 'node:test';
+import { deepStrictEqual } from 'node:assert';
+import { once } from 'node:events';
 import { startServer } from './support/deepseek-mock-server.mjs';
 
-const server = startServer(3456);
-
-// Make requests to http://localhost:3456
-
-server.close();
-```
-
-### Request Inspection and Assertions
-
-Each server instance records received requests in memory for test assertions. This enables validation of request content without implementing real conversation history or model logic.
-
-**Accessing captured requests:**
-
-```javascript
-const server = startServer(3456);
-
-// Make some requests...
-await fetch('http://localhost:3456/v1/chat/completions', {
-  method: 'POST',
-  body: JSON.stringify({
-    messages: [
-      { role: 'system', content: 'You are a meeting note generator.' },
-      { role: 'user', content: 'Project deadline is next Friday.' },
-    ],
-  }),
-});
-
-// Inspect what the server received
-const requests = server.getRequests();
-console.log(requests[0].messages); // Array of { role, content }
-console.log(requests[0].mode);     // 'normal', 'rate-limit', etc.
-console.log(requests[0].timestamp); // Request time
-```
-
-**Asserting user and system context:**
-
-```javascript
-import { once } from 'node:events';
-
 test('client sends system context and the exact transcript', async () => {
-  const server = startServer(3456);
-  await once(server, 'listening');
-
+  const server = startServer(0); // OS-assigned port, no random collisions
+  await once(server, 'listening'); // rejects on listen errors, no startup sleeps
+  const endpoint = `http://localhost:${server.address().port}/v1/chat/completions`;
+  const messages = [
+    { role: 'system', content: '会议上下文：讨论发布计划。' },
+    { role: 'user', content: '我们决定下周发布。' },
+  ];
   try {
-    // Replace with the real client call under test
-    await fetch('http://localhost:3456/v1/chat/completions', {
+    // Replace fetch with the API client under test, configured for this endpoint.
+    const response = await fetch(endpoint, {
       method: 'POST',
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: 'You are a meeting note generator.' },
-          { role: 'user', content: 'Project deadline is next Friday.' },
-        ],
-      }),
+      headers: { 'Content-Type': 'application/json', 'X-Mock-Mode': 'normal' },
+      body: JSON.stringify({ model: 'deepseek-chat', messages }),
     });
-
-    const { messages } = server.getRequests()[0];
-    const systemMsg = messages.find((m) => m.role === 'system');
-    const userMsg = messages.find((m) => m.role === 'user');
-
-    // Fails if the client drops or changes the system context
-    ok(systemMsg?.content.includes('meeting note generator'));
-    strictEqual(userMsg?.content, 'Project deadline is next Friday.');
+    await response.json();
+    deepStrictEqual(server.getRequests()[0].messages, messages);
   } finally {
-    server.close();
+    const closed = new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    // close() alone waits for active requests; timeout mode could take 30s.
+    server.closeAllConnections();
+    await closed;
   }
 });
 ```
 
-See `captures request messages for inspection` and `detects missing or incorrect context` in [deepseek-mock.test.mjs](../deepseek-mock.test.mjs) for the runnable versions.
+`server.getRequests()` returns a **deep, independent snapshot** of
+`{ timestamp, mode, messages }` records. Changing its array, records or nested
+messages cannot change the server log; earlier snapshots do not grow with later
+requests. `timestamp` is epoch milliseconds when the complete body is parsed.
+Records follow **body parsing order**, not TCP connection arrival order.
 
-**Usage notes and cleanup:**
+All four modes record messages before dispatch, including timeout requests that
+clients later abort. Missing messages become `[]`; malformed JSON and requests to
+other endpoints are not captured. The mock captures context but **does not require
+or validate a system message**: client tests must assert that themselves. Chinese
+UTF-8 characters split across network chunks are preserved.
 
-- Request logs exist **only in memory** during the test lifecycle
-- Logs are **not written to disk** or persisted across server restarts
-- Each `startServer()` call creates a **fresh, independent** request log
-- Call `server.close()` to clean up when done
-- Request content is used **only for test assertions**, never for application logging
+Each `startServer()` creates a fresh independent log. `server.close()` stops the
+listener but **does not erase records**: they remain readable while the server is
+referenced. Snapshots live as long as callers reference them. Release both the
+server and snapshots after assertions to allow garbage collection. A new instance
+starts empty, even on a reused port. Records are never printed or written to disk
+by the server. Capture is unbounded and intended only for short-lived tests.
+No HTTP inspection endpoint exists; use the imported server object for assertions.
 
-This approach validates that clients send correct user transcripts and system context, without requiring conversation history or actual model inference.
-
-## Fixtures
-
-Sample test data is available in [tests/fixtures/](../fixtures/):
-
-- `sample-transcript.json` - Example transcript with segments
-- `expected-note.json` - Expected note structure
-
-## API Compatibility
-
-The mock server matches DeepSeek API response format:
-
-- Response structure follows OpenAI-compatible format
-- `choices[0].message.content` contains JSON-stringified note
-- Usage statistics included in response
-- Error responses match DeepSeek error format
-
-## Limitations
-
-- Keyword extraction is simplistic (not AI-based)
-- No streaming support
-- No authentication/API key validation
-- Single endpoint only
-- No conversation history support
-
-## Development
-
-To modify the note generation logic, edit the `generateNoteFromTranscript()` function in [deepseek-mock-server.mjs](deepseek-mock-server.mjs:23).
-
-## Running Tests
+## Self-tests and CI
 
 ```bash
-npm test -- tests/deepseek-mock.test.mjs
+npm test -- tests/deepseek-mock.test.mjs tests/deepseek-mock-lifecycle.test.mjs tests/deepseek-mock-cli.test.mjs
+# Or, without installing project dependencies (mock-only):
+node --test tests/deepseek-mock*.test.mjs
 ```
 
-All tests should pass:
-- ✅ Normal mode returns valid note structure
-- ✅ Rate-limit mode returns 429
-- ✅ Timeout mode delays response
-- ✅ Invalid-json mode returns malformed response
-- ✅ Handles empty transcript gracefully
-- ✅ Extracts decisions from transcript
-- ✅ Returns 404 for unknown endpoints
+`npm test` and CI `check` automatically discover all three suites. They cover:
+
+- Normal note structure, 429 and exact Retry-After, client timeout, malformed JSON.
+- Exact system/user text, missing context, Chinese split inside a UTF-8 character.
+- Deep snapshot mutation safety, record order, per-instance isolation and retained
+  records after close; fresh capture and successful rebind on the same port.
+- Active timeout connection cleanup, ephemeral-port CLI readiness, SIGINT/SIGTERM
+  exit and port release (POSIX).
+
+## Limits
+
+- Keyword extraction is simplistic; no streaming, authentication or API-key checks.
+- Only the chat-completions endpoint is modeled; no real conversation history.
+- Invalid JSON mode corrupts the outer HTTP payload, not just the assistant content.
+- This verifies the mock, not a production API client's retry policy, real DeepSeek
+  inference, desktop packaging, or macOS/Windows platform behavior.
+
+Implementation: [deepseek-mock-server.mjs](deepseek-mock-server.mjs).
