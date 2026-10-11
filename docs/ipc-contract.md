@@ -53,13 +53,17 @@
 
 | 环境 | 已实现 | 尚未实现 |
 |---|---|---|
-| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、转写读取、纪要读取/编辑、非敏感设置持久化、录音生命周期、AudioWriter、loopback | 音频导入、ASR 生命周期/真实转写、DeepSeek、凭证、导出 |
+| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、录音生命周期、AudioWriter、loopback、自动/手动转写和取消、任务错误持久化、转写读取、纪要读取/编辑、非敏感设置持久化 | 音频导入、真实模型引擎（#8）、DeepSeek、凭证、导出 |
 | 浏览器 mock | 全部业务接口的内存模拟、状态/失败/取消/进度/编辑冲突 | 真实录音、文件、数据库、外部 API |
 
-录音 header 恢复已接入；转写成功后的音频清理和真实 ASR 启动仍属后续保留策略和 #7。recording.stop 当前返回 captured，后续通过 afterCapture 回调接入自动转写。
+`createSessionServices` 是 Electron 与集成测试共用的 Main 编排入口。recording.stop 在 WAV finalize 和 captured 提交后登记自动转写，再发布 captured；响应始终是该快照。手动启动、取消、删除和退出使待启动任务失效，旧任务的结果与进度按 jobId 丢弃。转写失败可通过 meetings.get 的 lastError 查询，音频不删除。
+
+删除先提交墓碑，使正在执行或排队的任务失效，再等待 sidecar 和 AudioWriter 释放资源，最后删除文件和数据库记录。退出后拒绝新的业务请求，并等待所有已启动的 sidecar 结束后关闭数据库。转写成功后的音频自动清理仍属后续保留策略，当前保留成功音频。
 
 ## 冻结验证和后续变更
 
 `tests/contracts.test.mjs` 检查 Preload 白名单、Main 参数校验、安全错误与 schema 完整性；`tests/mock-api.test.mjs` 检查取消/重试、停止返回状态、事件和编辑冲突；`tests/storage.test.mjs` 验证实际 SQLite 事务与重启持久化。
+
+`tests/transcription-integration.test.mjs` 使用正式 Main 编排、共享 dispatcher、临时 SQLite 和文件目录，经 PCM IPC → WAV → 真实 worker --fake → 时间戳片段入库，验证失败、取消/重试、删除、退出、SQL 回滚和自动启动竞争。它不覆盖真机采集、安装包或真实模型质量，完整生成/导出集成仍由 #36 验收。
 
 正式冻结前，前后端审核者需确认上述状态边界及 TurnnoteApi、Result/ErrorCode、事件、Main/Preload/mock 一致性，并留下可查记录。后续变更在同一个 PR 更新类型、通道、schema、调用方、mock、测试和契约文档；数据库结构变化必须新增编号 migration。禁止修改已经发布的迁移或保留旧接口转发层。

@@ -105,10 +105,9 @@ export function createRecordingHandlers(
         }
         requireCondition(store.finishRecording(jobId), 'INVALID_STATE');
         recordings.delete(jobId);
-        const captured = updated(id);
-        // #7 supplies the ASR starter. Never claim transcription before it exists.
-        if (afterCapture) setTimeout(() => afterCapture(id), 0);
-        return captured;
+        // Register before publishing: listeners may immediately start and cancel ASR.
+        afterCapture?.(id);
+        return updated(id);
       },
       fail: async (id, jobId, code) => {
         const meeting = store.get(id);

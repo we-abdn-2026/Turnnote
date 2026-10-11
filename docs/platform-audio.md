@@ -22,7 +22,7 @@ Renderer 不接触文件路径，只提交 `meetingId` 和 PCM 数据。
 6. 保存 start 返回的 activeJobId；Worklet 混为单声道、转 Int16，每约 1 秒调用一次 `turnnote.recording.appendChunk(meetingId, jobId, chunk)`
 7. 停止时关闭所有轨道和 `AudioContext`，调用 `turnnote.recording.stop`，Main 完成写入并开始转写
 
-stop(meetingId, jobId) 固定返回 captured 快照，后续自动转写通过 meetingUpdated 事件报告。采集失败后 Renderer 关闭轨道并调用 recording.fail(meetingId, jobId, code)，Main 使用安全错误目录并保留可恢复音频。用户显式取消调用 recording.cancel(meetingId, jobId)，文件清理成功后才回到 created；清理失败不丢失引用。完整状态边界见 [W1 IPC 契约基线](ipc-contract.md)。录音入口已实现；#7 的真实 ASR starter 尚未接入，当前 stop 停留在 captured，不伪装成已转写。createRecordingHandlers 的 afterCapture 回调预留后续接入点。
+stop(meetingId, jobId) 固定返回 captured 快照，后续自动转写通过 meetingUpdated 事件报告。采集失败后 Renderer 关闭轨道并调用 recording.fail(meetingId, jobId, code)，Main 使用安全错误目录并保留可恢复音频。用户显式取消调用 recording.cancel(meetingId, jobId)，文件清理成功后才回到 created；清理失败不丢失引用。完整状态边界见 [W1 IPC 契约基线](ipc-contract.md)。录音与自动转写通过 createSessionServices 接入；captured 提交后先登记自动转写，再发布 captured 事件。手动启动、取消、删除和退出会使待启动任务失效；真实模型引擎仍由 #8 验收。
 
 ## 接口
 

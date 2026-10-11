@@ -5,7 +5,7 @@
 - 起点：dev `469d5fc5776a5f7da2da6c1b93a05d1962e2ab65`。
 - 分支：`feat/audio-capture-writer`。记录适用于本次实现；提交 revision 由 PR 指向的 commit 确定。
 - 共享 contracts、IPC 通道和数据库 schema 均未修改。
-- ASR 自动启动属于 #7，目前录音 stop 正确停留在 captured，Main 提供 afterCapture 接入点。
+- 此原始基线尚未接入 #7：录音 stop 返回 captured，Main 提供 afterCapture 接入点。当前转写编排与验证见下方 #71 基线更新记录。
 
 ## macOS 实际采集（2026-10-11，Asia/Shanghai）
 
@@ -61,6 +61,14 @@
 - 初始 header 写入失败时关闭 fd 并尝试移除独占创建的文件，覆盖清理成功与失败时安全错误返回。
 - 回归使用真实 SQLite trigger、真实 WAV 与受控媒体；覆盖文件 unlink EBUSY 后恢复、事务回滚后保存/失败/退出恢复、文件已删除但丢弃事务回滚、失败上报重试、并发重试和实际 React 控件。
 - 本轮 lint、typecheck、build 通过；`npm test` 为 198 通过、10 跳过（缺少 faster-whisper / 真实模型），UI 15/15 通过；Electron 44.4.5 / Node 24.21.0 的 SQLite 加载、迁移、持久化 smoke 通过。此轮不增加 macOS/Windows 真机音频验收证据。
+
+## #71 转写编排基线更新（2026-10-12）
+
+- #65 已合并，#71 基于 dev `f0b8918` 接入自动/手动转写，保留工作区唯一采集会话和上述保存、丢弃重试行为。
+- `createSessionServices` 在 captured 提交后、事件发布前登记自动转写；手动启动/取消、删除和退出使待启动任务失效。
+- 新增工作区采集 adapter → 正式 Main 编排 → SQLite/WAV → worker.py --fake 集成回归：保存事务回滚后媒体只关闭一次，无转写任务；恢复后保留同一 WAV，创建并完成唯一的自动转写任务，工作区通过 Main 事件显示 transcribing/transcribed。
+- 本轮 lint、typecheck、build 通过；`npm test` 为 224 通过、10 跳过（缺少 faster-whisper / 真实模型），浏览器 UI 15/15 通过；Electron 44.4.5 / Node 24.21.0 的 SQLite 加载、迁移、持久化 smoke 通过。
+- 媒体 fixture 和 fake worker 只证明流程及事务，不构成新的真机采集、安装包或真实模型验收。
 
 ## 尚需验收
 

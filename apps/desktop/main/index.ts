@@ -1,16 +1,16 @@
 import { app, BrowserWindow, dialog, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { eventChannels, type MeetingDetail } from '@shared/contracts';
+import { eventChannels } from '@shared/contracts';
 import { ok } from '@shared/result';
 import { registerIpc } from './ipc';
 import { MeetingStore } from './storage/database';
-import { createStorageHandlers } from './storage/handlers';
-import { createRecordingHandlers } from './platform/recording';
+import { createSessionServices } from './services/session';
+import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 
 initializeLoopback();
-let recording: ReturnType<typeof createRecordingHandlers> | undefined;
+let services: ReturnType<typeof createSessionServices> | undefined;
 let shuttingDown = false;
 
 let window: BrowserWindow | undefined;
@@ -21,6 +21,12 @@ app.on('second-instance', () => {
   if (window?.isMinimized()) window.restore();
   window?.focus();
 });
+
+function interruptRecording(): void {
+  void services?.interruptRecording().catch(() => {
+    /* Keep ownership for retry; startup recovery handles unavailable storage. */
+  });
+}
 
 function createWindow(): void {
   window = new BrowserWindow({
@@ -35,15 +41,9 @@ function createWindow(): void {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
-  window.webContents.on('did-start-navigation', () => {
-    void recording?.shutdown();
-  });
-  window.webContents.on('render-process-gone', () => {
-    void recording?.shutdown();
-  });
-  window.webContents.on('destroyed', () => {
-    void recording?.shutdown();
-  });
+  window.webContents.on('did-start-navigation', interruptRecording);
+  window.webContents.on('render-process-gone', interruptRecording);
+  window.webContents.on('destroyed', interruptRecording);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -60,41 +60,46 @@ void app
     mkdirSync(audioDirectory, { recursive: true });
     store = new MeetingStore(join(app.getPath('userData'), 'turnnote.db'), audioDirectory);
     store.interruptProcessing();
-    const emit = (meeting: MeetingDetail) => {
+    const publish = (channel: string, payload: unknown) => {
       for (const browser of BrowserWindow.getAllWindows()) {
         if (!browser.webContents.isDestroyed()) {
           try {
-            browser.webContents.send(eventChannels.meetingUpdated, meeting);
+            browser.webContents.send(channel, payload);
           } catch {
             /* Window closed during delivery. */
           }
         }
       }
     };
-    const storageHandlers = createStorageHandlers(store, audioDirectory, emit);
-    recording = createRecordingHandlers(store, audioDirectory, emit, () => ({
-      microphone:
-        process.platform === 'darwin'
-          ? systemPreferences.getMediaAccessStatus('microphone')
-          : 'unknown',
-      screen:
-        process.platform === 'darwin'
-          ? systemPreferences.getMediaAccessStatus('screen')
-          : process.platform === 'win32'
-            ? 'granted'
+    services = createSessionServices(store, {
+      audioDirectory,
+      modelsDirectory: join(app.getPath('userData'), 'models'),
+      sidecar: () =>
+        resolveSidecarCommand({
+          isPackaged: app.isPackaged,
+          appPath: app.getAppPath(),
+          resourcesPath: process.resourcesPath,
+        }),
+      emitMeeting: (meeting) => publish(eventChannels.meetingUpdated, meeting),
+      emitProgress: (progress) => publish(eventChannels.jobProgress, progress),
+      permissions: () => ({
+        microphone:
+          process.platform === 'darwin'
+            ? systemPreferences.getMediaAccessStatus('microphone')
             : 'unknown',
-    }));
-    await recording.recover();
-    const deleteMeeting = storageHandlers.meetings!.delete!;
-    storageHandlers.meetings!.delete = async (id) => {
-      await recording!.releaseMeeting(id);
-      return deleteMeeting(id);
-    };
+        screen:
+          process.platform === 'darwin'
+            ? systemPreferences.getMediaAccessStatus('screen')
+            : process.platform === 'win32'
+              ? 'granted'
+              : 'unknown',
+      }),
+    });
+    await services.recover();
     // 清理上次未完成的删除；失败时保留墓碑，下一次启动继续。
-    for (const meeting of store.getDeleted()) await storageHandlers.meetings!.delete!(meeting.id);
+    for (const meeting of store.getDeleted()) await services.handlers.meetings!.delete!(meeting.id);
     registerIpc({
-      ...storageHandlers,
-      ...recording.handlers,
+      ...services.handlers,
       app: {
         getInfo: async () =>
           ok({
@@ -122,10 +127,10 @@ app.on('will-quit', () => {
 });
 
 app.on('before-quit', (event) => {
-  if (shuttingDown || !recording) return;
+  if (shuttingDown || !services) return;
   event.preventDefault();
   shuttingDown = true;
-  void recording.shutdown().finally(() => app.quit());
+  void services.shutdown().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {

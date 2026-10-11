@@ -2,6 +2,8 @@ export { MeetingStore } from '../../apps/desktop/main/storage/database';
 export { createStorageHandlers } from '../../apps/desktop/main/storage/handlers';
 export { migrate, migrations } from '../../apps/desktop/main/storage/migrations';
 export { SidecarError, transcribe, withFakeFlag } from '../../apps/desktop/main/services/sidecar';
+export { resolveSidecarCommand } from '../../apps/desktop/main/services/sidecar-command';
+export { createSessionServices } from '../../apps/desktop/main/services/session';
 export { createMockApi } from '../../apps/desktop/renderer/mock/mock-api';
 export { AudioDeviceSelector } from '../../apps/desktop/renderer/components/AudioDeviceSelector';
 export {
