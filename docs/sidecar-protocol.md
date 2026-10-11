@@ -144,7 +144,7 @@ Sidecar 自己写的诊断只包含阶段和异常类型名（如 `decode failed
 
 - 音频由 PyAV 解码为 16kHz 单声道后送入 faster-whisper（CPU、int8），开启 VAD 过滤静音。
 - `startMs`/`endMs` 为整数毫秒，截断到 `durationMs` 以内；`durationMs` 为解码后音频时长。
-- 空文本片段不输出；`segmentCount` 等于实际输出的 `segment` 数。
+- 输出的片段满足共享 `transcriptSegmentsSchema`：`endMs > startMs`、文本非空、`startMs` 非递减。截断或舍入后时长为零的片段（完全落在音频之外、零时长、舍入坍缩）和空文本片段不输出；`segmentCount` 等于实际输出的 `segment` 数。
 - 每个 `segment` 后发送一次 `progress`（按片段结束时间占总时长计算，最高 99），`done` 前发送 100。
 
 ## 模型存储

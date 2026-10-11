@@ -1,17 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { transcriptSegmentsSchema } from '../out/tests/runtime.mjs';
 import { pythonExecutable } from './support/python.mjs';
 
 const WORKER = 'services/asr-worker/worker.py';
@@ -242,6 +235,79 @@ test('model load failure diagnostics do not leak the model path', needsFasterWhi
   assert.doesNotMatch(stderr, /sensitive-model-dir/);
 });
 
+// 只替换 WhisperModel 推理，返回受控片段；音频仍由真实 PyAV 解码（与审查复现方式一致）。
+// segments 为 [startSeconds, endSeconds, text]
+function stubWhisper(dir, segments) {
+  writeFileSync(
+    join(dir, 'sitecustomize.py'),
+    `import types
+import faster_whisper
+SEGMENTS = ${JSON.stringify(segments)}
+class _StubModel:
+    def __init__(self, *args, **kwargs):
+        pass
+    def transcribe(self, audio, **kwargs):
+        segs = [types.SimpleNamespace(start=s, end=e, text=t) for s, e, t in SEGMENTS]
+        return iter(segs), types.SimpleNamespace(language="en")
+faster_whisper.WhisperModel = _StubModel
+`,
+  );
+  return { PYTHONPATH: dir };
+}
+
+function runStubbed(t, segments, seconds = 2) {
+  const dir = tempDir(t);
+  const audioPath = silentWav(join(dir, 'audio.wav'), seconds);
+  // 文件齐全以通过加载前检查；内容不会被读取，推理已被替换
+  const modelPath = brokenModelDir(join(dir, 'model'));
+  return runWithStderr([transcribeRequest({ audioPath, modelPath })], {
+    env: stubWhisper(dir, segments),
+  }).responses;
+}
+
+// 审查 #62 复审 P2：截断后零时长的片段曾被输出并计入 segmentCount，无法入库
+test('segment collapsed to zero duration by clamping is dropped', needsFasterWhisper, (t) => {
+  // 审查复现：2 秒音频，片段 2.4–3.0 秒，截断后 startMs=endMs=2000
+  const responses = runStubbed(t, [[2.4, 3.0, 'past the end']]);
+  const segments = responses.filter((r) => r.type === 'segment');
+  const done = responses.at(-1);
+  assert.equal(done.type, 'done', JSON.stringify(done));
+  assert.deepEqual(segments, []);
+  assert.equal(done.segmentCount, 0);
+  assert.equal(done.durationMs, 2000);
+});
+
+test('worker output satisfies the shared transcript schema', needsFasterWhisper, (t) => {
+  const responses = runStubbed(t, [
+    [0.0, 1.0, 'inside'],
+    [1.0, 3.0, 'overshoots the end'], // 截断为 1000–2000
+    [2.0, 2.5, 'starts at the end'], // 截断为 2000–2000，丢弃
+    [2.5, 3.0, 'entirely past the end'], // 丢弃
+    [1.5, 1.5, 'zero length'], // 丢弃
+    [1.9999, 2.0001, 'collapses by rounding'], // 舍入为 2000–2000，丢弃
+  ]);
+  const segments = responses
+    .filter((r) => r.type === 'segment')
+    .map(({ startMs, endMs, text }) => ({ startMs, endMs, text }));
+  const done = responses.at(-1);
+
+  assert.deepEqual(segments, [
+    { startMs: 0, endMs: 1000, text: 'inside' },
+    { startMs: 1000, endMs: 2000, text: 'overshoots the end' },
+  ]);
+  assert.equal(done.type, 'done');
+  assert.equal(done.segmentCount, segments.length);
+  assert.ok(segments.every((s) => s.endMs <= done.durationMs));
+  // 与 MeetingStore.completeTranscription 使用的同一份 schema
+  assert.ok(transcriptSegmentsSchema.safeParse(segments).success);
+
+  const percents = responses.filter((r) => r.type === 'progress').map((r) => r.percent);
+  assert.deepEqual(
+    percents,
+    [...percents].sort((a, b) => a - b),
+  );
+  assert.equal(percents.at(-1), 100);
+});
 
 // 真实模型验收：TURNNOTE_ASR_MODEL=<模型目录> TURNNOTE_ASR_AUDIO=<音频> npm test
 const realModel = process.env.TURNNOTE_ASR_MODEL;

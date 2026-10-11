@@ -25,5 +25,6 @@ export {
   invokeSchemas,
   meetingNoteSchema,
   settingsPatchSchema,
+  transcriptSegmentsSchema,
 } from '../../packages/contracts/src/schemas';
 export { errorMessages, ok, fail, TurnnoteError } from '../../packages/contracts/src/result';
