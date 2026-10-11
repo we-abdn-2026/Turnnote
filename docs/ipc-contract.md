@@ -8,7 +8,7 @@
 - Main 在调用 handler 前执行共享 schema 校验；无效参数返回 `INVALID_INPUT`，合法但尚未实现的方法返回 `NOT_IMPLEMENTED`。
 - Main 只接收窗口主 frame 的请求，阻止页面导航和新窗口。窗口保持 `contextIsolation=true`、`sandbox=true`、`nodeIntegration=false`。
 - 所有业务调用返回 `Result<T>`；预期错误使用共享安全错误目录，未知异常返回 `INTERNAL`。不得向 Renderer 或日志输出底层异常、路径、API Key 和会议正文。
-- `loopback.enable/disable` 是第三方库固定通道，不返回 `Result`；#6 完成前 Electron 中调用会拒绝，不伪装为采集成功。浏览器 mock 中为空操作。
+- `loopback.enable/disable` 是第三方库固定通道，不返回 `Result`；Electron 中固定通道已接入库的平台初始化，并增加主 frame 校验及安全的采集拒绝结果。浏览器 mock 中为空操作。
 - 本地状态和副作用归 Main；Python 不接触数据库、凭证和 DeepSeek。数据库提交完成后再发布事件。
 
 ## 状态、取消和失败
@@ -53,10 +53,10 @@
 
 | 环境 | 已实现 | 尚未实现 |
 |---|---|---|
-| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、转写读取、纪要读取/编辑、非敏感设置持久化 | 音频采集/导入、AudioWriter、ASR 生命周期/真实转写、DeepSeek、凭证、导出、loopback |
+| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、转写读取、纪要读取/编辑、非敏感设置持久化、录音生命周期、AudioWriter、loopback | 音频导入、ASR 生命周期/真实转写、DeepSeek、凭证、导出 |
 | 浏览器 mock | 全部业务接口的内存模拟、状态/失败/取消/进度/编辑冲突 | 真实录音、文件、数据库、外部 API |
 
-录音 header 恢复、转写成功后的音频清理和真实任务启动仍分别属于 #5、后续保留策略和 #7，不因类型或数据库方法存在而宣称已完成。
+录音 header 恢复已接入；转写成功后的音频清理和真实 ASR 启动仍属后续保留策略和 #7。recording.stop 当前返回 captured，后续通过 afterCapture 回调接入自动转写。
 
 ## 冻结验证和后续变更
 

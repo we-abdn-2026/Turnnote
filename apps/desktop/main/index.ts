@@ -1,11 +1,17 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { eventChannels } from '@shared/contracts';
+import { eventChannels, type MeetingDetail } from '@shared/contracts';
 import { ok } from '@shared/result';
 import { registerIpc } from './ipc';
 import { MeetingStore } from './storage/database';
 import { createStorageHandlers } from './storage/handlers';
+import { createRecordingHandlers } from './platform/recording';
+import { initializeLoopback } from './platform/loopback';
+
+initializeLoopback();
+let recording: ReturnType<typeof createRecordingHandlers> | undefined;
+let shuttingDown = false;
 
 let window: BrowserWindow | undefined;
 let store: MeetingStore | undefined;
@@ -29,6 +35,15 @@ function createWindow(): void {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+  window.webContents.on('did-start-navigation', () => {
+    void recording?.shutdown();
+  });
+  window.webContents.on('render-process-gone', () => {
+    void recording?.shutdown();
+  });
+  window.webContents.on('destroyed', () => {
+    void recording?.shutdown();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -45,7 +60,7 @@ void app
     mkdirSync(audioDirectory, { recursive: true });
     store = new MeetingStore(join(app.getPath('userData'), 'turnnote.db'), audioDirectory);
     store.interruptProcessing();
-    const storageHandlers = createStorageHandlers(store, audioDirectory, (meeting) => {
+    const emit = (meeting: MeetingDetail) => {
       for (const browser of BrowserWindow.getAllWindows()) {
         if (!browser.webContents.isDestroyed()) {
           try {
@@ -55,11 +70,31 @@ void app
           }
         }
       }
-    });
+    };
+    const storageHandlers = createStorageHandlers(store, audioDirectory, emit);
+    recording = createRecordingHandlers(store, audioDirectory, emit, () => ({
+      microphone:
+        process.platform === 'darwin'
+          ? systemPreferences.getMediaAccessStatus('microphone')
+          : 'unknown',
+      screen:
+        process.platform === 'darwin'
+          ? systemPreferences.getMediaAccessStatus('screen')
+          : process.platform === 'win32'
+            ? 'granted'
+            : 'unknown',
+    }));
+    await recording.recover();
+    const deleteMeeting = storageHandlers.meetings!.delete!;
+    storageHandlers.meetings!.delete = async (id) => {
+      await recording!.releaseMeeting(id);
+      return deleteMeeting(id);
+    };
     // 清理上次未完成的删除；失败时保留墓碑，下一次启动继续。
     for (const meeting of store.getDeleted()) await storageHandlers.meetings!.delete!(meeting.id);
     registerIpc({
       ...storageHandlers,
+      ...recording.handlers,
       app: {
         getInfo: async () =>
           ok({
@@ -84,6 +119,13 @@ void app
 
 app.on('will-quit', () => {
   store?.close();
+});
+
+app.on('before-quit', (event) => {
+  if (shuttingDown || !recording) return;
+  event.preventDefault();
+  shuttingDown = true;
+  void recording.shutdown().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {

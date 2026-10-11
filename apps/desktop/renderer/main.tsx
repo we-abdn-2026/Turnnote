@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { MeetingSummary } from '@shared/contracts';
 import './styles.css';
+import { RecordingControls } from './audio/recording-controls';
 
 function App(): ReactElement {
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
@@ -9,6 +10,11 @@ function App(): ReactElement {
   useEffect(() => {
     void window.turnnote.meetings.list().then((result) => {
       if (result.ok) setMeetings(result.value);
+    });
+    return window.turnnote.events.onMeetingUpdated(() => {
+      void window.turnnote.meetings.list().then((result) => {
+        if (result.ok) setMeetings(result.value);
+      });
     });
   }, []);
 
@@ -19,15 +25,13 @@ function App(): ReactElement {
           <p className="eyebrow">TURNNOTE</p>
           <h1>Meeting workspace</h1>
         </div>
-        <button type="button" disabled>
-          Start meeting
-        </button>
+        <RecordingControls />
       </header>
       <section className="empty-state" aria-live="polite">
         <h2>{meetings.length === 0 ? 'No meetings yet' : `${meetings.length} meetings`}</h2>
         <p>
-          The project foundation is ready. Meeting capture and transcription will be added in the
-          next implementation stage.
+          Record microphone and system audio locally. Transcription will be added in the next
+          implementation stage.
         </p>
       </section>
     </main>
