@@ -14,6 +14,8 @@ Node.js Main Process 与 Python ASR Worker 通过 stdin/stdout 的 JSON Lines �
 
 Sidecar 每任务单次启动，不常驻。
 
+Main 使用 processing_jobs 的唯一 ID 关联 transcribe 请求和响应，进度转发时携带 jobId。取消或重试后，旧 job 的 segment/done/error 不提交、不转发进度；数据库通过 isJobCurrent 及完成方法二次校验。Sidecar 的 INVALID_JSON/INVALID_REQUEST/UNKNOWN_REQUEST 属于协议问题，由 Main 映射为 SIDECAR_PROTOCOL_ERROR，不将不受控 message 直接展示。见 [W1 IPC 契约基线](ipc-contract.md)。
+
 ## 请求格式
 
 每行一个 JSON 对象，以 `\n` 结束。
@@ -116,7 +118,7 @@ Sidecar 每任务单次启动，不常驻。
 |---|---|
 | 10 秒内无 `pong` | 杀进程，记录 `SIDECAR_START_FAILED` |
 | 转写中 120 秒无任何输出 | 杀进程，记录 `SIDECAR_TIMEOUT` |
-| 进程意外退出 | 记录 `SIDECAR_CRASHED`，附 stderr 末尾 |
+| 进程意外退出 | 记录 `SIDECAR_CRASHED`；stderr 仅用于内部诊断，不透传或持久化原文 |
 | stdout 出现非 JSON 行 | 记录 `SIDECAR_PROTOCOL_ERROR`，杀进程 |
 | 用户取消 | 直接杀进程，不发送取消消息 |
 

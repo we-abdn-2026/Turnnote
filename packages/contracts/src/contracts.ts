@@ -11,13 +11,17 @@ export type MeetingStatus =
   | 'failed'
   | 'deleted';
 
-export type JobKind = 'transcribing' | 'generating';
+export type JobKind = 'recording' | 'transcribing' | 'generating';
+
+export type CaptureErrorCode =
+  'PERMISSION_DENIED' | 'DEVICE_NOT_FOUND' | 'CAPTURE_FAILED' | 'WRITE_FAILED';
 
 export type ErrorCode =
   // 通用
   | 'INVALID_INPUT'
   | 'NOT_FOUND'
   | 'INVALID_STATE'
+  | 'CONFLICT'
   | 'NOT_IMPLEMENTED'
   | 'INTERNAL'
   // 音频（docs/platform-audio.md）
@@ -63,8 +67,10 @@ export interface MeetingDetail extends MeetingSummary {
   retainAudio: boolean;
   hasAudio: boolean;
   keywords: string[];
+  /** 当前任务标识；取消、失败、完成后为 null，过滤迟到进度事件 */
+  activeJobId: string | null;
   /** status 为 failed 时的失败阶段和原因 */
-  lastError: (AppError & { kind: JobKind }) | null;
+  lastError: (AppError & { kind: JobKind; jobId: string }) | null;
 }
 
 export interface TranscriptSegment {
@@ -116,7 +122,9 @@ export interface CapturePermissions {
 
 export interface JobProgress {
   meetingId: string;
-  kind: JobKind;
+  /** 重试使用新的 jobId；前端忽略已取消任务的迟到进度 */
+  jobId: string;
+  kind: Exclude<JobKind, 'recording'>;
   /** 0-100 */
   percent: number;
 }
@@ -136,31 +144,40 @@ export interface TurnnoteInvokeApi {
     setRetainAudio(meetingId: string, retain: boolean): Promise<Result<MeetingDetail>>;
     setKeywords(meetingId: string, keywords: string[]): Promise<Result<MeetingDetail>>;
     delete(meetingId: string): Promise<Result<null>>;
-    /** Main 打开文件对话框；用户取消时返回 null */
+    /** 用户取消返回 null；成功返回 captured，随后通过事件自动转写 */
     importAudio(): Promise<Result<MeetingDetail | null>>;
   };
   recording: {
     getPermissions(): Promise<Result<CapturePermissions>>;
-    /** created → recording */
+    /** created → recording；失败录音须先 cancel 清理后才能重新录音 */
     start(meetingId: string): Promise<Result<MeetingDetail>>;
     /** 16kHz 单声道 Int16 PCM，约 1 秒一块 */
-    appendChunk(meetingId: string, chunk: Int16Array): Promise<Result<null>>;
-    /** recording → captured，Main 随后自动开始转写 */
-    stop(meetingId: string): Promise<Result<MeetingDetail>>;
+    appendChunk(meetingId: string, jobId: string, chunk: Int16Array): Promise<Result<null>>;
+    /** 固定返回 captured 快照；随后 Main 自动开始转写，通过事件报告 transcribing */
+    stop(meetingId: string, jobId: string): Promise<Result<MeetingDetail>>;
+    /** 丢弃本次录音；清理文件后 recording → created */
+    cancel(meetingId: string, jobId: string): Promise<Result<MeetingDetail>>;
+    /** Renderer 采集失败；Main 映射安全错误信息并保留可恢复音频 */
+    fail(meetingId: string, jobId: string, code: CaptureErrorCode): Promise<Result<MeetingDetail>>;
   };
   // 转写和生成是后台任务：调用立即返回，进度走 onJobProgress，完成走 onMeetingUpdated
   transcription: {
     /** captured / failed → transcribing，用于首次转写和重试 */
     start(meetingId: string): Promise<Result<MeetingDetail>>;
     /** transcribing → captured */
-    cancel(meetingId: string): Promise<Result<MeetingDetail>>;
+    cancel(meetingId: string, jobId: string): Promise<Result<MeetingDetail>>;
     getSegments(meetingId: string): Promise<Result<TranscriptSegment[]>>;
   };
   notes: {
     /** 由用户显式触发；transcribed / ready / failed → generating；使用 meeting.keywords 引导生成 */
     generate(meetingId: string): Promise<Result<MeetingDetail>>;
     getLatest(meetingId: string): Promise<Result<NoteVersion | null>>;
-    saveEdit(meetingId: string, note: MeetingNote): Promise<Result<NoteVersion>>;
+    /** 乐观锁：expectedVersion 为编辑时的版本，首次保存为 0；冲突不覆盖 */
+    saveEdit(
+      meetingId: string,
+      note: MeetingNote,
+      expectedVersion: number,
+    ): Promise<Result<NoteVersion>>;
   };
   exports: {
     /** Main 打开保存对话框；用户取消时返回 saved: false */
@@ -213,6 +230,8 @@ export const invokeChannels = {
     start: 'recording:start',
     appendChunk: 'recording:append-chunk',
     stop: 'recording:stop',
+    cancel: 'recording:cancel',
+    fail: 'recording:fail',
   },
   transcription: {
     start: 'transcription:start',
