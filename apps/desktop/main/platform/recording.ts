@@ -91,9 +91,9 @@ export function createRecordingHandlers(
           return fail('WRITE_FAILED');
         }
         requireCondition(store.finishRecording(jobId), 'INVALID_STATE');
+        // Register before captured is emitted: a listener may start and cancel ASR immediately.
+        afterCapture?.(id);
         const captured = updated(id);
-        // #7 supplies the ASR starter. Never claim transcription before it exists.
-        if (afterCapture) setTimeout(() => afterCapture(id), 0);
         return captured;
       },
       fail: async (id, jobId, code) => {
@@ -153,10 +153,10 @@ export function createRecordingHandlers(
     handlers,
     releaseMeeting(id: string) {
       return serialize(async () => {
-        for (const job of store.getJobs(id)) {
-          if (writers.has(job.id)) {
+        for (const jobId of writers.keys()) {
+          if (store.getJob(jobId)?.meetingId === id) {
             try {
-              await close(job.id);
+              await close(jobId);
             } catch {
               /* Delete handler reports disk errors. */
             }
@@ -182,7 +182,11 @@ export function createRecordingHandlers(
           } catch {
             code = 'WRITE_FAILED';
           }
-          store.failJob(jobId, code);
+          try {
+            store.failJob(jobId, code);
+          } catch {
+            /* Storage failure must not skip closing the remaining writers. */
+          }
         }
       });
     },

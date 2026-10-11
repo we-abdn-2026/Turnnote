@@ -60,6 +60,8 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 测试中的 Python 解释器按顺序选择：环境变量 `TURNNOTE_PYTHON`、`.venv`、系统 `python3`。
 
+`TURNNOTE_ASR_FAKE=1 npm run dev` 使用不加载模型的真实 Python sidecar，录音停止后自动转写。Main 使用相同的 Python 选择顺序，Windows 系统命令为 python；安装包改用 resources/asr-worker/asr-worker[.exe]。`npm test -- tests/transcription-integration.test.mjs` 验证正式 Main 的 PCM/WAV/fake sidecar/SQLite 链路，不需要麦克风、API Key 或模型。
+
 `npm test -- tests/storage.test.mjs` 可运行指定测试。测试脚本用 esbuild 将 TypeScript 和正式 SQL migrations 构建到 out/tests，再运行 Node test runner，不使用测试专用 schema。
 
 better-sqlite3 13 使用 Node-API 预编译模块；当前依赖不需要在 Node 和 Electron ABI 间反复重编译。仍须在打包验证中确认三个目标平台的原生模块加载和资源布局，不能用 Node 单测替代安装包验收。

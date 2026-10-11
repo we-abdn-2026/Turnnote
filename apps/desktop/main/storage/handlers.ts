@@ -9,16 +9,18 @@ export function createStorageHandlers(
   store: MeetingStore,
   audioDirectory: string,
   emit: (meeting: MeetingDetail) => void,
+  releaseMeeting?: (id: string) => Promise<void>,
 ): InvokeHandlers {
   function updated(meeting: MeetingDetail) {
     emit(meeting);
     return ok(meeting);
   }
 
-  function deleteMeeting(id: string) {
+  async function deleteMeeting(id: string) {
     // 墓碑先提交，任务立即失效；文件删除失败时不丢失清理线索。
     const meeting = store.markDeleted(id);
     emit(meeting);
+    await releaseMeeting?.(id);
     const audio = store.getAudio(id);
     if (audio) {
       try {
