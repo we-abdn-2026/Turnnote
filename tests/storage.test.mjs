@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -43,7 +44,7 @@ function using(t, resource) {
 }
 
 function fixture(t) {
-  const directory = mkdtempSync(join(tmpdir(), 'turnnote-storage-'));
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'turnnote-storage-')));
   const audioDirectory = join(directory, 'audio');
   mkdirSync(audioDirectory);
   const databasePath = join(directory, 'turnnote.db');
@@ -299,6 +300,33 @@ test('audio file ownership is unique across meetings and duplicate attachment ro
   assert.deepEqual(store.getJobs(second.id), []);
 });
 
+for (const existing of [false, true]) {
+  test(`internal directory aliases cannot share audio ownership (${existing ? 'existing' : 'future'} file)`, async (t) => {
+    const { store, audioDirectory } = fixture(t);
+    const realDirectory = join(audioDirectory, 'real');
+    const aliasDirectory = join(audioDirectory, 'alias');
+    mkdirSync(realDirectory);
+    symlinkSync(realDirectory, aliasDirectory, 'junction');
+    const realPath = join(realDirectory, 'shared.wav');
+    const aliasPath = join(aliasDirectory, 'shared.wav');
+    if (existing) writeFileSync(realPath, 'shared audio');
+    const owner = store.createCaptured('Alias owner', aliasPath);
+    assert.equal(store.getAudio(owner.id).filePath, realPath);
+    const recording = store.create('Duplicate recording');
+    assert.throws(() => store.createCaptured('Duplicate import', realPath), /UNIQUE/);
+    assert.throws(() => store.beginRecording(recording.id, realPath), /UNIQUE/);
+    assert.equal(store.list().length, 2);
+    assert.equal(store.get(recording.id).status, 'created');
+    assert.equal(store.get(recording.id).hasAudio, false);
+    assert.deepEqual(store.getJobs(recording.id), []);
+    // 创建尚不存在的录音文件后，正式 handler 仍能清理登记的规范路径。
+    if (!existing) writeFileSync(realPath, 'shared audio');
+    const handlers = createStorageHandlers(store, audioDirectory, () => {});
+    assert.deepEqual(await handlers.meetings.delete(owner.id), { ok: true, value: null });
+    assert.equal(existsSync(realPath), false);
+  });
+}
+
 test('cancel/retry invalidates old job results and progress identity, and retries only the failed stage', (t) => {
   const { store, audioPath } = fixture(t);
   const id = store.createCaptured('Retry', audioPath).id;
@@ -464,14 +492,43 @@ test('failed file deletion keeps tombstone for retry, hides the meeting and does
   assert.deepEqual(store.getDeleted(), []);
 });
 
-test('deletion rejects symlink ancestors outside the managed root without deleting external files', async (t) => {
+test('attachment rejects symlink ancestors outside the managed root and file symlinks', (t) => {
   const { store, audioDirectory, directory } = fixture(t);
   const outside = join(directory, 'outside');
   mkdirSync(outside);
   const outsidePath = join(outside, 'keep.wav');
   writeFileSync(outsidePath, 'keep');
   symlinkSync(outside, join(audioDirectory, 'link'), 'junction');
-  const id = store.createCaptured('Unsafe parent', join(audioDirectory, 'link', 'keep.wav')).id;
+  assert.throws(
+    () => store.createCaptured('Unsafe parent', join(audioDirectory, 'link', 'keep.wav')),
+    errorCode('INVALID_INPUT'),
+  );
+  const localPath = join(audioDirectory, 'keep.wav');
+  writeFileSync(localPath, 'local');
+  for (const [name, target] of [
+    ['external.wav', outsidePath],
+    ['alias.wav', localPath],
+  ]) {
+    const alias = join(audioDirectory, name);
+    symlinkSync(target, alias, 'file');
+    assert.throws(() => store.createCaptured('Unsafe file', alias), errorCode('INVALID_INPUT'));
+  }
+  assert.deepEqual(store.list(), []);
+  assert.equal(readFileSync(outsidePath, 'utf8'), 'keep');
+  assert.equal(readFileSync(localPath, 'utf8'), 'local');
+});
+
+test('deletion rejects ancestors replaced by symlinks outside the managed root without deleting external files', async (t) => {
+  const { store, audioDirectory, directory } = fixture(t);
+  const outside = join(directory, 'outside');
+  mkdirSync(outside);
+  const outsidePath = join(outside, 'keep.wav');
+  writeFileSync(outsidePath, 'keep');
+  const parent = join(audioDirectory, 'link');
+  mkdirSync(parent);
+  const id = store.createCaptured('Unsafe parent', join(parent, 'keep.wav')).id;
+  rmSync(parent, { recursive: true });
+  symlinkSync(outside, parent, 'junction');
   const result = await createStorageHandlers(store, audioDirectory, () => {}).meetings.delete(id);
   assert.equal(result.error.code, 'WRITE_FAILED');
   assert.equal(readFileSync(outsidePath, 'utf8'), 'keep');

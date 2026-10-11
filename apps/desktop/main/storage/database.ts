@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { lstatSync, mkdirSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type {
   AppSettings,
   ErrorCode,
@@ -216,10 +216,24 @@ export class MeetingStore {
 
   private attachAudio(id: string, filePath: string): void {
     requireCondition(typeof filePath === 'string' && isAbsolute(filePath), 'INVALID_INPUT');
-    const path = resolve(filePath);
+    let path = resolve(filePath);
     const child = relative(this.audioDirectory, path);
     requireCondition(
       child && child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child),
+      'INVALID_INPUT',
+    );
+    // 录音文件可以尚未创建，但父目录须存在；别名统一到实际目录后登记所有权。
+    path = resolve(realpathSync(dirname(path)), basename(path));
+    const actualChild = relative(realpathSync(this.audioDirectory), path);
+    requireCondition(
+      actualChild &&
+        actualChild !== '..' &&
+        !actualChild.startsWith(`..${sep}`) &&
+        !isAbsolute(actualChild),
+      'INVALID_INPUT',
+    );
+    requireCondition(
+      !lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink(),
       'INVALID_INPUT',
     );
     this.db

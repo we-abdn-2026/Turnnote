@@ -57,6 +57,7 @@ export function createMockApi({
   const segments = new Map<string, TranscriptSegment[]>();
   const notes = new Map<string, NoteVersion[]>();
   const jobs = new Map<string, MockJob>();
+  const pendingTranscriptions = new Map<string, ReturnType<typeof setTimeout>>();
   const meetingListeners = new Set<(meeting: MeetingDetail) => void>();
   const progressListeners = new Set<(progress: JobProgress) => void>();
   let settings = structuredClone(defaultSettings);
@@ -65,6 +66,20 @@ export function createMockApi({
   let nextJobId = 1;
   const now = () => new Date().toISOString();
   const wait = () => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  function cancelAutoTranscription(id: string): void {
+    clearTimeout(pendingTranscriptions.get(id));
+    pendingTranscriptions.delete(id);
+  }
+  function scheduleAutoTranscription(id: string): void {
+    cancelAutoTranscription(id);
+    const timer = setTimeout(() => {
+      if (pendingTranscriptions.get(id) !== timer) return;
+      pendingTranscriptions.delete(id);
+      if (meetings.get(id)?.status === 'captured') startJob(id, 'transcribing');
+    }, 0);
+    pendingTranscriptions.set(id, timer);
+  }
 
   function update(id: string, patch: Partial<MeetingDetail>): MeetingDetail {
     const meeting = {
@@ -108,6 +123,7 @@ export function createMockApi({
       : fail('NOT_FOUND');
   }
   function begin(id: string, kind: JobKind): { job: MockJob; meeting: MeetingDetail } {
+    cancelAutoTranscription(id);
     const job: MockJob = {
       id: `mock-job-${nextJobId++}`,
       kind,
@@ -225,6 +241,7 @@ export function createMockApi({
       setKeywords: async (id, keywords) => withMeeting(id, () => ok(update(id, { keywords }))),
       delete: async (id) =>
         withMeeting(id, () => {
+          cancelAutoTranscription(id);
           jobs.delete(id);
           update(id, { status: 'deleted' });
           meetings.delete(id);
@@ -234,9 +251,7 @@ export function createMockApi({
         }),
       importAudio: async () => {
         const meeting = create('Imported audio', { status: 'captured', hasAudio: true });
-        setTimeout(() => {
-          if (meetings.get(meeting.id)?.status === 'captured') startJob(meeting.id, 'transcribing');
-        }, 0);
+        scheduleAutoTranscription(meeting.id);
         return ok(meeting);
       },
     },
@@ -258,11 +273,10 @@ export function createMockApi({
           if (meeting.status !== 'recording' || meeting.activeJobId !== jobId)
             return fail('INVALID_STATE');
           jobs.delete(id);
+          // 先登记再发布 captured，事件监听器立即启动/取消时也能使其失效。
+          scheduleAutoTranscription(id);
           const captured = update(id, { status: 'captured' });
           // 返回已提交的 captured 快照；自动转写通过后续事件推进。
-          setTimeout(() => {
-            if (meetings.get(id)?.status === 'captured') startJob(id, 'transcribing');
-          }, 0);
           return ok(captured);
         }),
       cancel: async (id, jobId) =>
@@ -288,6 +302,7 @@ export function createMockApi({
         withMeeting(id, (meeting) => {
           if (meeting.status !== 'transcribing' || meeting.activeJobId !== jobId)
             return fail('INVALID_STATE');
+          cancelAutoTranscription(id);
           jobs.delete(id);
           return ok(update(id, { status: 'captured', lastError: null }));
         }),

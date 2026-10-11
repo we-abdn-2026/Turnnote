@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createMockApi } from '../out/tests/runtime.mjs';
 
 const NOTE = {
@@ -89,6 +90,50 @@ test('mock cancellation followed immediately by retry prevents old run from comp
   assert.equal(new Set(progress.map((p) => p.jobId)).size, 1);
   assert.equal(progress[0].jobId, 'mock-job-2');
 });
+
+for (const source of ['import', 'recording', 'recording-listener']) {
+  test(`mock ${source} auto-start cannot restart transcription after an immediate manual start and cancel`, async () => {
+    const api = createMockApi({ seed: false, delayMs: 1 });
+    const states = [];
+    const progress = [];
+    api.events.onMeetingUpdated((meeting) => states.push(meeting.status));
+    api.events.onJobProgress((event) => progress.push(event));
+    let id;
+    let cancelled;
+    const startAndCancel = async () => {
+      const job = value(await api.transcription.start(id));
+      cancelled = value(await api.transcription.cancel(id, job.activeJobId));
+    };
+    if (source === 'import') {
+      id = value(await api.meetings.importAudio()).id;
+      await startAndCancel();
+    } else {
+      id = value(await api.meetings.create('Capture')).id;
+      const recording = value(await api.recording.start(id));
+      let manualRun;
+      if (source === 'recording-listener') {
+        const off = api.events.onMeetingUpdated((meeting) => {
+          if (meeting.id === id && meeting.status === 'captured') {
+            off();
+            manualRun = startAndCancel();
+          }
+        });
+      }
+      value(await api.recording.stop(id, recording.activeJobId));
+      await (manualRun ?? startAndCancel());
+    }
+    const statesAfterCancel = [...states];
+    await delay(30);
+    assert.deepEqual(states, statesAfterCancel);
+    assert.deepEqual(progress, []);
+    const meeting = value(await api.meetings.get(id));
+    assert.equal(cancelled.status, 'captured');
+    assert.equal(meeting.status, 'captured');
+    assert.equal(meeting.activeJobId, null);
+    assert.equal(meeting.hasAudio, true);
+    assert.deepEqual(value(await api.transcription.getSegments(id)), []);
+  });
+}
 
 test('mock deletion from a progress callback invalidates the run before any partial transcript persists', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
