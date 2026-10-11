@@ -11,19 +11,7 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // 加载设置和权限
-  useEffect(() => {
-    void loadSettingsAndPermissions();
-  }, []);
-
-  // 加载可用的音频设备
-  useEffect(() => {
-    if (permissions?.microphone === 'granted') {
-      void loadDevices();
-    }
-  }, [permissions]);
-
-  async function loadSettingsAndPermissions(): Promise<void> {
+  const loadSettingsAndPermissions = async (): Promise<void> => {
     const [settingsResult, permissionsResult] = await Promise.all([
       window.turnnote.settings.get(),
       window.turnnote.recording.getPermissions(),
@@ -36,19 +24,31 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
     if (permissionsResult.ok) {
       setPermissions(permissionsResult.value);
     }
-  }
+  };
 
-  async function loadDevices(): Promise<void> {
+  const loadDevices = async (): Promise<void> => {
     try {
       const deviceList = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = deviceList.filter((d) => d.kind === 'audioinput');
       setDevices(audioInputs);
       setError(null);
-    } catch (err) {
+    } catch {
       setError('无法获取音频设备列表');
       setDevices([]);
     }
-  }
+  };
+
+  // 加载设置和权限
+  useEffect(() => {
+    void loadSettingsAndPermissions();
+  }, []);
+
+  // 加载可用的音频设备
+  useEffect(() => {
+    if (permissions?.microphone === 'granted') {
+      void loadDevices();
+    }
+  }, [permissions]);
 
   async function handleMicrophoneChange(deviceId: string): Promise<void> {
     const update = { microphoneDeviceId: deviceId || null };
