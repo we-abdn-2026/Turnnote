@@ -190,42 +190,38 @@ console.log(requests[0].timestamp); // Request time
 **Asserting user and system context:**
 
 ```javascript
-test('validates system context is present', () => {
-  const server = startServer(3456);
-  
-  // Send request
-  await callApi(3456, 'Some transcript');
-  
-  const captured = server.getRequests()[0];
-  const systemMsg = captured.messages.find(m => m.role === 'system');
-  
-  // Assert system message exists and contains expected instruction
-  ok(systemMsg, 'System message should be present');
-  ok(systemMsg.content.includes('meeting note generator'), 'Should have correct instruction');
-  
-  server.close();
-});
+import { once } from 'node:events';
 
-test('detects missing context', () => {
+test('client sends system context and the exact transcript', async () => {
   const server = startServer(3456);
-  
-  // Send request WITHOUT system message
-  await fetch('http://localhost:3456/v1/chat/completions', {
-    method: 'POST',
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: 'text' }],
-    }),
-  });
-  
-  const captured = server.getRequests()[0];
-  const systemMsg = captured.messages.find(m => m.role === 'system');
-  
-  // Assert: missing system message is detectable
-  strictEqual(systemMsg, undefined, 'Should detect missing system context');
-  
-  server.close();
+  await once(server, 'listening');
+
+  try {
+    // Replace with the real client call under test
+    await fetch('http://localhost:3456/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'You are a meeting note generator.' },
+          { role: 'user', content: 'Project deadline is next Friday.' },
+        ],
+      }),
+    });
+
+    const { messages } = server.getRequests()[0];
+    const systemMsg = messages.find((m) => m.role === 'system');
+    const userMsg = messages.find((m) => m.role === 'user');
+
+    // Fails if the client drops or changes the system context
+    ok(systemMsg?.content.includes('meeting note generator'));
+    strictEqual(userMsg?.content, 'Project deadline is next Friday.');
+  } finally {
+    server.close();
+  }
 });
 ```
+
+See `captures request messages for inspection` and `detects missing or incorrect context` in [deepseek-mock.test.mjs](../deepseek-mock.test.mjs) for the runnable versions.
 
 **Usage notes and cleanup:**
 
