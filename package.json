@@ -18,6 +18,7 @@
     "format": "eslint . --fix && prettier --write . && ruff check --fix services && ruff format services",
     "test": "node scripts/test.mjs",
     "test:electron": "node scripts/check-electron-storage.mjs",
+    "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/ui/*.test.mjs\"",
     "labels:sync": "node scripts/sync-labels.mjs"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.12.0",
+    "jsdom": "30.1.2",
     "prettier": "3.9.9",
     "typescript": "^5.9.2",
     "typescript-eslint": "8.71.0",

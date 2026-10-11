@@ -17,11 +17,14 @@ import {
   createDispatcher,
   createInvokeApi,
   createSessionServices,
+  createCaptureRecording,
+  createMeetingSession,
   MeetingStore,
   resolveSidecarCommand,
   errorMessages,
 } from '../out/tests/runtime.mjs';
 import { pythonExecutable } from './support/python.mjs';
+import { captureEnvironment } from './support/capture-environment.mjs';
 
 const SEGMENTS = [{ startMs: 0, endMs: 1000, text: 'Controlled audio' }];
 const value = (result) => {
@@ -106,6 +109,78 @@ function fixture(t, overrides = {}) {
   };
 }
 const dead = (pid) => assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+
+test('workspace capture retries a rolled-back save and launches exactly one automatic transcription', async (t) => {
+  const env = captureEnvironment(t);
+  const listeners = new Set();
+  const f = fixture(t, {
+    emitMeeting: (meeting) => {
+      for (const listener of listeners) listener(meeting);
+    },
+  });
+  const api = {
+    ...f.api,
+    loopback: env.api.loopback,
+    events: {
+      onMeetingUpdated(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  };
+  const session = createMeetingSession(api, createCaptureRecording(api));
+  const disconnect = session.connect();
+  const snapshots = [];
+  const unsubscribe = session.subscribe(() => snapshots.push(session.getState()));
+  t.after(() => {
+    unsubscribe();
+    disconnect();
+  });
+  value(await api.settings.update({ microphoneDeviceId: 'usb-mic', includeSystemAudio: false }));
+  assert.equal(await session.create('Capture to ASR'), true);
+  const id = session.getState().meeting.id;
+  assert.equal(await session.start(), true);
+  assert.equal(env.mediaCalls[0][1].audio.deviceId.exact, 'usb-mic');
+  const db = new Database(f.databasePath);
+  try {
+    db.exec(
+      "CREATE TRIGGER reject_capture BEFORE UPDATE OF status ON meetings WHEN NEW.status = 'captured' BEGIN SELECT RAISE(ABORT, 'injected capture rollback'); END;",
+    );
+    assert.equal(await session.stop(), false);
+    assert.equal(session.getState().meeting.status, 'recording');
+    assert.equal(session.getState().captureStopped, true);
+    assert.ok(env.tracks.every((track) => track.stopped));
+    assert.equal(env.context().state, 'closed');
+    const path = f.store.getAudio(id).filePath;
+    const saved = readFileSync(path);
+    await delay(50);
+    assert.equal(f.store.getJobs(id).filter((job) => job.kind === 'transcribing').length, 0);
+    assert.deepEqual(f.progress, []);
+    db.exec('DROP TRIGGER reject_capture');
+    assert.equal(await session.stop(), true);
+    await until(() => session.getState().meeting.status === 'transcribed');
+    assert.deepEqual(readFileSync(path), saved);
+    assert.equal(saved.readUInt32LE(40), 6);
+    assert.deepEqual(
+      [saved.readInt16LE(44), saved.readInt16LE(46), saved.readInt16LE(48)],
+      [11, 22, 33],
+    );
+    assert.equal(env.calls.filter((call) => call === 'close-context').length, 1);
+    assert.equal(env.mediaCalls.length, 1);
+    assert.ok(snapshots.some((state) => state.meeting?.status === 'captured'));
+    assert.ok(snapshots.some((state) => state.meeting?.status === 'transcribing'));
+    const jobs = f.store.getJobs(id);
+    assert.equal(jobs.filter((job) => job.kind === 'recording').length, 1);
+    assert.equal(jobs.filter((job) => job.kind === 'transcribing').length, 1);
+    assert.ok(jobs.every((job) => job.status === 'completed'));
+    assert.equal(value(await api.transcription.getSegments(id)).length, 3);
+    assert.equal(await session.stop(), false);
+    await delay(50);
+    assert.equal(f.store.getJobs(id).length, 2);
+  } finally {
+    db.close();
+  }
+});
 
 test('production Main composition: PCM IPC → finalized WAV → real fake worker → persistent timestamp segments', async (t) => {
   const f = fixture(t);

@@ -7,6 +7,7 @@ import {
   createAudioWriter,
   repairWavHeader,
   createRecordingHandlers,
+  createStorageHandlers,
   MeetingStore,
   createDispatcher,
   PcmEncoder,
@@ -239,3 +240,97 @@ test('partial disk write is reported, closes descriptor and preserves complete s
   assert.equal(await repairWavHeader(path), true);
   checkWav(path, [123]);
 });
+
+for (const restart of [false, true]) {
+  test(`integrated recording/storage deletion recovers a failed tombstone on ${restart ? 'restart' : 'retry'}`, async (t) => {
+    const root = fixture(t);
+    const dbPath = join(root, 'db.sqlite');
+    let store = new MeetingStore(dbPath, root);
+    t.after(() => store.close());
+    function integrated() {
+      const recording = createRecordingHandlers(
+        store,
+        root,
+        () => {},
+        () => ({}),
+      );
+      const storage = createStorageHandlers(store, root, () => {});
+      const remove = storage.meetings.delete;
+      storage.meetings.delete = async (id) => {
+        await recording.releaseMeeting(id);
+        return remove(id);
+      };
+      return { recording, dispatch: createDispatcher({ ...storage, ...recording.handlers }) };
+    }
+    let { recording, dispatch } = integrated();
+    const id = store.create('Deletion recovery').id;
+    const job = (await dispatch('recording:start', [id])).value.activeJobId;
+    await dispatch('recording:append-chunk', [id, job, new Int16Array([7, 8])]);
+    const path = store.getAudio(id).filePath;
+    // Force unlink to fail using a directory, then restore the filesystem.
+    await recording.releaseMeeting(id);
+    rmSync(path);
+    mkdirSync(path);
+    assert.equal((await dispatch('meetings:delete', [id])).error.code, 'WRITE_FAILED');
+    assert.equal(store.getDeleted().length, 1);
+    rmSync(path, { recursive: true });
+    writeFileSync(path, 'recoverable file');
+    if (restart) {
+      store.close();
+      store = new MeetingStore(dbPath, root);
+      ({ recording, dispatch } = integrated());
+      await recording.recover();
+      // Same wrapped deletion path as Main startup recovery.
+      for (const meeting of store.getDeleted())
+        assert.equal((await dispatch('meetings:delete', [meeting.id])).ok, true);
+    } else {
+      assert.equal((await dispatch('meetings:delete', [id])).ok, true);
+    }
+    assert.equal(store.getDeleted().length, 0);
+    assert.equal(store.getAudio(id), null);
+    await recording.releaseMeeting(id);
+    await recording.releaseMeeting(id);
+  });
+}
+
+for (const cleanupFails of [false, true]) {
+  test(`initial header write failure closes its descriptor and handles cleanup ${cleanupFails ? 'failure' : 'success'} safely`, async (t) => {
+    const fs = await import('node:fs');
+    const { syncBuiltinESMExports } = await import('node:module');
+    const path = join(fixture(t), 'initial.wav');
+    const originalClose = fs.default.closeSync;
+    let closes = 0;
+    const mocks = [
+      t.mock.method(fs.default, 'writeSync', () => {
+        throw Object.assign(new Error('private disk path'), { code: 'ENOSPC' });
+      }),
+      t.mock.method(fs.default, 'closeSync', (fd) => {
+        closes++;
+        return originalClose(fd);
+      }),
+    ];
+    if (cleanupFails)
+      mocks.push(
+        t.mock.method(fs.default, 'unlinkSync', () => {
+          throw Object.assign(new Error('private cleanup path'), { code: 'EBUSY' });
+        }),
+      );
+    syncBuiltinESMExports();
+    try {
+      assert.throws(
+        () => createAudioWriter(path),
+        (error) => error.code === 'WRITE_FAILED' && !error.message.includes('private'),
+      );
+      assert.equal(closes, 1);
+      assert.equal(fs.existsSync(path), cleanupFails);
+    } finally {
+      for (const mock of mocks) mock.mock.restore();
+      syncBuiltinESMExports();
+    }
+    if (cleanupFails) fs.unlinkSync(path);
+    const retry = createAudioWriter(path);
+    retry.append(new Int16Array([7]));
+    await retry.finalize();
+    checkWav(path, [7]);
+  });
+}

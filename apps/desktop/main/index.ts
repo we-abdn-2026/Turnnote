@@ -22,6 +22,12 @@ app.on('second-instance', () => {
   window?.focus();
 });
 
+function interruptRecording(): void {
+  void services?.interruptRecording().catch(() => {
+    /* Keep ownership for retry; startup recovery handles unavailable storage. */
+  });
+}
+
 function createWindow(): void {
   window = new BrowserWindow({
     width: 1280,
@@ -35,15 +41,9 @@ function createWindow(): void {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
-  window.webContents.on('did-start-navigation', () => {
-    void services?.interruptRecording();
-  });
-  window.webContents.on('render-process-gone', () => {
-    void services?.interruptRecording();
-  });
-  window.webContents.on('destroyed', () => {
-    void services?.interruptRecording();
-  });
+  window.webContents.on('did-start-navigation', interruptRecording);
+  window.webContents.on('render-process-gone', interruptRecording);
+  window.webContents.on('destroyed', interruptRecording);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
