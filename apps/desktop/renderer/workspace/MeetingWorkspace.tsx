@@ -39,6 +39,7 @@ export function MeetingWorkspace({
   const actions = availableActions(state);
   const recording = isRecording(state);
   const { meeting } = state;
+  const savePending = meeting?.status === 'recording' && state.captureStopped;
 
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -55,15 +56,17 @@ export function MeetingWorkspace({
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
           disabled={!actions.create}
-          aria-describedby={recording ? 'create-blocked' : undefined}
+          aria-describedby={recording || savePending ? 'create-blocked' : undefined}
         />
         <button type="submit" disabled={!actions.create || !title.trim()}>
           {state.pending === 'create' ? '创建中...' : '新建会议'}
         </button>
       </form>
-      {recording && (
+      {(recording || savePending) && (
         <p id="create-blocked" className="create-blocked">
-          正在录音，停止录音后才能新建会议。
+          {savePending
+            ? '录音已结束，保存完成后才能新建会议。'
+            : '正在录音，停止录音后才能新建会议。'}
         </p>
       )}
 
@@ -80,7 +83,7 @@ export function MeetingWorkspace({
         <div className="meeting-panel">
           <h2>{meeting.title}</h2>
           <p className="meeting-status" role="status" aria-live="polite">
-            {STATUS_LABELS[meeting.status]}
+            {savePending ? '录音已结束，等待保存' : STATUS_LABELS[meeting.status]}
             {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
           </p>
           <RecordingControls session={session} state={state} />

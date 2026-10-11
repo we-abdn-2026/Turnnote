@@ -36,6 +36,7 @@ interface CaptureOptions {
 
 interface CaptureSession {
   stop(): Promise<void>;
+  cancel(): Promise<void>;
 }
 
 function startCapture(options: CaptureOptions): Promise<CaptureSession>;
@@ -91,5 +92,9 @@ macOS 权限状态用 `systemPreferences.getMediaAccessStatus('microphone' | 'sc
 - IPC 写入队列最多积压八块，超过后报告 WRITE_FAILED 并保留已写数据。Main 串行处理录音调用，会议及 jobId 双重校验拒绝迟到请求。
 - WAV 独占创建，按小端编码，停止时根据实际文件长度回写 header；修复只接受应用的固定 PCM WAV 格式，丢弃最后半个样本，不改写未知格式。启动后修复未结束的录音并标记 INTERRUPTED，不自动转写。
 - Renderer 关闭、崩溃或应用退出时结束 Main writer。删除会议前先释放 writer；文件删除失败保留数据库引用。
-- 最小录音控件支持麦克风、系统音频、停止保存和显式丢弃。完整会议 UI 与音频导入仍由对应任务实现。
+- 工作区持有当前会议的唯一采集会话，每次启动读取已保存的麦克风/系统音频设置；dev:web 使用显式 mock adapter。参会者告知确认、停止保存及失败录音丢弃均通过工作区操作。
+- 文件 finalize 与数据库终态提交分开协调：关闭文件后仍保留 job 归属，数据库 stop/fail/shutdown 事务失败可以再次提交；只有终态提交成功或显式删除释放后才移除归属。迟到 PCM 不得写入已 finalize 的文件。
+- Renderer 只 flush/关闭媒体一次；Main 保存提交失败后 stop 重试只重发提交，不重新采集、不删除 WAV。媒体已关闭时界面显示“录音已结束，等待保存”并提供“重试保存”，不把尚未提交的业务状态解释为仍在采集。
+- cancel 仅合并正在进行的请求，失败后可显式重试；已成功丢弃后重复调用不再发送 IPC。媒体清理始终幂等。
+- 初始 WAV header 写入失败时尝试关闭并删除本次独占创建的文件；删除本身失败仍返回安全 WRITE_FAILED，可能遗留无音频内容的文件，不宣称清理成功。
 - 自动测试中的 MediaStream、AudioContext 和 IPC 替身只验证流程，不作为真实平台采集证据。实际验证记录见 [audio-validation.md](audio-validation.md)。

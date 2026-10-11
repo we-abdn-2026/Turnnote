@@ -99,3 +99,69 @@ for (const trigger of ['track', 'processor', 'write']) {
     assert.ok(env.tracks.every((track) => track.stopped));
   });
 }
+
+for (const mode of ['result', 'reject']) {
+  test(`failed cancel ${mode} can be retried; concurrent attempts coalesce and media closes once`, async (t) => {
+    const env = environment(t);
+    let calls = 0;
+    env.api.recording.cancel = async () => {
+      calls++;
+      if (calls === 1) {
+        if (mode === 'reject') throw new Error('transport failed');
+        return { ok: false, error: { code: 'WRITE_FAILED' } };
+      }
+      return { ok: true, value: null };
+    };
+    const session = await startCapture(options, env.api);
+    env.worklet().onprocessorerror();
+    const first = session.cancel();
+    assert.equal(first, session.cancel());
+    await assert.rejects(first);
+    assert.equal(calls, 1);
+    await Promise.all([session.cancel(), session.cancel()]);
+    await session.cancel();
+    assert.equal(calls, 2);
+    assert.equal(env.calls.filter((call) => call === 'close-context').length, 1);
+    assert.ok(env.tracks.every((track) => track.stopped));
+  });
+}
+
+test('Main stop commit retry does not reflush media or report a capture failure', async (t) => {
+  const env = environment(t);
+  let calls = 0;
+  let stopped = 0;
+  env.api.recording.stop = async () => {
+    calls++;
+    return calls === 1 ? { ok: false, error: { code: 'INTERNAL' } } : { ok: true, value: null };
+  };
+  const session = await startCapture({ ...options, onStopped: () => stopped++ }, env.api);
+  const first = session.stop();
+  assert.equal(first, session.stop());
+  await assert.rejects(first, { code: 'INTERNAL' });
+  await Promise.all([session.stop(), session.stop()]);
+  await session.stop();
+  assert.equal(calls, 2);
+  assert.equal(stopped, 1);
+  assert.equal(env.calls.filter((call) => Array.isArray(call) && call[0] === 'chunk').length, 1);
+  assert.equal(env.calls.filter((call) => Array.isArray(call) && call[0] === 'fail').length, 0);
+});
+
+test('unavailable failure reporting can be retried without unhandled rejection or leaked media', async (t) => {
+  const env = environment(t);
+  let calls = 0;
+  const errors = [];
+  env.api.recording.fail = async () => {
+    if (++calls === 1) throw new Error('IPC unavailable');
+    return { ok: true, value: null };
+  };
+  const session = await startCapture(
+    { ...options, onError: (error) => errors.push(error.code) },
+    env.api,
+  );
+  env.worklet().onprocessorerror();
+  while (!errors.length) await new Promise((resolve) => setTimeout(resolve, 1));
+  await assert.rejects(session.stop(), { code: 'CAPTURE_FAILED' });
+  assert.equal(calls, 2);
+  assert.equal(env.context().state, 'closed');
+  await session.cancel();
+});

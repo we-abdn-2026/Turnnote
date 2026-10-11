@@ -268,6 +268,7 @@ test('failed Result and rejection report a safe error and keep the last confirme
     pending: null,
     error: 'Not available yet.',
     warning: null,
+    captureStopped: false,
     revision,
   });
   mode = 'reject';

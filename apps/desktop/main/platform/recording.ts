@@ -15,8 +15,15 @@ export function createRecordingHandlers(
   permissions: () => CapturePermissions,
   afterCapture?: (meetingId: string) => void,
 ) {
-  const writers = new Map<string, AudioWriter>();
-  const owners = new Map<string, string>();
+  // Ownership outlives file closure: a rolled-back terminal transaction remains retryable.
+  const recordings = new Map<
+    string,
+    {
+      meetingId: string;
+      writer: AudioWriter;
+      finalizing?: Promise<void>;
+    }
+  >();
   let queue: Promise<void> = Promise.resolve();
   function serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = queue.then(operation);
@@ -31,34 +38,34 @@ export function createRecordingHandlers(
     emit(meeting);
     return ok(meeting);
   };
-  function current(id: string, jobId: string): AudioWriter {
+  function current(id: string, jobId: string) {
     const meeting = store.get(id);
     requireCondition(
       meeting.status === 'recording' && meeting.activeJobId === jobId,
       'INVALID_STATE',
     );
-    const writer = writers.get(jobId);
-    requireCondition(writer, 'INVALID_STATE');
-    return writer;
+    const recording = recordings.get(jobId);
+    requireCondition(recording?.meetingId === id, 'INVALID_STATE');
+    return recording;
   }
   async function close(jobId: string) {
-    const writer = writers.get(jobId);
-    writers.delete(jobId);
-    owners.delete(jobId);
-    await writer?.finalize();
+    const recording = recordings.get(jobId);
+    if (recording) {
+      recording.finalizing ??= recording.writer.finalize();
+      await recording.finalizing;
+    }
   }
   const handlers: InvokeHandlers = {
     recording: {
       getPermissions: async () => ok(permissions()),
       start: async (id) => {
         requireCondition(store.get(id).status === 'created', 'INVALID_STATE');
-        requireCondition(writers.size === 0, 'INVALID_STATE');
+        requireCondition(recordings.size === 0, 'INVALID_STATE');
         const path = join(directory, `${randomUUID()}.wav`);
         const writer = createAudioWriter(path);
         try {
           const job = store.beginRecording(id, path);
-          writers.set(job.id, writer);
-          owners.set(job.id, id);
+          recordings.set(job.id, { meetingId: id, writer });
         } catch (error) {
           await writer.finalize();
           unlinkSync(path);
@@ -67,9 +74,10 @@ export function createRecordingHandlers(
         return updated(id);
       },
       appendChunk: async (id, jobId, chunk) => {
-        const writer = current(id, jobId);
+        const recording = current(id, jobId);
+        requireCondition(!recording.finalizing, 'INVALID_STATE');
         try {
-          writer.append(chunk);
+          recording.writer.append(chunk);
         } catch (error) {
           if (error instanceof Error && 'code' in error && error.code === 'INVALID_INPUT')
             throw error;
@@ -78,7 +86,8 @@ export function createRecordingHandlers(
           } catch {
             /* Preserve audio on disk failure. */
           }
-          store.failJob(jobId, 'WRITE_FAILED');
+          requireCondition(store.failJob(jobId, 'WRITE_FAILED'), 'INVALID_STATE');
+          recordings.delete(jobId);
           emit(store.get(id));
           return fail('WRITE_FAILED');
         }
@@ -89,11 +98,13 @@ export function createRecordingHandlers(
         try {
           await close(jobId);
         } catch {
-          store.failJob(jobId, 'WRITE_FAILED');
+          requireCondition(store.failJob(jobId, 'WRITE_FAILED'), 'INVALID_STATE');
+          recordings.delete(jobId);
           emit(store.get(id));
           return fail('WRITE_FAILED');
         }
         requireCondition(store.finishRecording(jobId), 'INVALID_STATE');
+        recordings.delete(jobId);
         const captured = updated(id);
         // #7 supplies the ASR starter. Never claim transcription before it exists.
         if (afterCapture) setTimeout(() => afterCapture(id), 0);
@@ -114,6 +125,7 @@ export function createRecordingHandlers(
           code = 'WRITE_FAILED';
         }
         requireCondition(store.failJob(jobId, code), 'INVALID_STATE');
+        recordings.delete(jobId);
         return updated(id);
       },
       cancel: async (id, jobId) => {
@@ -134,11 +146,13 @@ export function createRecordingHandlers(
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
             store.failJob(jobId, 'WRITE_FAILED');
+            recordings.delete(jobId);
             emit(store.get(id));
             return fail('WRITE_FAILED');
           }
         }
         store.cancelRecording(id, jobId);
+        recordings.delete(jobId);
         return updated(id);
       },
     },
@@ -157,13 +171,14 @@ export function createRecordingHandlers(
     releaseMeeting(id: string) {
       return serialize(async () => {
         // Cleanup uses live ownership, so deleted tombstones and repeat calls are safe.
-        for (const [jobId, meetingId] of owners) {
+        for (const [jobId, { meetingId }] of recordings) {
           if (meetingId === id) {
             try {
               await close(jobId);
             } catch {
               /* Delete handler reports disk errors. */
             }
+            recordings.delete(jobId);
           }
         }
       });
@@ -179,7 +194,7 @@ export function createRecordingHandlers(
     },
     shutdown() {
       return serialize(async () => {
-        for (const jobId of [...writers.keys()]) {
+        for (const jobId of [...recordings.keys()]) {
           let code: 'INTERRUPTED' | 'WRITE_FAILED' = 'INTERRUPTED';
           try {
             await close(jobId);
@@ -187,6 +202,7 @@ export function createRecordingHandlers(
             code = 'WRITE_FAILED';
           }
           store.failJob(jobId, code);
+          recordings.delete(jobId);
         }
       });
     },

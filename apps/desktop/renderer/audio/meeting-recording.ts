@@ -31,6 +31,7 @@ export function createCaptureRecording(api: TurnnoteApi): MeetingRecording {
             microphoneDeviceId: settings.value.microphoneDeviceId ?? 'default',
             includeSystemAudio: settings.value.includeSystemAudio,
             onWarning: notify.warning,
+            onStopped: notify.stopped,
             onError: (error) => notify.error(error.message),
           },
           api,

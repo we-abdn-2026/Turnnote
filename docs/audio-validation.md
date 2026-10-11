@@ -53,6 +53,15 @@
 - 本轮 lint、typecheck、build 通过；`npm test` 为 185 通过、10 跳过（缺少 faster-whisper / 真实模型），`npm run test:ui` 为 15/15 通过。
 - 此轮自动回归不构成新增 macOS/Windows 真机采集证据；前述 macOS 记录保留为原始提交的历史验证。
 
+## 丢弃与保存事务恢复修复（2026-10-12）
+
+- 修复首次 Main 丢弃失败后 Renderer 永久缓存失败 Promise：并发请求仍合并，文件系统恢复后同一工作区可再次丢弃并重录。
+- Main 用同一份记录持有 writer 与 job 归属，文件 finalize 后直到数据库终态提交前保持可协调；stop/fail/shutdown 的事务回滚均可重试。保存重试保留同一 WAV 和样本，不依赖仍打开的 writer，不重复 flush。
+- Renderer 独立记录媒体已停止这一资源事实；Main 尚未完成保存时，真实 App 显示等待保存与重试入口，业务状态仍由 Main 确认。
+- 初始 header 写入失败时关闭 fd 并尝试移除独占创建的文件，覆盖清理成功与失败时安全错误返回。
+- 回归使用真实 SQLite trigger、真实 WAV 与受控媒体；覆盖文件 unlink EBUSY 后恢复、事务回滚后保存/失败/退出恢复、文件已删除但丢弃事务回滚、失败上报重试、并发重试和实际 React 控件。
+- 本轮 lint、typecheck、build 通过；`npm test` 为 198 通过、10 跳过（缺少 faster-whisper / 真实模型），UI 15/15 通过；Electron 44.4.5 / Node 24.21.0 的 SQLite 加载、迁移、持久化 smoke 通过。此轮不增加 macOS/Windows 真机音频验收证据。
+
 ## 尚需验收
 
 - Windows：本机没有 Windows 运行环境，未验证真实麦克风/系统音频或权限行为。

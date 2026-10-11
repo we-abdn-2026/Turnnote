@@ -6,6 +6,7 @@ import {
   readSync,
   ftruncateSync,
   writeSync,
+  unlinkSync,
 } from 'node:fs';
 import { TurnnoteError, requireCondition } from '@shared/result';
 
@@ -57,7 +58,16 @@ export function createAudioWriter(outputPath: string): AudioWriter {
   try {
     writeAll(fd, header(0), 0);
   } catch {
-    closeSync(fd);
+    try {
+      closeSync(fd);
+    } catch {
+      /* Still attempt to remove the file created exclusively by this call. */
+    }
+    try {
+      unlinkSync(outputPath);
+    } catch {
+      /* Preserve the safe WRITE_FAILED error if cleanup also fails. */
+    }
     throw new TurnnoteError('WRITE_FAILED');
   }
   return {

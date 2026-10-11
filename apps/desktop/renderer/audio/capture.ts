@@ -7,6 +7,7 @@ export interface CaptureOptions {
   microphoneDeviceId: string | null;
   includeSystemAudio: boolean;
   onWarning?: (message: string) => void;
+  onStopped?: () => void;
   onError?: (error: TurnnoteError) => void;
 }
 export interface CaptureSession {
@@ -62,6 +63,7 @@ export async function startCapture(
         if (context && context.state !== 'closed') await context.close();
       } finally {
         capturing = false;
+        options.onStopped?.();
       }
     })();
     return cleanupTask;
@@ -104,7 +106,13 @@ export async function startCapture(
         /* Still notify Main. */
       }
       await pending;
-      if (jobId) await api.recording.fail(options.meetingId, jobId, code);
+      let reported = !jobId;
+      try {
+        if (jobId) reported = (await api.recording.fail(options.meetingId, jobId, code)).ok;
+      } catch {
+        /* Main retains job ownership for retry/shutdown even if reporting is unavailable. */
+      }
+      if (!reported) failedTask = undefined;
       options.onError?.(new TurnnoteError(code));
     })();
     return failedTask;
@@ -212,44 +220,63 @@ export async function startCapture(
     };
     let stopping: Promise<void> | undefined;
     let cancelling: Promise<void> | undefined;
-    return {
-      stop() {
-        if (stopping) return stopping;
-        stopping = (async () => {
+    let cancelled = false;
+    let prepared: Promise<void> | undefined;
+    function prepareStop(): Promise<void> {
+      prepared ??= (async () => {
+        if (finished) {
+          await failedTask;
+          if (failureCode) throw new TurnnoteError(failureCode);
+          return;
+        }
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new TurnnoteError('CAPTURE_FAILED')), 3000);
+            flushed = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            worklet!.port.postMessage('flush');
+          });
+          await pending;
           if (finished) {
             await failedTask;
             if (failureCode) throw new TurnnoteError(failureCode);
             return;
           }
-          try {
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new TurnnoteError('CAPTURE_FAILED')), 3000);
-              flushed = () => {
-                clearTimeout(timeout);
-                resolve();
-              };
-              worklet!.port.postMessage('flush');
-            });
-            await pending;
-            if (finished) {
-              await failedTask;
-              if (failureCode) throw new TurnnoteError(failureCode);
-              return;
-            }
-            if (writeError) throw new TurnnoteError(writeError);
-            finished = true;
-            await cleanup();
-            const result = await api.recording.stop(options.meetingId, jobId!);
-            if (!result.ok) throw new TurnnoteError(result.error.code);
-          } catch (error) {
-            await reportFailure(captureCode(error));
-            throw new TurnnoteError(captureCode(error));
+          if (writeError) throw new TurnnoteError(writeError);
+          finished = true;
+          await cleanup();
+        } catch (error) {
+          await reportFailure(captureCode(error));
+          throw new TurnnoteError(captureCode(error));
+        }
+      })();
+      return prepared;
+    }
+    return {
+      stop() {
+        if (stopping) return stopping;
+        if (cancelled || cancelling) return Promise.reject(new TurnnoteError('INVALID_STATE'));
+        stopping = (async () => {
+          if (failureCode) {
+            await reportFailure(failureCode);
+            throw new TurnnoteError(failureCode);
           }
+          await prepareStop();
+          // Media/PCM are settled once. A failed Main commit can be retried without
+          // re-flushing closed media or downgrading saved audio to a capture failure.
+          const result = await api.recording.stop(options.meetingId, jobId!);
+          if (!result.ok) throw new TurnnoteError(result.error.code);
         })();
+        void stopping.catch(() => {
+          stopping = undefined;
+        });
         return stopping;
       },
       cancel() {
         if (cancelling) return cancelling;
+        if (cancelled) return Promise.resolve();
         cancelling = (async () => {
           // A failed stop must not prevent an explicit discard.
           if (stopping) {
@@ -269,7 +296,13 @@ export async function startCapture(
           await failedTask;
           const result = await api.recording.cancel(options.meetingId, jobId!);
           if (!result.ok) throw new TurnnoteError(result.error.code);
+          cancelled = true;
         })();
+        void cancelling
+          .finally(() => {
+            cancelling = undefined;
+          })
+          .catch(() => {});
         return cancelling;
       },
     };

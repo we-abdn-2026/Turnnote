@@ -8,7 +8,7 @@ type SessionApi = Pick<TurnnoteApi, 'meetings' | 'events'>;
 export interface MeetingRecording {
   start(
     id: string,
-    notify: { warning(message: string): void; error(message: string): void },
+    notify: { warning(message: string): void; error(message: string): void; stopped(): void },
   ): Promise<Result<MeetingDetail>>;
   stop(id: string, jobId: string): Promise<Result<MeetingDetail>>;
   discard(id: string, jobId: string): Promise<Result<MeetingDetail>>;
@@ -26,14 +26,16 @@ export interface SessionState {
   /** 每次替换会议快照时递增；updatedAt 可能在同一毫秒内重复，不能用来区分快照 */
   revision: number;
   warning: string | null;
+  /** Renderer media is closed; Main may still be committing the saved audio. */
+  captureStopped: boolean;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
 export const REQUEST_FAILED_MESSAGE = '操作失败，请重试。';
 
-/** 当前会议正在录音；工作区只显示一场会议，此时切走会失去唯一的停止入口 */
+/** Main 录音任务仍活动且 Renderer 尚未关闭媒体；保存等待不冒充正在采集 */
 export function isRecording(state: SessionState): boolean {
-  return state.meeting?.status === 'recording';
+  return state.meeting?.status === 'recording' && !state.captureStopped;
 }
 
 /** 与 Main/mock 共用 lifecycle 条件，界面按此启用按钮 */
@@ -41,7 +43,7 @@ export function availableActions(state: SessionState): Record<SessionAction, boo
   const { meeting, pending } = state;
   const idle = pending === null;
   return {
-    create: idle && !isRecording(state),
+    create: idle && meeting?.status !== 'recording',
     start: idle && !!meeting && canStartJob(meeting, 'recording', false),
     stop: idle && meeting?.status === 'recording' && !!meeting.activeJobId,
     discard: idle && !!meeting && canCancelRecording(meeting),
@@ -67,6 +69,7 @@ const INITIAL: SessionState = {
   error: null,
   revision: 0,
   warning: null,
+  captureStopped: false,
 };
 
 export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
@@ -113,7 +116,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     if (switchesMeeting) {
       generation += 1;
       eventSeq = 0;
-      set({ pending: null, meeting: result.value });
+      set({ pending: null, meeting: result.value, captureStopped: false });
     } else {
       set({ pending: null, ...(eventSeq === seq && { meeting: result.value }) });
     }
@@ -153,16 +156,20 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     create: (title) => run('create', () => api.meetings.create(title), { switchesMeeting: true }),
     start() {
       const token = generation;
-      return run('start', () =>
-        recording.start(state.meeting!.id, {
+      return run('start', () => {
+        set({ captureStopped: false });
+        return recording.start(state.meeting!.id, {
+          stopped: () => {
+            if (token === generation) set({ captureStopped: true });
+          },
           warning: (warning) => {
             if (token === generation) set({ warning });
           },
           error: (error) => {
             if (token === generation) set({ error });
           },
-        }),
-      );
+        });
+      });
     },
     stop: () => run('stop', () => recording.stop(state.meeting!.id, state.meeting!.activeJobId!)),
     discard() {
