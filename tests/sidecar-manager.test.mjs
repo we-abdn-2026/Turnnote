@@ -244,6 +244,37 @@ test('jobId is used as the transcribe request id', async () => {
   assert.equal(result.segments[0].text, 'job-123');
 });
 
+// 审查 #61 P2（复审）：与共享 schema 一致，拒绝零时长、空文本、乱序片段
+test('segment with zero duration is SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 0, text: 'zero duration' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('segment with empty text is SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 10, text: '' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('out-of-order segments are SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 100, endMs: 200, text: 'second' });
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 50, text: 'first' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('overlapping segments are SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 100, text: 'first' });
+    out({ id: msg.id, type: 'segment', startMs: 50, endMs: 150, text: 'overlaps' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
 test('model load failure passes through', async () => {
   const sidecar = afterPong(`(msg, out) => {
     out({ id: msg.id, type: 'error', code: 'MODEL_LOAD_FAILED', message: 'no model' });

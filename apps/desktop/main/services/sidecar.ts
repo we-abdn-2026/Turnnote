@@ -108,12 +108,14 @@ const isInt = (value: unknown): value is number => Number.isInteger(value);
 const isMs = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-function isSegment(message: Message): boolean {
+function isSegment(message: Message, prevEndMs: number): boolean {
   return (
     isMs(message.startMs) &&
     isMs(message.endMs) &&
-    message.endMs >= message.startMs &&
-    typeof message.text === 'string'
+    message.endMs > message.startMs &&
+    typeof message.text === 'string' &&
+    message.text.length > 0 &&
+    message.startMs >= prevEndMs
   );
 }
 
@@ -224,7 +226,7 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
           options.onProgress?.(message.percent);
           return;
         case 'segment':
-          if (!isSegment(message)) {
+          if (!isSegment(message, segments.at(-1)?.endMs ?? 0)) {
             fail('SIDECAR_PROTOCOL_ERROR');
             return;
           }
