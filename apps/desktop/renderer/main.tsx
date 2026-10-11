@@ -1,5 +1,6 @@
 import { StrictMode, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { AudioDeviceSelector } from './components/AudioDeviceSelector';
 import { MeetingWorkspace } from './workspace/MeetingWorkspace';
 import './styles.css';
 
@@ -12,6 +13,7 @@ function App(): ReactElement {
           <h1>Meeting workspace</h1>
         </div>
       </header>
+      <AudioDeviceSelector />
       <MeetingWorkspace />
     </main>
   );
