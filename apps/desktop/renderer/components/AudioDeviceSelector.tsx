@@ -21,27 +21,25 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
     void Promise.all([
       window.turnnote.settings.get(),
       window.turnnote.recording.getPermissions(),
-    ])
-      .then(([settingsResult, permissionsResult]) => {
-        if (!settingsResult.ok) {
-          setLoadError(settingsResult.error);
-          setLoadingState('error');
-          return;
-        }
-        if (!permissionsResult.ok) {
-          setLoadError(permissionsResult.error);
-          setLoadingState('error');
-          return;
-        }
-        setSettings(settingsResult.value);
-        setPermissions(permissionsResult.value);
-        setLoadError(null);
-        setLoadingState('loaded');
-      })
-      .catch(() => {
-        setLoadError({ code: 'INTERNAL', message: '加载失败，请重试' });
+    ]).then(([settingsResult, permissionsResult]) => {
+      if (!settingsResult.ok) {
+        setLoadError(settingsResult.error);
         setLoadingState('error');
-      });
+        return;
+      }
+      if (!permissionsResult.ok) {
+        setLoadError(permissionsResult.error);
+        setLoadingState('error');
+        return;
+      }
+      setSettings(settingsResult.value);
+      setPermissions(permissionsResult.value);
+      setLoadError(null);
+      setLoadingState('loaded');
+    }).catch(() => {
+      setLoadError({ code: 'INTERNAL', message: '加载失败，请重试' });
+      setLoadingState('error');
+    });
   }, []);
 
   // 加载可用的音频设备并监听设备变化
