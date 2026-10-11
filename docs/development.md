@@ -64,7 +64,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 better-sqlite3 13 使用 Node-API 预编译模块；当前依赖不需要在 Node 和 Electron ABI 间反复重编译。仍须在打包验证中确认三个目标平台的原生模块加载和资源布局，不能用 Node 单测替代安装包验收。
 
-Main 启动时迁移数据库、结束中断的转写/生成任务并继续未完成的删除。录音 header 修复等待 AudioWriter 接入；失败不重建或静默清空数据库。
+Main 启动时迁移数据库、结束中断的转写/生成任务并继续未完成的删除。录音 header 修复已接入，未结束录音保留音频并标记 INTERRUPTED；失败不重建或静默清空数据库。
 
 ## 更新依赖
 
