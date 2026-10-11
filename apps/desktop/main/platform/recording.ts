@@ -16,6 +16,7 @@ export function createRecordingHandlers(
   afterCapture?: (meetingId: string) => void,
 ) {
   const writers = new Map<string, AudioWriter>();
+  const owners = new Map<string, string>();
   let queue: Promise<void> = Promise.resolve();
   function serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = queue.then(operation);
@@ -43,6 +44,7 @@ export function createRecordingHandlers(
   async function close(jobId: string) {
     const writer = writers.get(jobId);
     writers.delete(jobId);
+    owners.delete(jobId);
     await writer?.finalize();
   }
   const handlers: InvokeHandlers = {
@@ -56,6 +58,7 @@ export function createRecordingHandlers(
         try {
           const job = store.beginRecording(id, path);
           writers.set(job.id, writer);
+          owners.set(job.id, id);
         } catch (error) {
           await writer.finalize();
           unlinkSync(path);
@@ -153,10 +156,11 @@ export function createRecordingHandlers(
     handlers,
     releaseMeeting(id: string) {
       return serialize(async () => {
-        for (const job of store.getJobs(id)) {
-          if (writers.has(job.id)) {
+        // Cleanup uses live ownership, so deleted tombstones and repeat calls are safe.
+        for (const [jobId, meetingId] of owners) {
+          if (meetingId === id) {
             try {
-              await close(job.id);
+              await close(jobId);
             } catch {
               /* Delete handler reports disk errors. */
             }

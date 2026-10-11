@@ -2,17 +2,32 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { startCapture } from '../out/tests/runtime.mjs';
 
-function environment(t, { systemDenied = false, micDenied = false, writeFailed = false } = {}) {
+function environment(
+  t,
+  { systemDenied = false, micDenied = false, writeFailed = false, duringModule, duringMic } = {},
+) {
   const calls = [];
   const tracks = [];
   function stream(video = false) {
     const audio = {
       kind: 'audio',
       stopped: false,
+      readyState: 'live',
+      listeners: new Set(),
       stop() {
         this.stopped = true;
+        this.readyState = 'ended';
       },
-      addEventListener() {},
+      end() {
+        this.readyState = 'ended';
+        for (const listener of this.listeners) listener();
+      },
+      addEventListener(type, listener) {
+        this.listeners.add(listener);
+      },
+      removeEventListener(type, listener) {
+        this.listeners.delete(listener);
+      },
     };
     const screen = {
       kind: 'video',
@@ -36,7 +51,11 @@ function environment(t, { systemDenied = false, micDenied = false, writeFailed =
   class Context {
     state = 'suspended';
     destination = {};
-    audioWorklet = { addModule: async () => {} };
+    audioWorklet = {
+      addModule: async () => {
+        await duringModule?.(tracks);
+      },
+    };
     constructor() {
       contexts.push(this);
     }
@@ -47,11 +66,16 @@ function environment(t, { systemDenied = false, micDenied = false, writeFailed =
       this.state = 'running';
     }
     async close() {
+      if (this.state === 'closed') throw new DOMException('closed', 'InvalidStateError');
       this.state = 'closed';
       calls.push('close-context');
     }
   }
+  const worklets = [];
   class Worklet {
+    constructor() {
+      worklets.push(this);
+    }
     port = {
       onmessage: undefined,
       close() {},
@@ -71,6 +95,7 @@ function environment(t, { systemDenied = false, micDenied = false, writeFailed =
           return stream(true);
         },
         async getUserMedia() {
+          await duringMic?.(tracks);
           if (micDenied) throw new DOMException('denied', 'NotAllowedError');
           return stream();
         },
@@ -122,7 +147,7 @@ function environment(t, { systemDenied = false, micDenied = false, writeFailed =
       },
     },
   };
-  return { api, calls, tracks, context: () => contexts[0] };
+  return { api, calls, tracks, context: () => contexts[0], worklet: () => worklets[0] };
 }
 const options = { meetingId: 'meeting', microphoneDeviceId: 'default', includeSystemAudio: true };
 
@@ -172,3 +197,50 @@ test('failed final chunk reports WRITE_FAILED and cannot claim captured', async 
   assert.ok(!env.calls.includes('stop'));
   assert.ok(env.tracks.every((track) => track.stopped));
 });
+
+test('source ending while Worklet initializes fails start and releases resources', async (t) => {
+  const env = environment(t, { duringModule: (tracks) => tracks[0].end() });
+  await assert.rejects(startCapture(options, env.api), { code: 'CAPTURE_FAILED' });
+  assert.deepEqual(env.calls.at(-1), ['fail', 'CAPTURE_FAILED']);
+  assert.equal(env.context().state, 'closed');
+  assert.ok(env.tracks.every((track) => track.stopped));
+});
+
+test('ended readyState without a delivered event is rejected across initialization', async (t) => {
+  const env = environment(t, {
+    duringModule: (tracks) => {
+      tracks[0].readyState = 'ended';
+    },
+  });
+  await assert.rejects(startCapture(options, env.api), { code: 'CAPTURE_FAILED' });
+  assert.deepEqual(env.calls.at(-1), ['fail', 'CAPTURE_FAILED']);
+});
+
+test('system source ending during microphone permission wait also stops the late microphone', async (t) => {
+  const env = environment(t, {
+    duringMic: async (tracks) => {
+      tracks[0].end();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+  });
+  await assert.rejects(startCapture(options, env.api), { code: 'CAPTURE_FAILED' });
+  assert.ok(env.tracks.every((track) => track.stopped));
+  assert.deepEqual(env.calls.at(-1), ['fail', 'CAPTURE_FAILED']);
+  assert.equal(env.context(), undefined);
+});
+
+for (const trigger of ['track', 'processor', 'write']) {
+  test(`session cancel completes once after ${trigger} failure without closing Context twice`, async (t) => {
+    const env = environment(t, { writeFailed: trigger === 'write' });
+    const session = await startCapture(options, env.api);
+    if (trigger === 'track') env.tracks[0].end();
+    if (trigger === 'processor') env.worklet().onprocessorerror();
+    if (trigger === 'write') await assert.rejects(session.stop(), { code: 'WRITE_FAILED' });
+    await Promise.all([session.cancel(), session.cancel()]);
+    assert.equal(env.calls.filter((call) => call === 'cancel').length, 1);
+    assert.equal(env.calls.filter((call) => call === 'close-context').length, 1);
+    const fail = env.calls.findIndex((call) => Array.isArray(call) && call[0] === 'fail');
+    assert.ok(fail < env.calls.indexOf('cancel'));
+    assert.ok(env.tracks.every((track) => track.stopped));
+  });
+}

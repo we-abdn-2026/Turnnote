@@ -31,11 +31,18 @@
 
 - `npm run typecheck`：通过。
 - `npm run lint:js`：通过；Python 未修改，完整 lint 的 ruff 部分另行记录。
-- `npm test`：64 项全部通过，含 12 项本次新增音频与采集流程测试。
+- `npm test`：72 项全部通过，含最初 12 项音频与采集流程测试，以及审核后新增的 8 项异常流程回归测试。
 - `npm run build`：Main、Preload、Renderer 和独立 AudioWorklet 构建通过。
 - `npm run test:electron`：Electron 44.4.5 / Node 24.21.0 的 SQLite 加载、迁移和持久化通过。
 
 音频测试覆盖 WAV 小端样本、偏移视图、header 长度、重复 finalize、截断修复、空/未知文件拒绝、实际短写/磁盘异常模拟、jobId 隔离、停止/取消竞态、启动恢复、删除失败保留引用、重采样时长、混音和末块。Renderer 流程测试验证末块写入先于 stop、权限拒绝后的资源释放、系统音频降级和 WRITE_FAILED；浏览器替身不作为实际采集证据。
+
+## 审核问题修复（2026-10-11）
+
+- P1：资源释放仅按内存中的活动 writer 归属操作，不查询会排除删除墓碑的 getJobs；带墓碑的删除重试和重启恢复可以完成。使用真实 SQLite 和文件系统验证删除失败、恢复、再次删除及启动清理的组合路径。
+- P2：取得音轨后立即监听 ended，在媒体请求、Worklet 加载和 AudioContext 恢复后检查音轨状态；初始化期间失效不会返回成功，晚到的麦克风也会释放。
+- P2：清理只执行一次，已关闭的 AudioContext 不再次关闭；显式 cancel 等待失败收尾，但不会被之前 stop 的错误阻断。覆盖音轨失效、processorerror 和 WRITE_FAILED 后的取消。
+- 本轮 typecheck、lint:js、build 和 72 项测试通过。新增媒体生命周期测试使用替身，不算新增真机录音证据；前述 macOS 记录属于初次提交。
 
 ## 尚需验收
 

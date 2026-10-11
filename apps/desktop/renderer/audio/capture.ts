@@ -48,15 +48,50 @@ export async function startCapture(
   let writeError: CaptureErrorCode | undefined;
   let failedTask: Promise<void> | undefined;
   let failureCode: CaptureErrorCode | undefined;
-  async function cleanup() {
-    for (const stream of streams) for (const track of stream.getTracks()) track.stop();
-    worklet?.disconnect();
-    worklet?.port.close();
-    try {
-      await context?.close();
-    } finally {
-      capturing = false;
+  let cleanupTask: Promise<void> | undefined;
+  const endedListeners = new Map<MediaStreamTrack, () => void>();
+  function cleanup(): Promise<void> {
+    if (cleanupTask) return cleanupTask;
+    cleanupTask = (async () => {
+      for (const [track, listener] of endedListeners) track.removeEventListener('ended', listener);
+      endedListeners.clear();
+      for (const stream of streams) for (const track of stream.getTracks()) track.stop();
+      worklet?.disconnect();
+      worklet?.port.close();
+      try {
+        if (context && context.state !== 'closed') await context.close();
+      } finally {
+        capturing = false;
+      }
+    })();
+    return cleanupTask;
+  }
+  function ensureLive() {
+    if (failureCode) throw new TurnnoteError(failureCode);
+    if (
+      streams.some((stream) =>
+        stream.getAudioTracks().some((track) => track.readyState === 'ended'),
+      )
+    )
+      throw new TurnnoteError('CAPTURE_FAILED');
+  }
+  function watchStream(stream: MediaStream) {
+    // A media request can resolve after an earlier source has already failed.
+    if (finished) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new TurnnoteError(failureCode ?? 'CAPTURE_FAILED');
     }
+    streams.push(stream);
+    const audioTracks = stream.getAudioTracks();
+    for (const track of audioTracks) {
+      const listener = () => {
+        if (!finished) void reportFailure('CAPTURE_FAILED');
+      };
+      endedListeners.set(track, listener);
+      track.addEventListener('ended', listener);
+    }
+    if (!audioTracks.length) throw new TurnnoteError('CAPTURE_FAILED');
+    ensureLive();
   }
   function reportFailure(code: CaptureErrorCode): Promise<void> {
     if (failedTask) return failedTask;
@@ -85,6 +120,7 @@ export async function startCapture(
         await api.loopback.enable();
         try {
           system = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+          watchStream(system);
         } finally {
           await api.loopback.disable();
         }
@@ -92,16 +128,23 @@ export async function startCapture(
           track.stop();
           system.removeTrack(track);
         }
-        if (!system.getAudioTracks().length) throw new TurnnoteError('CAPTURE_FAILED');
-        streams.push(system);
+        ensureLive();
       } catch (error) {
         system?.getTracks().forEach((track) => track.stop());
-        if (options.microphoneDeviceId === null) throw error;
+        if (failureCode || options.microphoneDeviceId === null) throw error;
+        if (system) {
+          streams.splice(streams.indexOf(system), 1);
+          for (const track of system.getAudioTracks()) {
+            const listener = endedListeners.get(track);
+            if (listener) track.removeEventListener('ended', listener);
+            endedListeners.delete(track);
+          }
+        }
         options.onWarning?.('System audio is unavailable. Recording microphone only.');
       }
     }
     if (options.microphoneDeviceId !== null) {
-      streams.push(
+      watchStream(
         await navigator.mediaDevices.getUserMedia({
           audio: {
             deviceId: { exact: options.microphoneDeviceId },
@@ -112,6 +155,7 @@ export async function startCapture(
         }),
       );
     }
+    ensureLive();
     try {
       context = new AudioContext({ sampleRate: 16000 });
     } catch {
@@ -119,6 +163,7 @@ export async function startCapture(
       context = new AudioContext();
     }
     await context.audioWorklet.addModule(workletUrl);
+    ensureLive();
     worklet = new AudioWorkletNode(context, 'turnnote-capture', {
       numberOfInputs: streams.length,
       numberOfOutputs: 1,
@@ -154,22 +199,19 @@ export async function startCapture(
     };
     streams.forEach((stream, i) => {
       context!.createMediaStreamSource(stream).connect(worklet!, 0, i);
-      stream.getAudioTracks().forEach((track) =>
-        track.addEventListener('ended', () => {
-          if (!finished) void reportFailure('CAPTURE_FAILED');
-        }),
-      );
     });
     worklet.onprocessorerror = () => {
       if (!finished) void reportFailure('CAPTURE_FAILED');
     };
     worklet.connect(context.destination);
     await context.resume();
+    ensureLive();
     if (context.state !== 'running') throw new TurnnoteError('CAPTURE_FAILED');
     context.onstatechange = () => {
       if (!finished && context?.state !== 'running') void reportFailure('CAPTURE_FAILED');
     };
     let stopping: Promise<void> | undefined;
+    let cancelling: Promise<void> | undefined;
     return {
       stop() {
         if (stopping) return stopping;
@@ -206,16 +248,29 @@ export async function startCapture(
         })();
         return stopping;
       },
-      async cancel() {
-        if (stopping) await stopping;
-        else {
+      cancel() {
+        if (cancelling) return cancelling;
+        cancelling = (async () => {
+          // A failed stop must not prevent an explicit discard.
+          if (stopping) {
+            try {
+              await stopping;
+            } catch {
+              /* Failure has already been reported to Main. */
+            }
+          }
           finished = true;
-          await cleanup();
+          try {
+            await cleanup();
+          } catch {
+            /* Still attempt explicit discard if resource cleanup failed. */
+          }
           await pending;
           await failedTask;
-        }
-        const result = await api.recording.cancel(options.meetingId, jobId!);
-        if (!result.ok) throw new TurnnoteError(result.error.code);
+          const result = await api.recording.cancel(options.meetingId, jobId!);
+          if (!result.ok) throw new TurnnoteError(result.error.code);
+        })();
+        return cancelling;
       },
     };
   } catch (error) {
