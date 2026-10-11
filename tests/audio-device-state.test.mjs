@@ -112,6 +112,16 @@ test('empty list reports no microphone; a later scan after connecting lists the 
   assert.ok(view.options.some((o) => o.value === 'mic-new' && !o.disabled));
 });
 
+test('placeholder devices with an empty deviceId are not listed and do not duplicate the default option', async () => {
+  // 页面尚未获得麦克风授权时，Chrome 只返回 deviceId 和 label 都为空的占位设备
+  const scan = await scanAudioInputs(fakeMediaDevices([mic(''), mic(''), speaker('')]));
+  assert.equal(scan.devices.length, 2);
+  const view = deriveDeviceView(SETTINGS, GRANTED, scan.devices, scan.error);
+  assert.deepEqual(view.options, [{ value: '', label: '系统默认麦克风', disabled: false }]);
+  // 设备存在，只是暂不可单独选择，不能提示“未检测到麦克风”
+  assert.equal(view.noDevices, false);
+});
+
 test('removed selected device stays visible as unavailable and the persisted setting is not rewritten', async () => {
   const writes = [];
   const base = apiWith();

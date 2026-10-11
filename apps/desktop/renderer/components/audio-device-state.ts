@@ -103,7 +103,9 @@ export function deriveDeviceView(
   if (selectedMissing && selectedId !== null) {
     options.push({ value: selectedId, label: '已断开的设备（不可用）', disabled: true });
   }
-  for (const device of list) {
+  // 页面尚未获得麦克风授权时，浏览器只返回 deviceId 为空的占位设备，无法单独选择；
+  // 不列为选项（否则与“系统默认麦克风”的空值重复），但仍计入“检测到设备”
+  for (const device of list.filter((d) => d.deviceId !== '')) {
     options.push({
       value: device.deviceId,
       label: device.label || `麦克风 ${device.deviceId.slice(0, 8)}`,
