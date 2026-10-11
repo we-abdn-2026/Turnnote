@@ -50,7 +50,7 @@ button:disabled {
   letter-spacing: 0.12em;
   margin: 0 0 8px;
 }
-.recording-controls {
+.header .recording-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -58,7 +58,7 @@ button:disabled {
   gap: 10px;
   max-width: 640px;
 }
-.recording-controls p {
+.header .recording-controls p {
   flex-basis: 100%;
   text-align: right;
   margin: 0;
@@ -70,16 +70,287 @@ h2 {
 h1 {
   font-size: 30px;
 }
-.empty-state {
+/* 录音工作区 */
+.workspace {
+  margin-top: 32px;
+  max-width: 720px;
+}
+.create-meeting {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+.create-meeting input {
+  border: 1px solid #d9e0e7;
+  border-radius: 6px;
+  flex: 1;
+  font: inherit;
+  padding: 9px 12px;
+}
+.create-blocked {
+  color: #64748b;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+.workspace-error {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 6px;
+  margin-top: 16px;
+  padding: 12px 16px;
+}
+.workspace-error p {
+  color: #5f2120;
+  margin: 4px 0 0;
+}
+.meeting-panel {
+  background: white;
   border: 1px solid #d9e0e7;
   border-radius: 8px;
-  background: white;
-  margin-top: 48px;
-  max-width: 720px;
-  padding: 32px;
+  margin-top: 24px;
+  padding: 24px;
 }
-.empty-state p {
+.meeting-status {
+  color: #475569;
+  margin: 8px 0 20px;
+}
+.meeting-actions {
+  display: flex;
+  gap: 12px;
+}
+button.secondary {
+  background: white;
+  border: 1px solid #d9e0e7;
+  color: #17212b;
+}
+button.danger {
+  background: #c62828;
+}
+
+/* 录音控制 */
+.recording-indicator,
+.processing-indicator {
+  align-items: center;
+  border-radius: 6px;
+  display: inline-flex;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 6px 12px;
+}
+.recording-indicator {
+  background: #ffebee;
+  color: #b71c1c;
+}
+.processing-indicator {
+  background: #eef2f7;
+  color: #475569;
+}
+.recording-dot {
+  animation: recording-pulse 1.2s ease-in-out infinite;
+  background: #d32f2f;
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+@keyframes recording-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-dot {
+    animation: none;
+  }
+}
+.consent-notice {
+  background: #fff8e1;
+  border: 1px solid #ffd54f;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+.consent-notice p {
+  color: #5f4c00;
+  line-height: 1.5;
+  margin: 4px 0 12px;
+}
+
+/* 音频设备选择器 */
+.device-selector {
+  background: white;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  margin-top: 32px;
+  max-width: 720px;
+  padding: 24px;
+}
+
+.device-selector h3 {
+  font-size: 18px;
+  margin: 0 0 20px;
+}
+
+.device-selector.loading {
   color: #64748b;
-  line-height: 1.6;
+  padding: 16px 24px;
+}
+
+.permission-notice {
+  background: #fff8e1;
+  border: 1px solid #ffd54f;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.permission-notice strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.permission-notice p {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.device-option {
+  margin-bottom: 20px;
+}
+
+.device-option:last-child {
   margin-bottom: 0;
+}
+
+.device-option > label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.device-option .disabled-hint {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.device-option select {
+  background: white;
+  border: 1px solid #d9e0e7;
+  border-radius: 6px;
+  font: inherit;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.device-option select:disabled {
+  background: #f4f6f8;
+  color: #aab4bf;
+  cursor: not-allowed;
+}
+
+.device-option input[type='checkbox'] {
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+.device-option label[for='system-audio-toggle'] {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 400;
+}
+
+.device-option .hint {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.device-option .error {
+  color: #d32f2f;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.device-option .warning {
+  background: #fff8e1;
+  border-left: 3px solid #ffa000;
+  color: #5f4c00;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+}
+
+.error-notice {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.error-notice strong {
+  color: #c62828;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.error-notice p {
+  color: #5f2120;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+
+.retry-button {
+  background: #ef5350;
+  border: 0;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  margin-top: 12px;
+  padding: 8px 16px;
+}
+
+.retry-button:hover {
+  background: #e53935;
+}
+
+.device-select-wrapper {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.device-select-wrapper select {
+  flex: 1;
+}
+
+.refresh-button {
+  background: #1f6feb;
+  border: 0;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  height: 38px;
+  padding: 0;
+  width: 38px;
+}
+
+.refresh-button:hover {
+  background: #1a5cd7;
+}
+
+.refresh-button:active {
+  transform: rotate(180deg);
+  transition: transform 0.3s;
 }

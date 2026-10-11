@@ -54,6 +54,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run test` | Node 测试 |
 | `npm run test:electron` | 用 Electron Node 运行时验证原生 SQLite 加载、迁移和持久化，不打开 GUI |
+| `npm run test:ui` | 在本机 Chrome（headless）中运行 dev:web，挂载真实组件做界面测试；需要 Chrome 或设置 `CHROME_PATH`，不在 CI 中运行 |
 | `npm run build` | 构建到 `out/` |
 
 `npm run lint` 和 `npm run format` 需要先激活 `.venv`。

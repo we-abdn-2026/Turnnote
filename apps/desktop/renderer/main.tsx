@@ -1,23 +1,11 @@
-import { StrictMode, useEffect, useState, type ReactElement } from 'react';
+import { StrictMode, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { MeetingSummary } from '@shared/contracts';
-import './styles.css';
 import { RecordingControls } from './audio/recording-controls';
+import { AudioDeviceSelector } from './components/AudioDeviceSelector';
+import { MeetingWorkspace } from './workspace/MeetingWorkspace';
+import './styles.css';
 
 function App(): ReactElement {
-  const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
-
-  useEffect(() => {
-    void window.turnnote.meetings.list().then((result) => {
-      if (result.ok) setMeetings(result.value);
-    });
-    return window.turnnote.events.onMeetingUpdated(() => {
-      void window.turnnote.meetings.list().then((result) => {
-        if (result.ok) setMeetings(result.value);
-      });
-    });
-  }, []);
-
   return (
     <main className="shell">
       <header className="header">
@@ -27,13 +15,8 @@ function App(): ReactElement {
         </div>
         <RecordingControls />
       </header>
-      <section className="empty-state" aria-live="polite">
-        <h2>{meetings.length === 0 ? 'No meetings yet' : `${meetings.length} meetings`}</h2>
-        <p>
-          Record microphone and system audio locally. Transcription will be added in the next
-          implementation stage.
-        </p>
-      </section>
+      <AudioDeviceSelector />
+      <MeetingWorkspace />
     </main>
   );
 }
