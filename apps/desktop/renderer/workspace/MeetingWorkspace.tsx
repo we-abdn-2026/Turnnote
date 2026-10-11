@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { MeetingStatus } from '@shared/contracts';
 import { availableActions, createMeetingSession } from './meeting-session';
+import { RecordingControls } from './RecordingControls';
 
 export const STATUS_LABELS: Record<MeetingStatus, string> = {
   created: '已创建，未开始录音',
@@ -65,14 +66,7 @@ export function MeetingWorkspace(): ReactElement {
             {STATUS_LABELS[meeting.status]}
             {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
           </p>
-          <div className="meeting-actions">
-            <button type="button" onClick={() => void session.start()} disabled={!actions.start}>
-              {state.pending === 'start' ? '正在开始...' : '开始录音'}
-            </button>
-            <button type="button" onClick={() => void session.stop()} disabled={!actions.stop}>
-              {state.pending === 'stop' ? '正在停止...' : '停止录音'}
-            </button>
-          </div>
+          <RecordingControls session={session} state={state} />
         </div>
       )}
     </section>
