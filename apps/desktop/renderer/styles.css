@@ -74,6 +74,11 @@ h1 {
   font: inherit;
   padding: 9px 12px;
 }
+.create-blocked {
+  color: #64748b;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
 .workspace-error {
   background: #ffebee;
   border: 1px solid #ef5350;

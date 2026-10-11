@@ -5,6 +5,7 @@ import {
   availableActions,
   createMeetingSession,
   createMockApi,
+  isRecording,
 } from '../out/tests/runtime.mjs';
 
 /** 记录会话每次通知时的会议状态 */
@@ -78,20 +79,75 @@ test('events for other meetings never change the current meeting', async () => {
 });
 
 test('switching to a new meeting ignores late events from the previous one', async () => {
-  const api = createMockApi({ seed: false, delayMs: 1 });
+  const api = createMockApi({ seed: false, delayMs: 5 });
   const session = createMeetingSession(api);
   const disconnect = session.connect();
   await session.create('First');
   const first = session.getState().meeting.id;
   await session.start();
+  await session.stop();
   await session.create('Second');
   const second = session.getState().meeting;
-  // 第一场会议此后的停止和转写事件不能影响第二场
-  const jobId = (await api.meetings.get(first)).value.activeJobId;
-  await api.recording.stop(first, jobId);
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  // 第一场会议此后的转写进度和完成事件不能影响第二场
+  for (let i = 0; (await api.meetings.get(first)).value.status !== 'transcribed'; i++) {
+    assert.ok(i < 200, 'first meeting reaches transcribed');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
   assert.equal(session.getState().meeting.id, second.id);
   assert.equal(session.getState().meeting.status, 'created');
+  disconnect();
+});
+
+test('creating another meeting is refused while recording, so the recording keeps its stop control', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  let creates = 0;
+  const api = {
+    ...base,
+    meetings: { ...base.meetings, create: (title) => (creates++, base.meetings.create(title)) },
+  };
+  const session = createMeetingSession(api);
+  const disconnect = session.connect();
+  await session.create('Recording');
+  await session.start();
+  const recording = session.getState().meeting;
+  assert.equal(isRecording(session.getState()), true);
+  assert.equal(availableActions(session.getState()).create, false);
+  assert.equal(await session.create('Second'), false);
+  assert.equal(creates, 1);
+  assert.equal(session.getState().meeting.id, recording.id);
+  assert.equal(availableActions(session.getState()).stop, true);
+
+  assert.equal(await session.stop(), true);
+  assert.equal(isRecording(session.getState()), false);
+  assert.equal(await session.create('Second'), true);
+  disconnect();
+});
+
+test('a recording event that arrives before the start response already blocks create', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  let release;
+  const api = {
+    ...base,
+    recording: {
+      ...base.recording,
+      start: async (id) => {
+        const result = await base.recording.start(id);
+        await new Promise((resolve) => (release = resolve));
+        return result;
+      },
+    },
+  };
+  const session = createMeetingSession(api);
+  const disconnect = session.connect();
+  await session.create('Event first');
+  const starting = session.start();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.getState().meeting.status, 'recording');
+  release();
+  await starting;
+  // 响应结束 pending 后仍处于录音中，新建仍不可用
+  assert.equal(session.getState().pending, null);
+  assert.equal(availableActions(session.getState()).create, false);
   disconnect();
 });
 
@@ -262,11 +318,14 @@ test('available actions follow meeting status; processing states are never start
   assert.deepEqual(actions(null), { create: true, start: false, stop: false, discard: false });
   assert.equal(actions(meeting('created')).start, true);
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).stop, true);
+  assert.equal(actions(meeting('recording', { activeJobId: 'j' })).create, false);
   for (const status of ['captured', 'transcribing', 'transcribed', 'generating', 'ready']) {
     const a = actions(meeting(status, { activeJobId: 'j' }));
     assert.equal(a.start, false, status);
     assert.equal(a.stop, false, status);
     assert.equal(a.discard, false, status);
+    // 已不在录音中，可以新建会议
+    assert.equal(a.create, true, status);
   }
   assert.deepEqual(actions(meeting('created'), 'create'), {
     create: false,

@@ -17,6 +17,7 @@ export {
   REQUEST_FAILED_MESSAGE,
   availableActions,
   createMeetingSession,
+  isRecording,
 } from '../../apps/desktop/renderer/workspace/meeting-session';
 export {
   activeConfirmation,

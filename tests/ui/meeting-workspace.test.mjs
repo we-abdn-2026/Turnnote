@@ -83,23 +83,56 @@ test('updates and failures of other meetings do not change the workspace', async
   assert.deepEqual(await page.eval('__ui.alerts()'), []);
 });
 
-test('switching to a new meeting ignores late events from the previous one', async () => {
+test('while recording, a new meeting cannot be created and stop stays available', async () => {
   const page = await browser.open();
   const first = await createMeeting(page, 'First');
   await startRecording(page);
   await page.waitFor(`__ui.status() === '录音中'`);
+  // 只用可见控件：输入标题后新建仍不可用，并说明原因
+  await page.eval(`__ui.type('#meeting-title', 'Second')`);
+  assert.deepEqual(
+    await page.eval(`__ui.buttons().filter((b) => ['新建会议', '停止录音'].includes(b.label))`),
+    [
+      { label: '新建会议', disabled: true },
+      { label: '停止录音', disabled: false },
+    ],
+  );
+  assert.equal(await page.eval(`document.querySelector('#meeting-title').disabled`), true);
+  assert.equal(
+    await page.eval(`document.querySelector('#create-blocked')?.textContent`),
+    '正在录音，停止录音后才能新建会议。',
+  );
+  // 即使绕过禁用直接提交表单，也不会发出创建请求
+  await page.eval(`document.querySelector('.create-meeting').requestSubmit()`);
+  assert.equal(await page.eval(`__ui.calls['meetings.create']`), 1);
+  assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'First');
+
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() !== '录音中'`);
+  assert.equal(await page.eval(`document.querySelector('#create-blocked')`), null);
+  assert.equal(
+    await page.eval(`__ui.api.meetings.get(${JSON.stringify(first)}).then((r) => r.value.status)`),
+    'transcribing',
+  );
+  assert.deepEqual(page.errors, []);
+});
+
+test('switching to a new meeting after stopping ignores late events from the previous one', async () => {
+  const page = await browser.open();
+  const first = await createMeeting(page, 'First');
+  await startRecording(page);
+  await page.waitFor(`__ui.status() === '录音中'`);
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() === '正在转写'`);
+  // 第一场仍在转写时，通过表单新建第二场
   await createMeeting(page, 'Second');
-  // 第一场会议此后停止并转写，第二场的界面不受影响
-  await page.eval(`(async () => {
-    const meeting = (await __ui.api.meetings.get(${JSON.stringify(first)})).value;
-    await __ui.api.recording.stop(meeting.id, meeting.activeJobId);
-  })()`);
   await page.waitFor(
     `__ui.api.meetings.get(${JSON.stringify(first)}).then((r) => r.value.status === 'transcribed')`,
     { timeout: 8000 },
   );
   assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'Second');
   assert.equal(await page.eval('__ui.status()'), '已创建，未开始录音');
+  assert.deepEqual(page.errors, []);
 });
 
 test('duplicate start clicks while pending send one request', async () => {

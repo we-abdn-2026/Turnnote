@@ -6,7 +6,7 @@ import {
   type ReactElement,
 } from 'react';
 import type { MeetingStatus } from '@shared/contracts';
-import { availableActions, createMeetingSession } from './meeting-session';
+import { availableActions, createMeetingSession, isRecording } from './meeting-session';
 import { RecordingControls } from './RecordingControls';
 
 export const STATUS_LABELS: Record<MeetingStatus, string> = {
@@ -29,6 +29,7 @@ export function MeetingWorkspace(): ReactElement {
   useEffect(() => session.connect(), [session]);
 
   const actions = availableActions(state);
+  const recording = isRecording(state);
   const { meeting } = state;
 
   async function handleCreate(event: FormEvent): Promise<void> {
@@ -46,11 +47,17 @@ export function MeetingWorkspace(): ReactElement {
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
           disabled={!actions.create}
+          aria-describedby={recording ? 'create-blocked' : undefined}
         />
         <button type="submit" disabled={!actions.create || !title.trim()}>
           {state.pending === 'create' ? '创建中...' : '新建会议'}
         </button>
       </form>
+      {recording && (
+        <p id="create-blocked" className="create-blocked">
+          正在录音，停止录音后才能新建会议。
+        </p>
+      )}
 
       {state.error && (
         <div className="workspace-error" role="alert">

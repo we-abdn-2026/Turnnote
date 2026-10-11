@@ -20,12 +20,17 @@ export interface SessionState {
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
 export const REQUEST_FAILED_MESSAGE = '操作失败，请重试。';
 
+/** 当前会议正在录音；工作区只显示一场会议，此时切走会失去唯一的停止入口 */
+export function isRecording(state: SessionState): boolean {
+  return state.meeting?.status === 'recording';
+}
+
 /** 与 Main/mock 共用 lifecycle 条件，界面按此启用按钮 */
 export function availableActions(state: SessionState): Record<SessionAction, boolean> {
   const { meeting, pending } = state;
   const idle = pending === null;
   return {
-    create: idle,
+    create: idle && !isRecording(state),
     start: idle && !!meeting && canStartJob(meeting, 'recording', false),
     stop: idle && meeting?.status === 'recording' && !!meeting.activeJobId,
     discard: idle && !!meeting && canCancelRecording(meeting),
