@@ -74,12 +74,58 @@ jobs:
         shell: pwsh
         run: |
           $installer = Get-ChildItem dist-packaging -Filter '*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer was not generated.' }
           $installDir = Join-Path $env:RUNNER_TEMP 'turnnote-installed'
-          Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installDir" -Wait
+          $installation = Start-Process -FilePath $installer.FullName `
+            -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($installation.ExitCode -ne 0) {
+            throw "NSIS installer failed with exit code $($installation.ExitCode)."
+          }
+
+          $executable = Join-Path $installDir 'Turnnote.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Installed executable was not found at $executable."
+          }
+
+          # Negative control: prove that an application self-check failure produces
+          # a non-zero exit code before accepting the normal validation result.
+          $failureUserData = Join-Path $env:RUNNER_TEMP 'turnnote-user-data-failure'
+          $failure = Start-Process -FilePath $executable `
+            -ArgumentList @(
+              '--packaging-smoke',
+              '--packaging-smoke-force-failure',
+              "--user-data-dir=$failureUserData"
+            ) -Wait -PassThru
+          if ($failure.ExitCode -eq 0) {
+            throw 'Intentional packaging smoke-test failure returned exit code 0.'
+          }
+
           $userData = Join-Path $env:RUNNER_TEMP 'turnnote-user-data'
-          & (Join-Path $installDir 'Turnnote.exe') --packaging-smoke "--user-data-dir=$userData"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-Content (Join-Path $userData 'packaging-validation.json')
+          $smoke = Start-Process -FilePath $executable `
+            -ArgumentList @('--packaging-smoke', "--user-data-dir=$userData") `
+            -Wait -PassThru
+          if ($smoke.ExitCode -ne 0) {
+            throw "Packaging smoke test failed with exit code $($smoke.ExitCode)."
+          }
+
+          $reportPath = Join-Path $userData 'packaging-validation.json'
+          if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+            throw "Packaging validation report was not found at $reportPath."
+          }
+          $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+          if ($report.platform -ne 'win32') {
+            throw "Unexpected report platform: $($report.platform)."
+          }
+          if ($report.architecture -ne 'x64') {
+            throw "Unexpected report architecture: $($report.architecture)."
+          }
+          if ($report.sqlite -ne 'ok') {
+            throw "SQLite validation failed: $($report.sqlite)."
+          }
+          if ($report.sidecar -ne 'ok') {
+            throw "Sidecar validation failed: $($report.sidecar)."
+          }
+          $report | ConvertTo-Json -Depth 5
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: turnnote-windows-x64

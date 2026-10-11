@@ -3,16 +3,18 @@
 本文记录 Issue #14 的空壳打包验证。它不是正式发布说明；正式打包配置仍由后续
 `electron-builder`、PyInstaller 和 CI 任务完善。
 
-## 本地验证结果
+## 验证结果
 
 | 日期 | 平台 | 安装包 | 启动 | SQLite | Sidecar ping |
 |---|---|---|---|---|---|
 | 2026-10-11 | macOS 26.6.2 arm64 | 通过 | 通过 | 通过 | 通过 |
-| 待验证 | Windows x64 | 待在 Windows x64/runner 构建 | 待验证 | 待验证 | 待验证 |
+| 2026-10-11 | Windows x64（GitHub runner） | 通过 | 通过 | 通过 | 通过 |
 
 macOS arm64 产物：`dist-packaging/Turnnote-0.1.0-arm64.dmg`（约 143 MB）。
 可提交的详细验证记录见
 [`packaging-validation/macos-arm64-2026-10-11.json`](packaging-validation/macos-arm64-2026-10-11.json)。
+Windows x64 由 GitHub Actions 原生 runner 构建、静默安装并运行相同自检，安装包和
+报告保存在对应 workflow run 的 `turnnote-windows-x64` artifact 中。
 
 验证时从 DMG 复制出 `Turnnote.app` 后运行打包自检。结果如下：
 
@@ -48,10 +50,10 @@ CI 结果记录为“通过”。
 
 ## 当前限制
 
-- 本地 sidecar 使用 Python 3.14.5、PyInstaller 6.22.3 构建并验证成功；仓库指定
-  Python 3.12，CI/正式打包仍应在 3.12 上复验。
+- 本地 sidecar 使用 Python 3.14.5、PyInstaller 6.22.3 构建并验证成功；GitHub
+  Actions 已按仓库指定的 Python 3.12 完成 macOS arm64 和 Windows x64 复验。
 - 当前安装包未签名，使用 Electron 默认图标，只用于可行性验证。
-- 当前 `worker.py` 只验证协议和 `ping`；它尚未包含正式 faster-whisper 推理实现。
-- Windows x64 不能由本机 arm64 构建后冒充已验证，必须由 Windows runner 补齐安装、
-  启动、SQLite 和 sidecar 日志。
+- 本次打包自检只验证 sidecar 的 `ping`，不代表真实 faster-whisper 模型推理已经通过。
+- Windows x64 不能由本机 arm64 构建后冒充已验证；Windows runner 负责构建、安装、
+  启动并检查 SQLite、sidecar 和自检报告。
 - macOS x64 明确不属于 Issue #14 的交付或验收范围。

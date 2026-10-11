@@ -43,7 +43,11 @@ void app
   .then(async () => {
     if (!ownsInstance) return;
     if (process.argv.includes('--packaging-smoke')) {
-      const result = await runPackagingSmoke(process.resourcesPath, app.getPath('userData'));
+      const result = await runPackagingSmoke(
+        process.resourcesPath,
+        app.getPath('userData'),
+        process.argv.includes('--packaging-smoke-force-failure'),
+      );
       console.log(`Packaging validation log: ${result.logPath}`);
       app.exit(result.passed ? 0 : 1);
       return;

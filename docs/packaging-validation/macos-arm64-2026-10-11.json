@@ -1,13 +1,14 @@
 {
-  "checkedAt": "2026-10-11T09:34:40.682Z",
+  "checkedAt": "2026-10-11T15:42:31.452Z",
   "platform": "macOS 26.6.2",
   "architecture": "arm64",
   "artifact": "dist-packaging/Turnnote-0.1.0-arm64.dmg",
-  "artifactSizeBytes": 150146468,
-  "artifactSha256": "8808dd11166b25e4511fb84eb299096f2106539054d0ce2a627ab7fcc9217d29",
+  "artifactSizeBytes": 150129636,
+  "artifactSha256": "33943082b213d6ffd5c616ade654bd2305a056e0d6d403ff7bd8cc9713fed73a",
   "installation": "DMG mounted and Turnnote.app copied before launch",
   "appExecutable": "Mach-O 64-bit executable arm64",
   "sidecarExecutable": "Mach-O 64-bit executable arm64",
+  "negativeControlExitCode": 1,
   "sqlite": "ok",
   "sidecar": "ok"
 }

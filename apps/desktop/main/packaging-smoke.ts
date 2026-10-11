@@ -67,6 +67,7 @@ function checkSidecar(sidecarPath: string): Promise<void> {
 export async function runPackagingSmoke(
   resourcesPath: string,
   userDataPath: string,
+  forceFailure = false,
 ): Promise<{ passed: boolean; logPath: string }> {
   const sidecarPath = join(
     resourcesPath,
@@ -83,6 +84,7 @@ export async function runPackagingSmoke(
   };
 
   try {
+    if (forceFailure) throw new Error('Intentional packaging smoke-test failure.');
     checkSqlite();
     result.sqlite = 'ok';
     await checkSidecar(sidecarPath);
