@@ -1,34 +1,21 @@
-import { StrictMode, type ReactElement } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AudioDeviceSelector } from './components/AudioDeviceSelector';
-import { MeetingWorkspace } from './workspace/MeetingWorkspace';
+import { App } from './App';
 import './styles.css';
 
-function App(): ReactElement {
-  return (
-    <main className="shell">
-      <header className="header">
-        <div>
-          <p className="eyebrow">TURNNOTE</p>
-          <h1>Meeting workspace</h1>
-        </div>
-      </header>
-      <AudioDeviceSelector />
-      <MeetingWorkspace />
-    </main>
-  );
-}
-
 async function bootstrap(): Promise<void> {
+  let recordingFactory;
   // `npm run dev:web` 没有 Preload，改用内存 mock；生产构建中该分支被整体移除
   if (import.meta.env.MODE === 'mock') {
     const { createMockApi } = await import('./mock/mock-api');
     window.turnnote = createMockApi();
+    const { createMockRecording } = await import('./mock/mock-recording');
+    recordingFactory = createMockRecording;
   }
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App />
+      <App recordingFactory={recordingFactory} />
     </StrictMode>,
   );
 }

@@ -15,6 +15,19 @@ export async function buildRuntime() {
     loader: { '.sql': 'text' },
     plugins: [
       {
+        name: 'worklet-test-url',
+        setup(builder) {
+          builder.onResolve({ filter: /\?worker&url$/ }, () => ({
+            path: 'worklet-test',
+            namespace: 'test-url',
+          }));
+          builder.onLoad({ filter: /.*/, namespace: 'test-url' }, () => ({
+            contents: 'export default "worklet-test.js";',
+            loader: 'js',
+          }));
+        },
+      },
+      {
         name: 'sql-raw',
         setup(builder) {
           builder.onResolve({ filter: /\.sql\?raw$/ }, (args) => ({

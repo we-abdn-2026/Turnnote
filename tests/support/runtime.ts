@@ -38,3 +38,12 @@ export {
   transcriptSegmentsSchema,
 } from '../../packages/contracts/src/schemas';
 export { errorMessages, ok, fail, TurnnoteError } from '../../packages/contracts/src/result';
+
+export { createAudioWriter, repairWavHeader } from '../../apps/desktop/main/platform/audio-writer';
+export { createRecordingHandlers } from '../../apps/desktop/main/platform/recording';
+export { PcmEncoder } from '../../apps/desktop/renderer/audio/pcm';
+export { startCapture } from '../../apps/desktop/renderer/audio/capture';
+
+export { createCaptureRecording } from '../../apps/desktop/renderer/audio/meeting-recording';
+export { createMockRecording } from '../../apps/desktop/renderer/mock/mock-recording';
+export { App } from '../../apps/desktop/renderer/App';

@@ -4,6 +4,7 @@ import {
   activeConfirmation,
   createMeetingSession,
   createMockApi,
+  createMockRecording,
   deriveRecordingControls,
 } from '../out/tests/runtime.mjs';
 
@@ -29,7 +30,7 @@ function until(session, status) {
 
 async function connected(options = {}) {
   const api = createMockApi({ seed: false, delayMs: 1, ...options });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Controls');
   return { api, session, disconnect };
@@ -104,7 +105,7 @@ test('while start or stop is pending the control stays visible, busy and disable
       stop: gated(base.recording.stop),
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Pending');
 
@@ -135,7 +136,7 @@ test('start failure keeps the meeting startable and leaves the error to the work
       }),
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Denied');
   assert.equal(await session.start(), false);
@@ -161,7 +162,7 @@ test('when the captured event arrives before the stop response, stop disappears 
       },
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Event first');
   await session.start();
@@ -192,7 +193,7 @@ test('stop failure keeps showing recording so the user can retry stop', async ()
           : base.recording.stop(id, job),
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Stop retry');
   await session.start();

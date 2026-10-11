@@ -5,7 +5,9 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { MeetingStatus } from '@shared/contracts';
+import type { MeetingStatus, TurnnoteApi } from '@shared/contracts';
+import { createCaptureRecording } from '../audio/meeting-recording';
+import type { MeetingRecording } from './meeting-session';
 import { availableActions, createMeetingSession, isRecording } from './meeting-session';
 import { RecordingControls } from './RecordingControls';
 
@@ -21,8 +23,14 @@ export const STATUS_LABELS: Record<MeetingStatus, string> = {
   deleted: '已删除',
 };
 
-export function MeetingWorkspace(): ReactElement {
-  const [session] = useState(() => createMeetingSession(window.turnnote));
+export function MeetingWorkspace({
+  recordingFactory = createCaptureRecording,
+}: {
+  recordingFactory?: (api: TurnnoteApi) => MeetingRecording;
+}): ReactElement {
+  const [session] = useState(() =>
+    createMeetingSession(window.turnnote, recordingFactory(window.turnnote)),
+  );
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const [title, setTitle] = useState('');
 
@@ -31,6 +39,7 @@ export function MeetingWorkspace(): ReactElement {
   const actions = availableActions(state);
   const recording = isRecording(state);
   const { meeting } = state;
+  const savePending = meeting?.status === 'recording' && state.captureStopped;
 
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -47,15 +56,17 @@ export function MeetingWorkspace(): ReactElement {
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
           disabled={!actions.create}
-          aria-describedby={recording ? 'create-blocked' : undefined}
+          aria-describedby={recording || savePending ? 'create-blocked' : undefined}
         />
         <button type="submit" disabled={!actions.create || !title.trim()}>
           {state.pending === 'create' ? '创建中...' : '新建会议'}
         </button>
       </form>
-      {recording && (
+      {(recording || savePending) && (
         <p id="create-blocked" className="create-blocked">
-          正在录音，停止录音后才能新建会议。
+          {savePending
+            ? '录音已结束，保存完成后才能新建会议。'
+            : '正在录音，停止录音后才能新建会议。'}
         </p>
       )}
 
@@ -66,11 +77,13 @@ export function MeetingWorkspace(): ReactElement {
         </div>
       )}
 
+      {state.warning && <p role="status">{state.warning}</p>}
+
       {meeting && (
         <div className="meeting-panel">
           <h2>{meeting.title}</h2>
           <p className="meeting-status" role="status" aria-live="polite">
-            {STATUS_LABELS[meeting.status]}
+            {savePending ? '录音已结束，等待保存' : STATUS_LABELS[meeting.status]}
             {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
           </p>
           <RecordingControls session={session} state={state} />

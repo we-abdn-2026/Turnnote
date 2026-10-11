@@ -5,6 +5,7 @@ import {
   availableActions,
   createMeetingSession,
   createMockApi,
+  createMockRecording,
   isRecording,
 } from '../out/tests/runtime.mjs';
 
@@ -41,7 +42,7 @@ function deferred() {
 
 test('create → start → stop: state follows Main snapshots and events through transcribed', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   const statuses = observe(session);
 
@@ -63,7 +64,7 @@ test('create → start → stop: state follows Main snapshots and events through
 
 test('events for other meetings never change the current meeting', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Mine');
   const mine = session.getState().meeting;
@@ -80,7 +81,7 @@ test('events for other meetings never change the current meeting', async () => {
 
 test('switching to a new meeting ignores late events from the previous one', async () => {
   const api = createMockApi({ seed: false, delayMs: 5 });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('First');
   const first = session.getState().meeting.id;
@@ -105,7 +106,7 @@ test('creating another meeting is refused while recording, so the recording keep
     ...base,
     meetings: { ...base.meetings, create: (title) => (creates++, base.meetings.create(title)) },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Recording');
   await session.start();
@@ -137,7 +138,7 @@ test('a recording event that arrives before the start response already blocks cr
       },
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Event first');
   const starting = session.start();
@@ -164,7 +165,7 @@ test('disconnect unsubscribes and drops the response of an in-flight request', a
       },
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Unmount');
   const created = session.getState().meeting;
@@ -184,7 +185,7 @@ test('disconnect unsubscribes and drops the response of an in-flight request', a
 
 test('reconnecting refreshes the snapshot missed while disconnected', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   session.connect()();
   const first = session.connect();
   await session.create('Remount');
@@ -207,7 +208,7 @@ test('duplicate start/stop while a request is pending sends only one request', a
       stop: (id, job) => (calls.stop++, base.recording.stop(id, job)),
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Double click');
   assert.deepEqual(await Promise.all([session.start(), session.start()]), [true, false]);
@@ -233,7 +234,7 @@ test('a response older than events received while it was pending does not overwr
       },
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Ordering');
   await session.start();
@@ -256,7 +257,7 @@ test('failed Result and rejection report a safe error and keep the last confirme
       },
     },
   };
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Errors');
   const { meeting: created, revision } = session.getState();
@@ -266,6 +267,8 @@ test('failed Result and rejection report a safe error and keep the last confirme
     meeting: created,
     pending: null,
     error: 'Not available yet.',
+    warning: null,
+    captureStopped: false,
     revision,
   });
   mode = 'reject';
@@ -276,7 +279,8 @@ test('failed Result and rejection report a safe error and keep the last confirme
 });
 
 test('invalid title is rejected by the shared schema and no meeting is selected', async () => {
-  const session = createMeetingSession(createMockApi({ seed: false }));
+  const api = createMockApi({ seed: false });
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   assert.equal(await session.create('   '), false);
   assert.equal(session.getState().meeting, null);
@@ -286,7 +290,7 @@ test('invalid title is rejected by the shared schema and no meeting is selected'
 
 test('failed recording can be discarded and recorded again', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
-  const session = createMeetingSession(api);
+  const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
   await session.create('Retry capture');
   await session.start();
