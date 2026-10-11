@@ -170,3 +170,82 @@ h1 {
   font-size: 13px;
   margin: 8px 0 0;
 }
+
+.device-option .warning {
+  background: #fff8e1;
+  border-left: 3px solid #ffa000;
+  color: #5f4c00;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+}
+
+.error-notice {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.error-notice strong {
+  color: #c62828;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.error-notice p {
+  color: #5f2120;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+
+.retry-button {
+  background: #ef5350;
+  border: 0;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  margin-top: 12px;
+  padding: 8px 16px;
+}
+
+.retry-button:hover {
+  background: #e53935;
+}
+
+.device-select-wrapper {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.device-select-wrapper select {
+  flex: 1;
+}
+
+.refresh-button {
+  background: #1f6feb;
+  border: 0;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  height: 38px;
+  padding: 0;
+  width: 38px;
+}
+
+.refresh-button:hover {
+  background: #1a5cd7;
+}
+
+.refresh-button:active {
+  transform: rotate(180deg);
+  transition: transform 0.3s;
+}
