@@ -18,6 +18,7 @@
     "format": "eslint . --fix && prettier --write . && ruff check --fix services && ruff format services",
     "test": "node scripts/test.mjs",
     "test:electron": "node scripts/check-electron-storage.mjs",
+    "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/ui/*.test.mjs\"",
     "labels:sync": "node scripts/sync-labels.mjs"
   },
   "dependencies": {

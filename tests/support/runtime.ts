@@ -13,6 +13,16 @@ export {
   saveDeviceSettings,
   scanAudioInputs,
 } from '../../apps/desktop/renderer/components/audio-device-state';
+export {
+  REQUEST_FAILED_MESSAGE,
+  availableActions,
+  createMeetingSession,
+  isRecording,
+} from '../../apps/desktop/renderer/workspace/meeting-session';
+export {
+  activeConfirmation,
+  deriveRecordingControls,
+} from '../../apps/desktop/renderer/workspace/recording-controls';
 export { createInvokeApi } from '../../packages/contracts/src/bridge';
 export { createDispatcher } from '../../packages/contracts/src/invoke';
 export {
