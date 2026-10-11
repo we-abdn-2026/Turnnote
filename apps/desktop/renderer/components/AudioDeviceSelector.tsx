@@ -18,10 +18,7 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
 
   // 加载设置和权限
   useEffect(() => {
-    void Promise.all([
-      window.turnnote.settings.get(),
-      window.turnnote.recording.getPermissions(),
-    ])
+    void Promise.all([window.turnnote.settings.get(), window.turnnote.recording.getPermissions()])
       .then(([settingsResult, permissionsResult]) => {
         if (!settingsResult.ok) {
           setLoadError(settingsResult.error);
@@ -146,8 +143,7 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
   const hasDevices = devices.length > 0;
   // 检查当前选择的设备是否还存在
   const selectedDeviceExists =
-    !settings.microphoneDeviceId ||
-    devices.some((d) => d.deviceId === settings.microphoneDeviceId);
+    !settings.microphoneDeviceId || devices.some((d) => d.deviceId === settings.microphoneDeviceId);
 
   return (
     <div className="device-selector">
@@ -229,9 +225,7 @@ export function AudioDeviceSelector({ onSettingsChange }: AudioDeviceSelectorPro
 
         {/* 已选设备失效 */}
         {canSelectDevice && hasDevices && !selectedDeviceExists && (
-          <p className="warning">
-            之前选择的设备已不可用,已切换为默认麦克风。请重新选择设备。
-          </p>
+          <p className="warning">之前选择的设备已不可用,已切换为默认麦克风。请重新选择设备。</p>
         )}
 
         {deviceError && <p className="error">{deviceError}</p>}
