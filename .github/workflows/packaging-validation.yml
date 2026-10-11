@@ -1,0 +1,88 @@
+name: Packaging validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/packaging-validation.yml'
+      - 'apps/desktop/main/**'
+      - 'services/asr-worker/**'
+      - 'scripts/build-sidecar.mjs'
+      - 'scripts/check-package-target.mjs'
+      - 'electron-builder.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'requirements-dev.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: npm ci
+      - run: pip install -r requirements-dev.txt
+      - run: npm run package:mac:arm64
+      - name: Install and validate DMG
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/turnnote-dmg" "$RUNNER_TEMP/turnnote-installed"
+          hdiutil attach dist-packaging/Turnnote-0.1.0-arm64.dmg \
+            -nobrowse -readonly -mountpoint "$RUNNER_TEMP/turnnote-dmg"
+          ditto "$RUNNER_TEMP/turnnote-dmg/Turnnote.app" \
+            "$RUNNER_TEMP/turnnote-installed/Turnnote.app"
+          "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/MacOS/Turnnote" \
+            --packaging-smoke --user-data-dir="$RUNNER_TEMP/turnnote-user-data"
+          cat "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json"
+          hdiutil detach "$RUNNER_TEMP/turnnote-dmg"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: turnnote-macos-arm64
+          path: |
+            dist-packaging/*.dmg
+            ${{ runner.temp }}/turnnote-user-data/packaging-validation.json
+
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: npm ci
+      - run: pip install -r requirements-dev.txt
+      - run: npm run package:win:x64
+      - name: Install and validate NSIS package
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem dist-packaging -Filter '*.exe' | Select-Object -First 1
+          $installDir = Join-Path $env:RUNNER_TEMP 'turnnote-installed'
+          Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installDir" -Wait
+          $userData = Join-Path $env:RUNNER_TEMP 'turnnote-user-data'
+          & (Join-Path $installDir 'Turnnote.exe') --packaging-smoke "--user-data-dir=$userData"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content (Join-Path $userData 'packaging-validation.json')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: turnnote-windows-x64
+          path: |
+            dist-packaging/*.exe
+            ${{ runner.temp }}/turnnote-user-data/packaging-validation.json

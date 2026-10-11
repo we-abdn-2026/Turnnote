@@ -1,0 +1,33 @@
+appId: uk.ac.abdn.turnnote
+productName: Turnnote
+
+directories:
+  output: dist-packaging
+
+files:
+  - out/**/*
+  - package.json
+
+asarUnpack:
+  - node_modules/**/*.node
+
+extraResources:
+  - from: build/sidecar/asr-worker
+    to: asr-worker
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

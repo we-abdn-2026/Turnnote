@@ -6,6 +6,7 @@ import { ok } from '@shared/result';
 import { registerIpc } from './ipc';
 import { MeetingStore } from './storage/database';
 import { createStorageHandlers } from './storage/handlers';
+import { runPackagingSmoke } from './packaging-smoke';
 
 let window: BrowserWindow | undefined;
 let store: MeetingStore | undefined;
@@ -41,6 +42,12 @@ void app
   .whenReady()
   .then(async () => {
     if (!ownsInstance) return;
+    if (process.argv.includes('--packaging-smoke')) {
+      const result = await runPackagingSmoke(process.resourcesPath, app.getPath('userData'));
+      console.log(`Packaging validation log: ${result.logPath}`);
+      app.exit(result.passed ? 0 : 1);
+      return;
+    }
     const audioDirectory = join(app.getPath('userData'), 'audio');
     mkdirSync(audioDirectory, { recursive: true });
     store = new MeetingStore(join(app.getPath('userData'), 'turnnote.db'), audioDirectory);
