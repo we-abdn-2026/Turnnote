@@ -7,6 +7,11 @@
  * - timeout: Delays response by 30 seconds
  * - invalid-json: Returns malformed JSON response
  *
+ * Request Inspection:
+ * Each server instance records received requests in memory for test assertions.
+ * Call server.getRequests() to retrieve captured messages (user + system context).
+ * Logs are ephemeral and exist only during the test lifecycle.
+ *
  * Usage:
  *   node tests/support/deepseek-mock-server.mjs [--port=3456]
  *
@@ -123,67 +128,78 @@ function generateNoteFromTranscript(transcriptText) {
 /**
  * Handle incoming requests
  */
-function handleRequest(req, res) {
-  const url = parseUrl(req.url, true);
+function createRequestHandler(requestLog) {
+  return function handleRequest(req, res) {
+    const url = parseUrl(req.url, true);
 
-  // Only handle POST /v1/chat/completions
-  if (req.method !== 'POST' || url.pathname !== '/v1/chat/completions') {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: { message: 'Not found', type: 'invalid_request_error' } }));
-    return;
-  }
-
-  // Parse request body
-  let body = '';
-  req.on('data', (chunk) => {
-    body += chunk.toString();
-  });
-
-  req.on('end', () => {
-    try {
-      const requestData = JSON.parse(body);
-      const mode = req.headers['x-mock-mode'] || 'normal';
-
-      // Extract transcript text from messages
-      const messages = requestData.messages || [];
-      let transcriptText = '';
-      for (const msg of messages) {
-        if (msg.role === 'user' && msg.content) {
-          transcriptText += msg.content + ' ';
-        }
-      }
-
-      // Handle different modes
-      switch (mode) {
-        case 'rate-limit':
-          handleRateLimitMode(res);
-          break;
-
-        case 'timeout':
-          handleTimeoutMode(res, transcriptText);
-          break;
-
-        case 'invalid-json':
-          handleInvalidJsonMode(res);
-          break;
-
-        case 'normal':
-        default:
-          handleNormalMode(res, transcriptText);
-          break;
-      }
-    } catch {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          error: {
-            message: 'Invalid JSON in request body',
-            type: 'invalid_request_error',
-          },
-        }),
-      );
+    // Only handle POST /v1/chat/completions
+    if (req.method !== 'POST' || url.pathname !== '/v1/chat/completions') {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: 'Not found', type: 'invalid_request_error' } }));
+      return;
     }
-  });
+
+    // Parse request body
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        const requestData = JSON.parse(body);
+        const mode = req.headers['x-mock-mode'] || 'normal';
+
+        // Record request for test inspection (in-memory only, not logged to disk)
+        if (requestLog) {
+          requestLog.push({
+            timestamp: Date.now(),
+            mode,
+            messages: requestData.messages || [],
+          });
+        }
+
+        // Extract transcript text from messages
+        const messages = requestData.messages || [];
+        let transcriptText = '';
+        for (const msg of messages) {
+          if (msg.role === 'user' && msg.content) {
+            transcriptText += msg.content + ' ';
+          }
+        }
+
+        // Handle different modes
+        switch (mode) {
+          case 'rate-limit':
+            handleRateLimitMode(res);
+            break;
+
+          case 'timeout':
+            handleTimeoutMode(res, transcriptText);
+            break;
+
+          case 'invalid-json':
+            handleInvalidJsonMode(res);
+            break;
+
+          case 'normal':
+          default:
+            handleNormalMode(res, transcriptText);
+            break;
+        }
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: {
+              message: 'Invalid JSON in request body',
+              type: 'invalid_request_error',
+            },
+          }),
+        );
+      }
+    });
+  };
 }
 
 /**
@@ -265,7 +281,8 @@ function handleInvalidJsonMode(res) {
  * Start the server
  */
 function startServer(port = DEFAULT_PORT) {
-  const server = createServer(handleRequest);
+  const requestLog = [];
+  const server = createServer(createRequestHandler(requestLog));
 
   server.listen(port, () => {
     console.log(`DeepSeek mock server running on http://localhost:${port}`);
@@ -273,6 +290,9 @@ function startServer(port = DEFAULT_PORT) {
     console.log(`Modes: normal (default), rate-limit, timeout, invalid-json`);
     console.log(`Control via header: X-Mock-Mode: <mode>`);
   });
+
+  // Expose request log for test inspection
+  server.getRequests = () => requestLog;
 
   return server;
 }

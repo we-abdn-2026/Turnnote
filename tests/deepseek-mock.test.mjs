@@ -59,7 +59,7 @@ async function withMockServer(testFn) {
   try {
     // Wait a bit for server to start
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await testFn(port);
+    await testFn(port, server);
   } finally {
     server.close();
   }
@@ -198,5 +198,60 @@ test('mock server - returns 404 for unknown endpoints', async () => {
     });
 
     strictEqual(response.status, 404);
+  });
+});
+
+test('mock server - captures request messages for inspection', async () => {
+  await withMockServer(async (port, server) => {
+    const transcriptText = 'Project deadline is next Friday.';
+
+    await callMockApi(port, transcriptText, 'normal');
+
+    const requests = server.getRequests();
+    strictEqual(requests.length, 1, 'Should capture one request');
+
+    const captured = requests[0];
+    ok(captured.messages, 'Should have messages array');
+    ok(captured.timestamp, 'Should have timestamp');
+    strictEqual(captured.mode, 'normal', 'Should capture mode');
+
+    // Verify system message
+    const systemMsg = captured.messages.find((m) => m.role === 'system');
+    ok(systemMsg, 'Should have system message');
+    ok(
+      systemMsg.content.includes('meeting note generator'),
+      'System message should contain expected instruction',
+    );
+
+    // Verify user message
+    const userMsg = captured.messages.find((m) => m.role === 'user');
+    ok(userMsg, 'Should have user message');
+    strictEqual(userMsg.content, transcriptText, 'Should capture exact user transcript');
+  });
+});
+
+test('mock server - detects missing or incorrect context', async () => {
+  await withMockServer(async (port, server) => {
+    // Send request with missing system context
+    await fetch(`http://localhost:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'user',
+            content: 'Some transcript',
+          },
+        ],
+      }),
+    });
+
+    const requests = server.getRequests();
+    const captured = requests[requests.length - 1];
+
+    // Assert: missing system message is detectable
+    const systemMsg = captured.messages.find((m) => m.role === 'system');
+    strictEqual(systemMsg, undefined, 'Should detect missing system message');
   });
 });
