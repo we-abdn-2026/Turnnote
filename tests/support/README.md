@@ -160,6 +160,83 @@ const server = startServer(3456);
 server.close();
 ```
 
+### Request Inspection and Assertions
+
+Each server instance records received requests in memory for test assertions. This enables validation of request content without implementing real conversation history or model logic.
+
+**Accessing captured requests:**
+
+```javascript
+const server = startServer(3456);
+
+// Make some requests...
+await fetch('http://localhost:3456/v1/chat/completions', {
+  method: 'POST',
+  body: JSON.stringify({
+    messages: [
+      { role: 'system', content: 'You are a meeting note generator.' },
+      { role: 'user', content: 'Project deadline is next Friday.' },
+    ],
+  }),
+});
+
+// Inspect what the server received
+const requests = server.getRequests();
+console.log(requests[0].messages); // Array of { role, content }
+console.log(requests[0].mode);     // 'normal', 'rate-limit', etc.
+console.log(requests[0].timestamp); // Request time
+```
+
+**Asserting user and system context:**
+
+```javascript
+test('validates system context is present', () => {
+  const server = startServer(3456);
+  
+  // Send request
+  await callApi(3456, 'Some transcript');
+  
+  const captured = server.getRequests()[0];
+  const systemMsg = captured.messages.find(m => m.role === 'system');
+  
+  // Assert system message exists and contains expected instruction
+  ok(systemMsg, 'System message should be present');
+  ok(systemMsg.content.includes('meeting note generator'), 'Should have correct instruction');
+  
+  server.close();
+});
+
+test('detects missing context', () => {
+  const server = startServer(3456);
+  
+  // Send request WITHOUT system message
+  await fetch('http://localhost:3456/v1/chat/completions', {
+    method: 'POST',
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'text' }],
+    }),
+  });
+  
+  const captured = server.getRequests()[0];
+  const systemMsg = captured.messages.find(m => m.role === 'system');
+  
+  // Assert: missing system message is detectable
+  strictEqual(systemMsg, undefined, 'Should detect missing system context');
+  
+  server.close();
+});
+```
+
+**Usage notes and cleanup:**
+
+- Request logs exist **only in memory** during the test lifecycle
+- Logs are **not written to disk** or persisted across server restarts
+- Each `startServer()` call creates a **fresh, independent** request log
+- Call `server.close()` to clean up when done
+- Request content is used **only for test assertions**, never for application logging
+
+This approach validates that clients send correct user transcripts and system context, without requiring conversation history or actual model inference.
+
 ## Fixtures
 
 Sample test data is available in [tests/fixtures/](../fixtures/):
