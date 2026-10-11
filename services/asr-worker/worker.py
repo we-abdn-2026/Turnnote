@@ -92,7 +92,15 @@ def validate_transcribe(request: dict[str, Any]) -> str | None:
 
 def transcribe_fake(request_id: Any, language: str) -> Iterator[dict[str, Any]]:
     yield {"id": request_id, "type": "progress", "percent": 0}
+    duration_ms = FAKE_SEGMENTS[-1][1]
+    count = 0
     for start_ms, end_ms, text in FAKE_SEGMENTS:
+        # Apply same clamping logic as real transcription
+        start_ms = max(0, min(start_ms, duration_ms))
+        end_ms = max(0, min(end_ms, duration_ms))
+        if end_ms <= start_ms:
+            continue
+        count += 1
         yield {
             "id": request_id,
             "type": "segment",
@@ -105,8 +113,8 @@ def transcribe_fake(request_id: Any, language: str) -> Iterator[dict[str, Any]]:
         "id": request_id,
         "type": "done",
         "detectedLanguage": "en" if language == "auto" else language,
-        "durationMs": FAKE_SEGMENTS[-1][1],
-        "segmentCount": len(FAKE_SEGMENTS),
+        "durationMs": duration_ms,
+        "segmentCount": count,
     }
 
 
@@ -166,8 +174,13 @@ def transcribe_real(
             if not text:
                 continue
             # Whisper timestamps can overshoot the end of the audio
-            start_ms = min(round(segment.start * 1000), duration_ms)
-            end_ms = min(max(start_ms, round(segment.end * 1000)), duration_ms)
+            start_ms = round(segment.start * 1000)
+            end_ms = round(segment.end * 1000)
+            # Clamp to [0, duration_ms], skip if collapsed to zero duration after clamping
+            start_ms = max(0, min(start_ms, duration_ms))
+            end_ms = max(0, min(end_ms, duration_ms))
+            if end_ms <= start_ms:
+                continue
             count += 1
             yield {
                 "id": request_id,

@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -233,6 +241,7 @@ test('model load failure diagnostics do not leak the model path', needsFasterWhi
   assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
   assert.doesNotMatch(stderr, /sensitive-model-dir/);
 });
+
 
 // 真实模型验收：TURNNOTE_ASR_MODEL=<模型目录> TURNNOTE_ASR_AUDIO=<音频> npm test
 const realModel = process.env.TURNNOTE_ASR_MODEL;
