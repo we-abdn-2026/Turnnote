@@ -105,8 +105,8 @@ Sidecar 每任务单次启动，不常驻。
 | `INVALID_REQUEST` | 缺少必需字段 |
 | `UNKNOWN_REQUEST` | 不支持的 `type` |
 | `AUDIO_NOT_FOUND` | 音频文件不存在 |
-| `AUDIO_DECODE_FAILED` | 音频格式无效 |
-| `MODEL_LOAD_FAILED` | 模型加载失败 |
+| `AUDIO_DECODE_FAILED` | 扩展名不在 `.wav`/`.mp3`/`.m4a` 内，或音频无法解码、无采样 |
+| `MODEL_LOAD_FAILED` | `modelPath` 不是目录、模型加载失败或 faster-whisper 未安装 |
 | `TRANSCRIBE_FAILED` | 转写过程失败 |
 | `NOT_IMPLEMENTED` | 功能未实现（脚手架阶段） |
 
@@ -134,7 +134,14 @@ Sidecar 每任务单次启动，不常驻。
 
 Sidecar 将诊断信息写入 stderr，Main Process 捕获并记录。
 
-stdout 只输出 JSON Lines 响应。
+stdout 只输出 JSON Lines 响应。启动时 sidecar 把 fd 1 重定向到 stderr、协议输出走复制出的描述符，原生库直接写 stdout 的内容也会进入 stderr。
+
+## 转写行为
+
+- 音频由 PyAV 解码为 16kHz 单声道后送入 faster-whisper（CPU、int8），开启 VAD 过滤静音。
+- `startMs`/`endMs` 为整数毫秒，截断到 `durationMs` 以内；`durationMs` 为解码后音频时长。
+- 空文本片段不输出；`segmentCount` 等于实际输出的 `segment` 数。
+- 每个 `segment` 后发送一次 `progress`（按片段结束时间占总时长计算，最高 99），`done` 前发送 100。
 
 ## 模型存储
 
