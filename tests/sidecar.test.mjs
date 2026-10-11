@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,16 +10,22 @@ const WORKER = 'services/asr-worker/worker.py';
 // 任意存在的文件即可通过 AUDIO_NOT_FOUND 检查；fake 模式不解码音频
 const EXISTING_FILE = 'package.json';
 
-function run(requests, args = []) {
+function runWithStderr(requests, { args = [], env } = {}) {
   const result = spawnSync(pythonExecutable(), [WORKER, ...args], {
     input: requests.map((request) => JSON.stringify(request) + '\n').join(''),
     encoding: 'utf8',
+    env: env ? { ...process.env, ...env } : process.env,
   });
   assert.equal(result.status, 0, result.stderr);
-  return result.stdout
+  const responses = result.stdout
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+  return { responses, stderr: result.stderr };
+}
+
+function run(requests, args = []) {
+  return runWithStderr(requests, { args }).responses;
 }
 
 function transcribeRequest(overrides = {}) {
@@ -121,11 +127,111 @@ test('reports missing model directory without downloading', needsFasterWhisper, 
   assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
 });
 
+// 模型目录：文件齐全但内容无效，走到 WhisperModel 真正加载失败的分支
+function brokenModelDir(dir, files = ['model.bin', 'config.json', 'tokenizer.json']) {
+  mkdirSync(dir, { recursive: true });
+  for (const name of files) writeFileSync(join(dir, name), 'not a model');
+  return dir;
+}
+
+// sitecustomize 在 worker 启动时加载：拦截 Python socket 和 Tokenizer.from_pretrained，
+// 任何联网尝试都会在 stderr 留下 NETWORK_ATTEMPT
+function networkGuard(dir, { stubWeights = false } = {}) {
+  writeFileSync(
+    join(dir, 'sitecustomize.py'),
+    `import socket, sys
+def _block(*args, **kwargs):
+    sys.stderr.write("NETWORK_ATTEMPT\\n")
+    raise OSError("network blocked by test")
+socket.socket.connect = _block
+socket.create_connection = _block
+socket.getaddrinfo = _block
+try:
+    import tokenizers
+    tokenizers.Tokenizer.from_pretrained = staticmethod(_block)
+except ImportError:
+    pass
+${stubWeights ? STUB_CTRANSLATE2 : ''}
+sys.stderr.write("NETGUARD_ACTIVE\\n")
+`,
+  );
+  return { PYTHONPATH: dir };
+}
+
+// 替换 CTranslate2 权重加载，让占位模型也能走到 faster-whisper 的 tokenizer 回退分支
+// （与审查复现方式一致）；不替换时占位权重会先在 CTranslate2 处失败
+const STUB_CTRANSLATE2 = `
+import ctranslate2
+class _StubWhisper:
+    is_multilingual = True
+    def __init__(self, *args, **kwargs):
+        pass
+ctranslate2.models.Whisper = _StubWhisper
+`;
+
 test('reports unloadable model', needsFasterWhisper, (t) => {
   const dir = tempDir(t);
   const audioPath = silentWav(join(dir, 'silence.wav'));
-  const responses = run([transcribeRequest({ audioPath, modelPath: dir })]);
+  const modelPath = brokenModelDir(join(dir, 'model'));
+  const responses = run([transcribeRequest({ audioPath, modelPath })]);
   assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
+});
+
+// 审查 #62 P1：缺 tokenizer.json 时 faster-whisper 会调用 Tokenizer.from_pretrained 联网
+test('missing tokenizer.json fails without any network attempt', needsFasterWhisper, (t) => {
+  const dir = tempDir(t);
+  const audioPath = silentWav(join(dir, 'silence.wav'));
+  const modelPath = brokenModelDir(join(dir, 'model'), ['model.bin', 'config.json']);
+  const { responses, stderr } = runWithStderr([transcribeRequest({ audioPath, modelPath })], {
+    env: networkGuard(dir, { stubWeights: true }),
+  });
+  assert.match(stderr, /NETGUARD_ACTIVE/, 'network guard must be loaded');
+  assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
+  assert.doesNotMatch(stderr, /NETWORK_ATTEMPT/);
+});
+
+// 真实模型只缺 tokenizer.json：其余文件可加载，能真正走到 faster-whisper 的联网回退分支
+test(
+  'real model without tokenizer.json fails without any network attempt',
+  { skip: !process.env.TURNNOTE_ASR_MODEL && 'set TURNNOTE_ASR_MODEL' },
+  (t) => {
+    const dir = tempDir(t);
+    const audioPath = silentWav(join(dir, 'silence.wav'));
+    const modelPath = join(dir, 'model');
+    mkdirSync(modelPath);
+    for (const name of readdirSync(process.env.TURNNOTE_ASR_MODEL)) {
+      if (name !== 'tokenizer.json') {
+        symlinkSync(join(process.env.TURNNOTE_ASR_MODEL, name), join(modelPath, name));
+      }
+    }
+    const { responses, stderr } = runWithStderr([transcribeRequest({ audioPath, modelPath })], {
+      env: networkGuard(dir),
+    });
+    assert.match(stderr, /NETGUARD_ACTIVE/);
+    assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
+    assert.doesNotMatch(stderr, /NETWORK_ATTEMPT/);
+  },
+);
+
+// 审查 #62 P2：PyAV 异常原文含完整音频路径，诊断不得输出
+test('decode failure diagnostics do not leak the audio path', needsFasterWhisper, (t) => {
+  const dir = join(tempDir(t), 'private-folder');
+  mkdirSync(dir);
+  const audioPath = join(dir, 'sensitive-meeting-title.wav');
+  writeFileSync(audioPath, 'not audio');
+  const { responses, stderr } = runWithStderr([transcribeRequest({ audioPath })]);
+  assert.equal(responses.at(-1).code, 'AUDIO_DECODE_FAILED');
+  assert.match(stderr, /decode failed/, 'diagnostic line should still be written');
+  assert.doesNotMatch(stderr, /sensitive-meeting-title|private-folder/);
+});
+
+test('model load failure diagnostics do not leak the model path', needsFasterWhisper, (t) => {
+  const dir = tempDir(t);
+  const audioPath = silentWav(join(dir, 'silence.wav'));
+  const modelPath = brokenModelDir(join(dir, 'sensitive-model-dir'));
+  const { responses, stderr } = runWithStderr([transcribeRequest({ audioPath, modelPath })]);
+  assert.equal(responses.at(-1).code, 'MODEL_LOAD_FAILED');
+  assert.doesNotMatch(stderr, /sensitive-model-dir/);
 });
 
 // 真实模型验收：TURNNOTE_ASR_MODEL=<模型目录> TURNNOTE_ASR_AUDIO=<音频> npm test

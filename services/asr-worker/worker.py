@@ -18,6 +18,7 @@ from typing import IO, Any
 
 LANGUAGES = {"en", "zh", "auto"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a"}
+MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
 SAMPLE_RATE = 16000
 
 FAKE_SEGMENTS = [
@@ -48,7 +49,9 @@ def reserve_stdout() -> IO[str]:
 
 
 def diagnose(stage: str, exc: BaseException) -> None:
-    print(f"[asr-worker] {stage} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+    # Exception text can contain the audio/model path (e.g. PyAV InvalidDataError),
+    # which must not reach logs (docs/technical-solution.md §6); log the type only.
+    print(f"[asr-worker] {stage} failed: {type(exc).__name__}", file=sys.stderr)
 
 
 def decode_audio(path: str) -> Any:
@@ -134,9 +137,14 @@ def transcribe_real(
         yield error(request_id, "AUDIO_DECODE_FAILED", "Audio file contains no samples.")
         return
 
-    # A bare model name would make faster-whisper download it; the sidecar stays offline
+    # The sidecar stays offline. A bare model name makes faster-whisper download the
+    # model, and a missing tokenizer.json makes it call Tokenizer.from_pretrained,
+    # which ignores local_files_only. Require every asset before loading.
     if not Path(model_path).is_dir():
         yield error(request_id, "MODEL_LOAD_FAILED", "Model directory does not exist.")
+        return
+    if not all((Path(model_path) / name).is_file() for name in MODEL_FILES):
+        yield error(request_id, "MODEL_LOAD_FAILED", "Model files are incomplete.")
         return
     try:
         model = WhisperModel(model_path, device="cpu", compute_type="int8", local_files_only=True)

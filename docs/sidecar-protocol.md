@@ -108,7 +108,7 @@ Main 使用 processing_jobs 的唯一 ID 关联 transcribe 请求和响应，进
 | `UNKNOWN_REQUEST` | 不支持的 `type` |
 | `AUDIO_NOT_FOUND` | 音频文件不存在 |
 | `AUDIO_DECODE_FAILED` | 扩展名不在 `.wav`/`.mp3`/`.m4a` 内，或音频无法解码、无采样 |
-| `MODEL_LOAD_FAILED` | `modelPath` 不是目录、模型加载失败或 faster-whisper 未安装 |
+| `MODEL_LOAD_FAILED` | `modelPath` 不是目录、缺少 `model.bin`/`config.json`/`tokenizer.json`、模型加载失败或 faster-whisper 未安装 |
 | `TRANSCRIBE_FAILED` | 转写过程失败 |
 | `NOT_IMPLEMENTED` | 功能未实现（脚手架阶段） |
 
@@ -138,6 +138,8 @@ Sidecar 将诊断信息写入 stderr，Main Process 捕获并记录。
 
 stdout 只输出 JSON Lines 响应。启动时 sidecar 把 fd 1 重定向到 stderr、协议输出走复制出的描述符，原生库直接写 stdout 的内容也会进入 stderr。
 
+Sidecar 自己写的诊断只包含阶段和异常类型名（如 `decode failed: InvalidDataError`），不输出异常原文，因为原文可能包含音频或模型的完整路径。
+
 ## 转写行为
 
 - 音频由 PyAV 解码为 16kHz 单声道后送入 faster-whisper（CPU、int8），开启 VAD 过滤静音。
@@ -149,4 +151,4 @@ stdout 只输出 JSON Lines 响应。启动时 sidecar 把 fd 1 重定向到 std
 
 模型存储在 `userData/models/<model>/`。首次使用时 Main Process 下载并校验。
 
-Sidecar 只读取 `modelPath`，不访问网络。
+Sidecar 只读取 `modelPath`，不访问网络。加载前检查 `model.bin`、`config.json`、`tokenizer.json` 都存在；faster-whisper 在缺 `tokenizer.json` 时会调用 `Tokenizer.from_pretrained` 联网下载，且不受 `local_files_only` 控制。
