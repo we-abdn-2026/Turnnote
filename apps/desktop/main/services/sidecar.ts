@@ -37,21 +37,28 @@ const MESSAGES: Record<SidecarErrorCode, string> = {
   INTERRUPTED: 'Transcription was cancelled.',
 };
 
-/** sidecar 自身返回的错误码到 contracts 错误码；请求类错误说明 Main 与 sidecar 协议不一致 */
-const SIDECAR_CODES: Record<string, SidecarErrorCode> = {
-  AUDIO_NOT_FOUND: 'AUDIO_NOT_FOUND',
-  AUDIO_DECODE_FAILED: 'AUDIO_DECODE_FAILED',
-  MODEL_LOAD_FAILED: 'MODEL_LOAD_FAILED',
-  TRANSCRIBE_FAILED: 'TRANSCRIBE_FAILED',
-  NOT_IMPLEMENTED: 'TRANSCRIBE_FAILED',
-  INVALID_REQUEST: 'SIDECAR_PROTOCOL_ERROR',
-  UNKNOWN_REQUEST: 'SIDECAR_PROTOCOL_ERROR',
-  INVALID_JSON: 'SIDECAR_PROTOCOL_ERROR',
-};
+/**
+ * sidecar 自身返回的错误码到 contracts 错误码；请求类错误说明 Main 与 sidecar 协议不一致。
+ * 用 Map 而不是普通对象，避免 "toString" 等原型属性名被当成合法错误码。
+ */
+const SIDECAR_CODES = new Map<string, SidecarErrorCode>([
+  ['AUDIO_NOT_FOUND', 'AUDIO_NOT_FOUND'],
+  ['AUDIO_DECODE_FAILED', 'AUDIO_DECODE_FAILED'],
+  ['MODEL_LOAD_FAILED', 'MODEL_LOAD_FAILED'],
+  ['TRANSCRIBE_FAILED', 'TRANSCRIBE_FAILED'],
+  ['NOT_IMPLEMENTED', 'TRANSCRIBE_FAILED'],
+  ['INVALID_REQUEST', 'SIDECAR_PROTOCOL_ERROR'],
+  ['UNKNOWN_REQUEST', 'SIDECAR_PROTOCOL_ERROR'],
+  ['INVALID_JSON', 'SIDECAR_PROTOCOL_ERROR'],
+]);
+
+function mapSidecarCode(code: unknown): SidecarErrorCode {
+  return (typeof code === 'string' && SIDECAR_CODES.get(code)) || 'SIDECAR_PROTOCOL_ERROR';
+}
 
 export class SidecarError extends Error {
   readonly code: SidecarErrorCode;
-  /** 仅用于诊断日志，可能包含路径，不得展示给用户 */
+  /** 仅用于内部诊断，可能包含路径；不得展示给用户、透传或持久化原文 */
   readonly stderrTail: string;
 
   constructor(code: SidecarErrorCode, stderrTail = '') {
@@ -77,6 +84,8 @@ export function withFakeFlag(
 
 export interface TranscribeOptions {
   sidecar: SidecarCommand;
+  /** processing_jobs 的 ID，作为 transcribe 请求 id（docs/sidecar-protocol.md）；缺省随机生成 */
+  jobId?: string;
   audioPath: string;
   language: TranscriptionLanguage;
   modelPath: string;
@@ -96,14 +105,25 @@ export interface TranscribeResult {
 type Message = Record<string, unknown>;
 
 const isInt = (value: unknown): value is number => Number.isInteger(value);
+const isMs = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 function isSegment(message: Message): boolean {
   return (
-    isInt(message.startMs) &&
-    isInt(message.endMs) &&
-    (message.startMs as number) >= 0 &&
-    (message.endMs as number) >= (message.startMs as number) &&
+    isMs(message.startMs) &&
+    isMs(message.endMs) &&
+    message.endMs >= message.startMs &&
     typeof message.text === 'string'
+  );
+}
+
+/** done 必须与已收到的片段一致：数量相同、时长非负、所有片段落在时长范围内 */
+function isValidDone(message: Message, segments: TranscriptSegment[]): boolean {
+  return (
+    message.segmentCount === segments.length &&
+    isMs(message.durationMs) &&
+    typeof message.detectedLanguage === 'string' &&
+    segments.every((segment) => segment.endMs <= (message.durationMs as number))
   );
 }
 
@@ -133,7 +153,7 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
     }
 
     const pingId = randomUUID();
-    const jobId = randomUUID();
+    const jobId = options.jobId ?? randomUUID();
     const segments: TranscriptSegment[] = [];
     let phase: 'starting' | 'transcribing' | 'finishing' = 'starting';
     let outcome:
@@ -215,11 +235,7 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
           });
           return;
         case 'done':
-          if (
-            message.segmentCount !== segments.length ||
-            !isInt(message.durationMs) ||
-            typeof message.detectedLanguage !== 'string'
-          ) {
+          if (!isValidDone(message, segments)) {
             fail('SIDECAR_PROTOCOL_ERROR');
             return;
           }
@@ -227,13 +243,13 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
             ok: true,
             value: {
               segments,
-              detectedLanguage: message.detectedLanguage,
-              durationMs: message.durationMs,
+              detectedLanguage: message.detectedLanguage as string,
+              durationMs: message.durationMs as number,
             },
           });
           return;
         case 'error':
-          fail(SIDECAR_CODES[String(message.code)] ?? 'SIDECAR_PROTOCOL_ERROR');
+          fail(mapSidecarCode(message.code));
           return;
         default:
           fail('SIDECAR_PROTOCOL_ERROR');
@@ -253,7 +269,12 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
         fail('SIDECAR_PROTOCOL_ERROR');
         return;
       }
-      handle(message as Message);
+      // 事件回调里的异常不会进入 Promise，必须在这里转成失败，否则会变成宿主进程的未捕获异常
+      try {
+        handle(message as Message);
+      } catch {
+        fail('SIDECAR_PROTOCOL_ERROR');
+      }
     });
 
     child.stderr.on('data', (chunk: Buffer) => {

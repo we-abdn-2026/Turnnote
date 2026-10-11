@@ -180,6 +180,70 @@ test('sidecar request-level errors are SIDECAR_PROTOCOL_ERROR', async () => {
   await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
 });
 
+// 审查 #61 P1：非字符串 code 曾在 readline 回调里抛 TypeError，宿主进程直接退出
+test('error with non-string code is SIDECAR_PROTOCOL_ERROR, not an uncaught throw', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'error', code: { toString: null }, message: 'bad code' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+// 审查 #61 P1：原型属性名曾命中普通对象的继承属性，得到 function 类型的 code
+for (const code of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+  test(`error with prototype property name "${code}" is SIDECAR_PROTOCOL_ERROR`, async () => {
+    const sidecar = afterPong(`(msg, out) => {
+      out({ id: msg.id, type: 'error', code: ${JSON.stringify(code)}, message: 'x' });
+    }`);
+    await assert.rejects(transcribe({ ...base, sidecar }), (error) => {
+      assert.equal(error.code, 'SIDECAR_PROTOCOL_ERROR');
+      assert.equal(typeof error.code, 'string');
+      assert.ok(error.message.length > 0);
+      return true;
+    });
+  });
+}
+
+// 审查 #61 P2：负时长曾作为成功结果返回
+test('done with negative durationMs is SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: -100, segmentCount: 0 });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('done with non-integer or unsafe durationMs is SIDECAR_PROTOCOL_ERROR', async () => {
+  for (const durationMs of [1.5, '1000', Number.MAX_SAFE_INTEGER + 2]) {
+    const sidecar = afterPong(`(msg, out) => {
+      out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: ${JSON.stringify(durationMs)}, segmentCount: 0 });
+    }`);
+    await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+  }
+});
+
+test('segment ending after durationMs is SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 5000, text: 'too long' });
+    out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: 1000, segmentCount: 1 });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('negative segment timestamps are SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: -10, endMs: 100, text: 'x' });
+  }`);
+  await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
+});
+
+test('jobId is used as the transcribe request id', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 10, text: msg.id });
+    out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: 10, segmentCount: 1 });
+  }`);
+  const result = await transcribe({ ...base, sidecar, jobId: 'job-123' });
+  assert.equal(result.segments[0].text, 'job-123');
+});
+
 test('model load failure passes through', async () => {
   const sidecar = afterPong(`(msg, out) => {
     out({ id: msg.id, type: 'error', code: 'MODEL_LOAD_FAILED', message: 'no model' });
