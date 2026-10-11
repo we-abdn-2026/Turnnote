@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { MeetingSummary } from '@shared/contracts';
+import { AudioDeviceSelector } from './components/AudioDeviceSelector';
 import './styles.css';
 
 function App(): ReactElement {
@@ -23,6 +24,10 @@ function App(): ReactElement {
           Start meeting
         </button>
       </header>
+
+      {/* 音频设备选择器 */}
+      <AudioDeviceSelector />
+
       <section className="empty-state" aria-live="polite">
         <h2>{meetings.length === 0 ? 'No meetings yet' : `${meetings.length} meetings`}</h2>
         <p>

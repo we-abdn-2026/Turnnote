@@ -70,3 +70,103 @@ h1 {
   line-height: 1.6;
   margin-bottom: 0;
 }
+
+/* 音频设备选择器 */
+.device-selector {
+  background: white;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  margin-top: 32px;
+  max-width: 720px;
+  padding: 24px;
+}
+
+.device-selector h3 {
+  font-size: 18px;
+  margin: 0 0 20px;
+}
+
+.device-selector.loading {
+  color: #64748b;
+  padding: 16px 24px;
+}
+
+.permission-notice {
+  background: #fff8e1;
+  border: 1px solid #ffd54f;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.permission-notice strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.permission-notice p {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.device-option {
+  margin-bottom: 20px;
+}
+
+.device-option:last-child {
+  margin-bottom: 0;
+}
+
+.device-option > label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.device-option .disabled-hint {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.device-option select {
+  background: white;
+  border: 1px solid #d9e0e7;
+  border-radius: 6px;
+  font: inherit;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.device-option select:disabled {
+  background: #f4f6f8;
+  color: #aab4bf;
+  cursor: not-allowed;
+}
+
+.device-option input[type='checkbox'] {
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+.device-option label[for='system-audio-toggle'] {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 400;
+}
+
+.device-option .hint {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.device-option .error {
+  color: #d32f2f;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
