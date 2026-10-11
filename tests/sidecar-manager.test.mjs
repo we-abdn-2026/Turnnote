@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
-import { SidecarError, transcribe, withFakeFlag } from '../apps/desktop/main/services/sidecar.ts';
+import { MeetingStore, SidecarError, transcribe, withFakeFlag } from '../out/tests/runtime.mjs';
 import { pythonExecutable } from './support/python.mjs';
 
 const WORKER = 'services/asr-worker/worker.py';
@@ -267,13 +269,78 @@ test('out-of-order segments are SIDECAR_PROTOCOL_ERROR', async () => {
   await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
 });
 
-test('overlapping segments are SIDECAR_PROTOCOL_ERROR', async () => {
+// 存储契约要求起点非递减，允许重叠、同起点、相邻和间隔片段。
+for (const [name, startMs, endMs] of [
+  ['overlapping', 50, 150],
+  ['same-start', 0, 150],
+  ['nested', 50, 75],
+  ['adjacent', 100, 150],
+  ['gapped', 120, 150],
+]) {
+  test(`${name} segments complete transcription and commit to storage`, async (t) => {
+    const directory = mkdtempSync(join(tmpdir(), 'turnnote-sidecar-storage-'));
+    const store = new MeetingStore(':memory:', directory);
+    t.after(() => {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    });
+    const meeting = store.createCaptured('Synthetic transcript', join(directory, 'input.wav'));
+    const job = store.beginTranscription(meeting.id);
+    const segments = [
+      { startMs: 0, endMs: 100, text: 'first' },
+      { startMs, endMs, text: 'second' },
+    ];
+    const sidecar = afterPong(`(msg, out) => {
+      for (const segment of ${JSON.stringify(segments)}) {
+        out({ id: msg.id, type: 'segment', ...segment });
+      }
+      out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: 150, segmentCount: 2 });
+    }`);
+    const result = await transcribe({ ...base, sidecar, jobId: job.id });
+    assert.deepEqual(result.segments, segments);
+    assert.equal(store.completeTranscription(job.id, result.segments), true);
+    assert.deepEqual(store.getSegments(meeting.id), segments);
+    assert.equal(store.getJob(job.id).status, 'completed');
+    assert.equal(store.get(meeting.id).status, 'transcribed');
+  });
+}
+
+test('segment text at the shared length limit succeeds', async () => {
   const sidecar = afterPong(`(msg, out) => {
-    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 100, text: 'first' });
-    out({ id: msg.id, type: 'segment', startMs: 50, endMs: 150, text: 'overlaps' });
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 1, text: 'x'.repeat(200_000) });
+    out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: 1, segmentCount: 1 });
+  }`);
+  const result = await transcribe({ ...base, sidecar });
+  assert.equal(result.segments[0].text.length, 200_000);
+});
+
+test('segment text above the shared length limit is SIDECAR_PROTOCOL_ERROR', async () => {
+  const sidecar = afterPong(`(msg, out) => {
+    out({ id: msg.id, type: 'segment', startMs: 0, endMs: 1, text: 'x'.repeat(200_001) });
+    out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: 1, segmentCount: 1 });
   }`);
   await rejectsWith(transcribe({ ...base, sidecar }), 'SIDECAR_PROTOCOL_ERROR');
 });
+
+for (const count of [100_000, 100_001]) {
+  test(`segment count ${count} respects the shared array limit`, async () => {
+    const sidecar = afterPong(`(msg, out) => {
+      for (let i = 0; i < ${count}; i++) {
+        out({ id: msg.id, type: 'segment', startMs: i, endMs: i + 1, text: 'x' });
+      }
+      out({ id: msg.id, type: 'done', detectedLanguage: 'en', durationMs: ${count}, segmentCount: ${count} });
+    }`);
+    const run = transcribe({ ...base, sidecar });
+    if (count > 100_000) {
+      await rejectsWith(run, 'SIDECAR_PROTOCOL_ERROR');
+    } else {
+      const result = await run;
+      assert.equal(result.segments.length, count);
+      assert.deepEqual(result.segments[0], { startMs: 0, endMs: 1, text: 'x' });
+      assert.deepEqual(result.segments.at(-1), { startMs: count - 1, endMs: count, text: 'x' });
+    }
+  });
+}
 
 test('model load failure passes through', async () => {
   const sidecar = afterPong(`(msg, out) => {

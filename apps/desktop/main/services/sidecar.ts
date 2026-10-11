@@ -5,6 +5,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import type { ErrorCode, TranscriptSegment, TranscriptionLanguage } from '@shared/contracts';
+import { transcriptSegmentsSchema } from '@shared/schemas';
 
 export const PING_TIMEOUT_MS = 10_000;
 export const IDLE_TIMEOUT_MS = 120_000;
@@ -108,23 +109,13 @@ const isInt = (value: unknown): value is number => Number.isInteger(value);
 const isMs = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-function isSegment(message: Message, prevEndMs: number): boolean {
-  return (
-    isMs(message.startMs) &&
-    isMs(message.endMs) &&
-    message.endMs > message.startMs &&
-    typeof message.text === 'string' &&
-    message.text.length > 0 &&
-    message.startMs >= prevEndMs
-  );
-}
-
-/** done 必须与已收到的片段一致：数量相同、时长非负、所有片段落在时长范围内 */
+/** done 必须与片段一致，并满足共享存储契约和音频时长范围 */
 function isValidDone(message: Message, segments: TranscriptSegment[]): boolean {
   return (
     message.segmentCount === segments.length &&
     isMs(message.durationMs) &&
     typeof message.detectedLanguage === 'string' &&
+    transcriptSegmentsSchema.safeParse(segments).success &&
     segments.every((segment) => segment.endMs <= (message.durationMs as number))
   );
 }
@@ -225,17 +216,20 @@ export function transcribe(options: TranscribeOptions): Promise<TranscribeResult
           }
           options.onProgress?.(message.percent);
           return;
-        case 'segment':
-          if (!isSegment(message, segments.at(-1)?.endMs ?? 0)) {
+        case 'segment': {
+          // 去掉协议字段后复用共享单段规则；顺序只比较起点，允许重叠和同起点。
+          const segment = transcriptSegmentsSchema.element.safeParse({
+            startMs: message.startMs,
+            endMs: message.endMs,
+            text: message.text,
+          });
+          if (!segment.success || segment.data.startMs < (segments.at(-1)?.startMs ?? 0)) {
             fail('SIDECAR_PROTOCOL_ERROR');
             return;
           }
-          segments.push({
-            startMs: message.startMs as number,
-            endMs: message.endMs as number,
-            text: message.text as string,
-          });
+          segments.push(segment.data);
           return;
+        }
         case 'done':
           if (!isValidDone(message, segments)) {
             fail('SIDECAR_PROTOCOL_ERROR');
