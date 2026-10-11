@@ -19,8 +19,10 @@ Renderer 不接触文件路径，只提交 `meetingId` 和 PCM 数据。
 3. `turnnote.loopback.disable()`
 4. `getUserMedia({ audio: { deviceId } })` 获取麦克风
 5. `new AudioContext({ sampleRate: 16000 })`，两路 `MediaStreamAudioSourceNode` 接入同一个 `AudioWorkletNode`
-6. Worklet 混为单声道、转 Int16，每约 1 秒调用一次 `turnnote.recording.appendChunk`
+6. 保存 start 返回的 activeJobId；Worklet 混为单声道、转 Int16，每约 1 秒调用一次 `turnnote.recording.appendChunk(meetingId, jobId, chunk)`
 7. 停止时关闭所有轨道和 `AudioContext`，调用 `turnnote.recording.stop`，Main 完成写入并开始转写
+
+stop(meetingId, jobId) 固定返回 captured 快照，后续自动转写通过 meetingUpdated 事件报告。采集失败后 Renderer 关闭轨道并调用 recording.fail(meetingId, jobId, code)，Main 使用安全错误目录并保留可恢复音频。用户显式取消调用 recording.cancel(meetingId, jobId)，文件清理成功后才回到 created；清理失败不丢失引用。完整状态边界见 [W1 IPC 契约基线](ipc-contract.md)。这些采集入口在 #5/#6 接入前仍返回 NOT_IMPLEMENTED。
 
 ## 接口
 
