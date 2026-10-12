@@ -4,11 +4,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createPackage } from '@electron/asar';
-import { verifyPackageContents } from '../scripts/verify-package-contents.mjs';
+import {
+  normalizeArchivePath,
+  verifyPackageContents,
+} from '../scripts/verify-package-contents.mjs';
 
 const projectPackage = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 );
+
+test('normalizes ASAR paths returned by Windows', () => {
+  assert.equal(normalizeArchivePath('\\node_modules\\react'), 'node_modules/react');
+  assert.equal(normalizeArchivePath('/out/main/index.js'), 'out/main/index.js');
+});
 
 async function fixture(t, layout, extraFiles = {}, includeMain = true) {
   const directory = mkdtempSync(join(tmpdir(), 'turnnote-package-audit-'));

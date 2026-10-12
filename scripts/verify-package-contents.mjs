@@ -10,6 +10,10 @@ const allowedTopLevel = new Set(['node_modules', 'out', 'package.json']);
 const privateName =
   /^(?:\.env(?:\..*)?|\.npmrc|\.git|\.aws|\.ssh|[^/]+\.(?:pem|key|p12|pfx|db|sqlite|sqlite3))$/i;
 
+export function normalizeArchivePath(path) {
+  return path.replaceAll('\\', '/').replace(/^\/+/, '');
+}
+
 function assertSafePath(path) {
   const parts = path.split('/');
   if (parts.some((part) => privateName.test(part))) {
@@ -40,7 +44,7 @@ export function verifyPackageContents(appDirectory) {
   const archive = join(resources, 'app.asar');
   if (!existsSync(archive)) throw new Error('Packaged app.asar is missing');
 
-  const paths = listPackage(archive, { isPack: false }).map((path) => path.replace(/^\//, ''));
+  const paths = listPackage(archive, { isPack: false }).map(normalizeArchivePath);
   for (const path of paths) assertSafePath(path);
 
   const packaged = JSON.parse(extractFile(archive, 'package.json').toString('utf8'));
