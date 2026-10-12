@@ -1,11 +1,21 @@
-// 挂载实际 MeetingWorkspace（含 RecordingControls），覆盖 #11 和 #10 的界面状态与 React 接线；
+// 挂载实际 App（含 AudioDeviceSelector + MeetingWorkspace + RecordingControls），覆盖 #11 和 #10 的界面状态与 React 接线；
 // 会话和视图逻辑见 meeting-session.test.mjs、recording-controls.test.mjs。
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { act, click, document, render, settle, typeInto, waitFor, window } from './support/dom.mjs';
+import {
+  act,
+  click,
+  createElement,
+  document,
+  render,
+  settle,
+  typeInto,
+  waitFor,
+  window,
+} from './support/dom.mjs';
 
 // 必须在 dom.mjs 注入 jsdom 全局对象之后再加载
-const { MeetingWorkspace, createMockApi } = await import('../out/tests/runtime.mjs');
+const { App, createMockApi, createMockRecording } = await import('../out/tests/runtime.mjs');
 
 const NOT_IMPLEMENTED = { code: 'NOT_IMPLEMENTED', message: 'Not available yet.' };
 
@@ -65,7 +75,9 @@ function countedApi() {
 async function mount(t) {
   const harness = countedApi();
   window.turnnote = harness.api;
-  const { container, unmount } = await render(t, MeetingWorkspace);
+  const { container, unmount } = await render(t, () =>
+    createElement(App, { recordingFactory: createMockRecording }),
+  );
   const $ = (selector) => container.querySelector(selector);
   const buttons = () => [...container.querySelectorAll('button')];
   const button = (label) => {
@@ -148,9 +160,12 @@ describe('#11 meeting workspace', () => {
     assert.equal(await meetingStatus(view, id), 'transcribed');
   });
 
-  test('StrictMode remount leaves exactly one subscription; unmount removes it', async (t) => {
+  test('App has one recording owner and cleans subscriptions in StrictMode', async (t) => {
     const view = await mount(t);
     await createMeeting(view, 'Cleanup');
+    // 全页面只有一个录音控制组件和一个设备选择器
+    assert.equal(document.querySelectorAll('.workspace .recording-controls').length, 1);
+    assert.equal(document.querySelectorAll('.device-selector').length, 1);
     // StrictMode 会卸载再挂载一次 effect，清理函数必须真正取消订阅
     assert.ok(view.subscriptions.subscribed >= 2, `subscribed ${view.subscriptions.subscribed}`);
     assert.equal(view.subscriptions.subscribed - view.subscriptions.unsubscribed, 1);

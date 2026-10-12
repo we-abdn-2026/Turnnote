@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-packaging/
+build/
 out/
 .venv/
 __pycache__/
@@ -9,3 +11,4 @@ __pycache__/
 *.sqlite3
 *.log
 .DS_Store
+artifacts/local-audio/

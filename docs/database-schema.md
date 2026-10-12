@@ -150,7 +150,7 @@ get 同样排除 deleted。文件删除失败返回 WRITE_FAILED 并保留墓碑
 
 | 状态 | 处理 |
 |---|---|
-| `recording` | #5 接入后调用 repairWavHeader，成功完成 recording job 并改为 captured，失败以 INTERRUPTED 结束；当前保留原状态和音频，不伪装恢复成功 |
+| `recording` | Main 调用 repairWavHeader 尝试修复 WAV，然后以 INTERRUPTED 结束 recording job；保留音频，不自动启动转写 |
 | `transcribing` / `generating` | 改为 `failed`，写入 `error_code='INTERRUPTED'` 的失败 job |
 | `deleted` | 继续执行删除步骤 2、3 |
 
@@ -168,6 +168,6 @@ hasAudio 表示音频引用存在，实际文件存在性由 Main 在启动任�
 
 ## 数据库入口与验证
 
-`MeetingStore` 提供会议 CRUD、音频引用、任务启动/取消/失败/完成、转写/纪要版本和设置存取。`createStorageHandlers` 接入现有 IPC，仅注册已经实现的业务方法；真实采集、转写、生成和凭证操作仍返回 NOT_IMPLEMENTED。
+`MeetingStore` 提供会议 CRUD、音频引用、任务启动/取消/失败/完成、转写/纪要版本和设置存取。`createSessionServices` 合成 storage、recording 和 transcription handlers，接入真实 PCM 录音和 sidecar 转写；数据库仍不拥有文件和外部进程。音频导入、生成和凭证操作尚未接入。
 
 运行 `npm test -- tests/storage.test.mjs` 验证新库、v1 升级、失败迁移回滚、重启持久化、非法状态、SQL 注入输入、真实 SQL 故障事务回滚、任务令牌、编辑冲突、删除和设置白名单。

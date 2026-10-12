@@ -1,10 +1,10 @@
 // 录音控制按钮和状态指示器的视图状态。只从会话状态推导展示，不新增业务状态，
-// 接入真实采集后沿用同一套会议状态。
+// 媒体关闭但 Main 尚未提交时显示保存等待，业务终态仍只来自 Main。
 import type { MeetingStatus } from '@shared/contracts';
 import { availableActions, type SessionState } from './meeting-session';
 
-/** recording 只对应会议处于 recording；captured/transcribing/generating 是处理中，不是录音中 */
-export type Indicator = 'none' | 'idle' | 'recording' | 'processing' | 'done' | 'failed';
+/** 媒体关闭后的 recording 显示 saving；captured/transcribing/generating 是处理中 */
+export type Indicator = 'none' | 'idle' | 'recording' | 'processing' | 'done' | 'failed' | 'saving';
 
 const INDICATORS: Record<MeetingStatus, Indicator> = {
   created: 'idle',
@@ -52,7 +52,12 @@ export function deriveRecordingControls(
 ): RecordingControlsView {
   const { meeting, pending } = state;
   const actions = availableActions(state);
-  const indicator: Indicator = meeting ? INDICATORS[meeting.status] : 'none';
+  const indicator: Indicator =
+    meeting?.status === 'recording' && state.captureStopped
+      ? 'saving'
+      : meeting
+        ? INDICATORS[meeting.status]
+        : 'none';
   const failedRecording = meeting?.status === 'failed' && meeting.lastError?.kind === 'recording';
   return {
     indicator,
