@@ -164,7 +164,7 @@ describe('#11 meeting workspace', () => {
     const view = await mount(t);
     await createMeeting(view, 'Cleanup');
     // 全页面只有一个录音控制组件和一个设备选择器
-    assert.equal(document.querySelectorAll('.workspace .recording-controls').length, 1);
+    assert.equal(document.querySelectorAll('.recording-controls').length, 1);
     assert.equal(document.querySelectorAll('.device-selector').length, 1);
     // StrictMode 会卸载再挂载一次 effect，清理函数必须真正取消订阅
     assert.ok(view.subscriptions.subscribed >= 2, `subscribed ${view.subscriptions.subscribed}`);
@@ -213,18 +213,24 @@ describe('#11 meeting workspace', () => {
 
   test('switching to a new meeting after stopping ignores late events from the previous one', async (t) => {
     const view = await mount(t);
+    // 将转写任务设为挂起，手动控制完成时机
+    view.faults['transcription.transcribe'] = { type: 'hold' };
     const first = await createMeeting(view, 'First');
     await startRecording(view);
     await view.click('停止录音');
     await view.waitForStatus('正在转写');
-    // 第一场仍在转写时，通过表单新建第二场
+    // 第一场转写任务已挂起，现在新建第二场
     await createMeeting(view, 'Second');
-    await waitFor(() => view.statusHistory.length > 0, { message: 'second rendered' });
-    for (let i = 0; (await meetingStatus(view, first)) !== 'transcribed'; i += 1) {
-      assert.ok(i < 300, 'first meeting reaches transcribed');
-      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
-    }
+    await waitFor(() => view.title() === 'Second', { message: 'switched to second' });
+    assert.equal(view.status(), '已创建，未开始录音');
+    // 现在释放第一场的转写完成事件
+    await view.release('transcription.transcribe');
+    await waitFor(async () => (await meetingStatus(view, first)) === 'transcribed', {
+      timeout: 100,
+      message: 'first meeting completes',
+    });
     await settle();
+    // 第一场已完成，但第二场的标题和状态不应改变
     assert.equal(view.title(), 'Second');
     assert.equal(view.status(), '已创建，未开始录音');
   });
