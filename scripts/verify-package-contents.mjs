@@ -16,9 +16,7 @@ export function normalizeArchivePath(path) {
 
 function assertSafePath(path) {
   const parts = path.split('/');
-  if (parts.some((part) => privateName.test(part))) {
-    throw new Error(`Private configuration path found in app package: ${path}`);
-  }
+  assertNoPrivatePath(path);
   if (!allowedTopLevel.has(parts[0])) {
     throw new Error(`Unexpected top-level app package path: ${path}`);
   }
@@ -26,6 +24,12 @@ function assertSafePath(path) {
     if (path === `node_modules/${name}` || path.startsWith(`node_modules/${name}/`)) {
       throw new Error(`Development dependency found in app package: ${name}`);
     }
+  }
+}
+
+function assertNoPrivatePath(path) {
+  if (path.split('/').some((part) => privateName.test(part))) {
+    throw new Error(`Private configuration path found in app package: ${path}`);
   }
 }
 
@@ -61,10 +65,8 @@ export function verifyPackageContents(appDirectory) {
   for (const path of walk(unpacked)) {
     assertSafePath(relative(unpacked, path).split(sep).join('/'));
   }
-  for (const entry of readdirSync(resources)) {
-    if (privateName.test(entry)) {
-      throw new Error(`Private configuration path found in resources: ${entry}`);
-    }
+  for (const path of walk(resources)) {
+    assertNoPrivatePath(relative(resources, path).split(sep).join('/'));
   }
 
   console.log(

@@ -114,8 +114,9 @@ node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
 
 两条命令分别在对应平台执行，位于 `npm run package:mac:arm64` 或
 `npm run package:win:x64` 之后。脚本检查安装包里的名称、版本、入口文件，
-只允许应用代码、生产依赖和 `package.json` 进入应用归档；发现开发依赖、
-常见私人配置文件或意外顶层目录就失败。它检查文件路径，不能证明编译进代码里的
+只允许应用代码、生产依赖和 `package.json` 进入应用归档；递归检查归档外的
+sidecar 等资源目录。归档内发现开发依赖或意外顶层目录，以及任意位置发现
+常见私人配置文件时，检查都会失败。它检查文件路径，不能证明编译进代码里的
 内容没有秘密，因此仍须遵守仓库的凭证管理要求。
 
 #38 的边界是 Electron 安装包配置。真实 faster-whisper 模型与 sidecar 分发由 #39

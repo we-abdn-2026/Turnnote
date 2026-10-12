@@ -43,6 +43,13 @@ async function fixture(t, layout, extraFiles = {}, includeMain = true) {
   return app;
 }
 
+function addResource(app, layout, path, content) {
+  const resources = join(app, layout === 'mac' ? 'Contents/Resources' : 'resources');
+  const destination = join(resources, path);
+  mkdirSync(join(destination, '..'), { recursive: true });
+  writeFileSync(destination, content);
+}
+
 test('accepts macOS and Windows packages with the declared entry point', async (t) => {
   for (const layout of ['mac', 'windows']) {
     const app = await fixture(t, layout);
@@ -61,4 +68,30 @@ test('rejects a development dependency and a private file in the package', async
 test('rejects a package without its application entry point', async (t) => {
   const app = await fixture(t, 'mac', {}, false);
   assert.throws(() => verifyPackageContents(app), /entry point is missing/);
+});
+
+test('accepts sidecar and native module resources on macOS and Windows', async (t) => {
+  for (const layout of ['mac', 'windows']) {
+    const app = await fixture(t, layout);
+    addResource(app, layout, 'asr-worker/_internal/runtime.dat', 'runtime');
+    addResource(
+      app,
+      layout,
+      'app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+      'native module',
+    );
+    assert.doesNotThrow(() => verifyPackageContents(app));
+  }
+});
+
+test('rejects private files nested in sidecar resources on macOS and Windows', async (t) => {
+  for (const layout of ['mac', 'windows']) {
+    const app = await fixture(t, layout);
+    addResource(app, layout, 'asr-worker/_internal/.env', 'synthetic marker');
+    assert.throws(() => verifyPackageContents(app), /Private configuration.*\.env/);
+
+    const appWithKey = await fixture(t, layout);
+    addResource(appWithKey, layout, 'asr-worker/config/signing.pem', 'synthetic marker');
+    assert.throws(() => verifyPackageContents(appWithKey), /Private configuration.*signing\.pem/);
+  }
 });
