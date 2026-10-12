@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { SidecarCommand } from './services/sidecar';
 
 interface SmokeResult {
   checkedAt: string;
@@ -23,51 +24,71 @@ function checkSqlite(): void {
   }
 }
 
-function checkSidecar(sidecarPath: string): Promise<void> {
+/** A ping only passes after its child has actually released all resources. */
+export function checkPackagedSidecar(command: SidecarCommand, timeoutMs = 10_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(sidecarPath, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command.command, command.args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
-    let stderr = '';
-    let settled = false;
+    let outputBytes = 0;
+    let outcome: { error?: Error } | undefined;
+    let killTimer: NodeJS.Timeout | undefined;
 
     const finish = (error?: Error): void => {
-      if (settled) return;
-      settled = true;
+      if (outcome) return;
+      outcome = { error };
       clearTimeout(timer);
-      if (!child.killed) child.kill();
+      child.kill();
+      // A misbehaving worker must not keep the installation probe alive.
+      killTimer = setTimeout(() => child.kill('SIGKILL'), 1_000);
+    };
+    const timer = setTimeout(() => finish(new Error('Sidecar ping timed out.')), timeoutMs);
+    child.on('error', () => finish(new Error('Sidecar could not start.')));
+    child.stdin.on('error', () => finish(new Error('Sidecar input closed before pong.')));
+    child.on('close', () => {
+      clearTimeout(timer);
+      clearTimeout(killTimer);
+      const error = outcome ? outcome.error : new Error('Sidecar exited before pong.');
       if (error) reject(error);
       else resolve();
+    });
+    const limitOutput = (chunk: Buffer): boolean => {
+      outputBytes += chunk.length;
+      if (outputBytes > 64 * 1024) finish(new Error('Sidecar ping output exceeded its limit.'));
+      return !outcome;
     };
-
-    const timer = setTimeout(
-      () => finish(new Error(`Sidecar ping timed out. ${stderr.trim()}`.trim())),
-      10_000,
-    );
-
-    child.on('error', (error) => finish(error));
     child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
+      limitOutput(chunk);
     });
     child.stdout.on('data', (chunk: Buffer) => {
+      if (!limitOutput(chunk)) return;
       stdout += chunk.toString();
       const newline = stdout.indexOf('\n');
       if (newline < 0) return;
       try {
-        const response = JSON.parse(stdout.slice(0, newline)) as Record<string, unknown>;
-        if (response.id === 'packaging-smoke' && response.type === 'pong') finish();
+        const response: unknown = JSON.parse(stdout.slice(0, newline));
+        if (
+          response &&
+          typeof response === 'object' &&
+          'id' in response &&
+          response.id === 'packaging-smoke' &&
+          'type' in response &&
+          response.type === 'pong' &&
+          'status' in response &&
+          response.status === 'ok'
+        )
+          finish();
         else finish(new Error('Sidecar returned an unexpected ping response.'));
       } catch {
         finish(new Error('Sidecar returned invalid JSON.'));
       }
     });
-    child.stdin.write('{"id":"packaging-smoke","type":"ping"}\n');
+    child.stdin.end('{"id":"packaging-smoke","type":"ping"}\n');
   });
 }
 
 export async function runPackagingSmoke(
   resourcesPath: string,
   userDataPath: string,
-  forceFailure = false,
 ): Promise<{ passed: boolean; logPath: string }> {
   const sidecarPath = join(
     resourcesPath,
@@ -84,10 +105,9 @@ export async function runPackagingSmoke(
   };
 
   try {
-    if (forceFailure) throw new Error('Intentional packaging smoke-test failure.');
     checkSqlite();
     result.sqlite = 'ok';
-    await checkSidecar(sidecarPath);
+    await checkPackagedSidecar({ command: sidecarPath, args: [] });
     result.sidecar = 'ok';
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);

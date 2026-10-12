@@ -36,6 +36,7 @@ export function RecordingControls({ session, state }: RecordingControlsProps): R
           正在录音
         </p>
       )}
+      {view.indicator === 'saving' && <p role="status">录音已结束，等待保存。</p>}
       {view.indicator === 'processing' && (
         <p className="processing-indicator" role="status">
           录音已结束，正在处理
@@ -84,7 +85,7 @@ export function RecordingControls({ session, state }: RecordingControlsProps): R
         )}
         {view.stop.visible && (
           <button type="button" onClick={() => void session.stop()} disabled={!view.stop.enabled}>
-            {view.stop.busy ? '正在停止...' : '停止录音'}
+            {view.stop.busy ? '正在停止...' : state.captureStopped ? '重试保存' : '停止录音'}
           </button>
         )}
         {view.discard.visible && (

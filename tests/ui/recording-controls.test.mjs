@@ -12,7 +12,7 @@ after(async () => {
 });
 
 const controls = `(() => {
-  const root = document.querySelector('.recording-controls');
+  const root = document.querySelector('.workspace .recording-controls');
   return {
     recording: root.querySelector('.recording-indicator')?.textContent ?? null,
     processing: root.querySelector('.processing-indicator')?.textContent ?? null,

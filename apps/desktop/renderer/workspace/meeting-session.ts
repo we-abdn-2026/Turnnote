@@ -3,7 +3,17 @@
 import type { MeetingDetail, Result, TurnnoteApi } from '@shared/contracts';
 import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 
-type SessionApi = Pick<TurnnoteApi, 'meetings' | 'recording' | 'events'>;
+type SessionApi = Pick<TurnnoteApi, 'meetings' | 'events'>;
+
+export interface MeetingRecording {
+  start(
+    id: string,
+    notify: { warning(message: string): void; error(message: string): void; stopped(): void },
+  ): Promise<Result<MeetingDetail>>;
+  stop(id: string, jobId: string): Promise<Result<MeetingDetail>>;
+  discard(id: string, jobId: string): Promise<Result<MeetingDetail>>;
+  disconnect(): void;
+}
 
 export type SessionAction = 'create' | 'start' | 'stop' | 'discard';
 
@@ -15,14 +25,17 @@ export interface SessionState {
   error: string | null;
   /** 每次替换会议快照时递增；updatedAt 可能在同一毫秒内重复，不能用来区分快照 */
   revision: number;
+  warning: string | null;
+  /** Renderer media is closed; Main may still be committing the saved audio. */
+  captureStopped: boolean;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
 export const REQUEST_FAILED_MESSAGE = '操作失败，请重试。';
 
-/** 当前会议正在录音；工作区只显示一场会议，此时切走会失去唯一的停止入口 */
+/** Main 录音任务仍活动且 Renderer 尚未关闭媒体；保存等待不冒充正在采集 */
 export function isRecording(state: SessionState): boolean {
-  return state.meeting?.status === 'recording';
+  return state.meeting?.status === 'recording' && !state.captureStopped;
 }
 
 /** 与 Main/mock 共用 lifecycle 条件，界面按此启用按钮 */
@@ -30,7 +43,7 @@ export function availableActions(state: SessionState): Record<SessionAction, boo
   const { meeting, pending } = state;
   const idle = pending === null;
   return {
-    create: idle && !isRecording(state),
+    create: idle && meeting?.status !== 'recording',
     start: idle && !!meeting && canStartJob(meeting, 'recording', false),
     stop: idle && meeting?.status === 'recording' && !!meeting.activeJobId,
     discard: idle && !!meeting && canCancelRecording(meeting),
@@ -50,9 +63,16 @@ export interface MeetingSession {
   discard(): Promise<boolean>;
 }
 
-const INITIAL: SessionState = { meeting: null, pending: null, error: null, revision: 0 };
+const INITIAL: SessionState = {
+  meeting: null,
+  pending: null,
+  error: null,
+  revision: 0,
+  warning: null,
+  captureStopped: false,
+};
 
-export function createMeetingSession(api: SessionApi): MeetingSession {
+export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
   let state = INITIAL;
   const listeners = new Set<() => void>();
   // 当前会议收到事件的次数；请求期间有更新事件时以事件为准，丢弃较旧的响应快照
@@ -81,7 +101,7 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
     if (!availableActions(state)[action]) return false;
     const token = generation;
     const seq = eventSeq;
-    set({ pending: action, error: null });
+    set({ pending: action, error: null, warning: null });
     let result: Result<MeetingDetail> | null;
     try {
       result = await request();
@@ -96,7 +116,7 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
     if (switchesMeeting) {
       generation += 1;
       eventSeq = 0;
-      set({ pending: null, meeting: result.value });
+      set({ pending: null, meeting: result.value, captureStopped: false });
     } else {
       set({ pending: null, ...(eventSeq === seq && { meeting: result.value }) });
     }
@@ -129,18 +149,34 @@ export function createMeetingSession(api: SessionApi): MeetingSession {
       return () => {
         unsubscribe();
         generation += 1;
+        recording.disconnect();
         if (state.pending) set({ pending: null });
       };
     },
     create: (title) => run('create', () => api.meetings.create(title), { switchesMeeting: true }),
-    start: () => run('start', () => api.recording.start(state.meeting!.id)),
-    stop: () =>
-      run('stop', () => api.recording.stop(state.meeting!.id, state.meeting!.activeJobId!)),
+    start() {
+      const token = generation;
+      return run('start', () => {
+        set({ captureStopped: false });
+        return recording.start(state.meeting!.id, {
+          stopped: () => {
+            if (token === generation) set({ captureStopped: true });
+          },
+          warning: (warning) => {
+            if (token === generation) set({ warning });
+          },
+          error: (error) => {
+            if (token === generation) set({ error });
+          },
+        });
+      });
+    },
+    stop: () => run('stop', () => recording.stop(state.meeting!.id, state.meeting!.activeJobId!)),
     discard() {
       const meeting = state.meeting;
       const jobId = meeting?.activeJobId ?? meeting?.lastError?.jobId;
       if (!meeting || !jobId) return Promise.resolve(false);
-      return run('discard', () => api.recording.cancel(meeting.id, jobId));
+      return run('discard', () => recording.discard(meeting.id, jobId));
     },
   };
 }

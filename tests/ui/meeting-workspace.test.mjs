@@ -55,10 +55,11 @@ test('create → start → stop shows Main-driven recording, captured and transc
   assert.deepEqual(page.errors, []);
 });
 
-test('subscription is cleaned up on unmount: StrictMode remount leaves exactly one listener', async () => {
+test('workspace has one recording owner and cleans subscriptions in StrictMode', async () => {
   const page = await browser.open();
   await createMeeting(page, 'Cleanup');
-  // 开发模式 StrictMode 会卸载再挂载一次 effect，清理函数必须真正取消订阅
+  assert.equal(await page.eval(`document.querySelectorAll('.recording-controls').length`), 1);
+  assert.equal(await page.eval(`document.querySelectorAll('.device-selector').length`), 1);
   const { subscribed, unsubscribed } = await page.eval(
     '({ subscribed: __ui.subscribed, unsubscribed: __ui.unsubscribed })',
   );

@@ -14,6 +14,10 @@ Node.js Main Process 与 Python ASR Worker 通过 stdin/stdout 的 JSON Lines �
 
 Sidecar 每任务单次启动，不常驻。
 
+Main 的 `createSessionServices` 接入 recording.stop 自动启动及 transcription.start/cancel IPC，processing_jobs 创建后立即返回 transcribing 快照。收到合法 done 且进程释放后，调用正式 MeetingStore 在事务中提交片段、完成 job 和 transcribed 状态；失败写入安全错误目录中的 code/message，可通过 meetings.get.lastError 查询。取消记为 cancelled 并保留音频，不持久化部分片段。
+
+开发命令由 app.getAppPath() 解析 worker.py；Python 优先使用 TURNNOTE_PYTHON，其次项目 .venv（Windows 为 Scripts/python.exe，其他平台为 bin/python），最后系统 python/python3。安装包使用 process.resourcesPath/asr-worker/asr-worker[.exe]，不依赖 cwd 或 Renderer 提供的路径。模型参数来自经共享 schema 校验的设置，解析到 userData/models/<model>。这些资源布局仍需打包任务实际验证。
+
 Main 使用 processing_jobs 的唯一 ID 关联 transcribe 请求和响应，进度转发时携带 jobId。取消或重试后，旧 job 的 segment/done/error 不提交、不转发进度；数据库通过 isJobCurrent 及完成方法二次校验。Sidecar 的 INVALID_JSON/INVALID_REQUEST/UNKNOWN_REQUEST 属于协议问题，由 Main 映射为 SIDECAR_PROTOCOL_ERROR，不将不受控 message 直接展示。见 [W1 IPC 契约基线](ipc-contract.md)。
 
 ## 请求格式
@@ -134,7 +138,7 @@ Main 使用 processing_jobs 的唯一 ID 关联 transcribe 请求和响应，进
 
 ## 诊断日志
 
-Sidecar 将诊断信息写入 stderr，Main Process 捕获并记录。
+Sidecar 将诊断信息写入 stderr，Main 生命周期管理器仅保留末尾作为内部诊断；当前编排不向 Renderer、数据库或日志输出该原文。
 
 stdout 只输出 JSON Lines 响应。启动时 sidecar 把 fd 1 重定向到 stderr、协议输出走复制出的描述符，原生库直接写 stdout 的内容也会进入 stderr。
 
