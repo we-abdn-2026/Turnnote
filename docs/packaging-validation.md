@@ -22,6 +22,20 @@ Windows x64 由 GitHub Actions 原生 runner 构建、静默安装并运行相�
 本次收尾同步 `dev@51e5c3d`（包含 #71 的采集与转写集成），最终版本以 PR #68
 最新 `Packaging validation` 检查及其日志、artifact 为准。
 
+2026-10-12 收尾修复 `c5c5d49` 的原生复验已通过：
+[`38200988043`](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988043)，
+测试合并快照 `4003352`，基线为 `51e5c3d`。
+
+| 平台 | 安装与自检日志 | 安装包及报告 | 结果 |
+| --- | --- | --- | --- |
+| macOS arm64 | [DMG 安装 job](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988043/job/114654140055) | [DMG 与报告](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988043/artifacts/11725142598) | `darwin/arm64`，SQLite、sidecar 均 `ok` |
+| Windows x64 | [NSIS 安装 job](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988043/job/114654139968) | [NSIS 与两份报告](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988043/artifacts/11725961274) | 正常 `win32/x64`、SQLite/sidecar 均 `ok`；缺失 worker 时退出码 1、SQLite `ok`、sidecar `failed` |
+
+同 revision 的 [常规 CI](https://github.com/we-abdn-2026/Turnnote/actions/runs/38200988050)
+也已通过，测试为 245 项通过、2 项跳过。原生打包使用 Python 3.12.10、
+PyInstaller 6.22.3 和 Electron 44.4.5。以上链接固定对应该修复 revision；后续文档
+回填不改变安装实现，但仍应确认最新 head 的全部检查通过。
+
 验证时从 DMG 复制出 `Turnnote.app` 后运行打包自检。结果如下：
 
 ```json
