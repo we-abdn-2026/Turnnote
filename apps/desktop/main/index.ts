@@ -5,11 +5,13 @@ import { eventChannels } from '@shared/contracts';
 import { ok } from '@shared/result';
 import { registerIpc } from './ipc';
 import { MeetingStore } from './storage/database';
+import { runPackagingSmoke } from './packaging-smoke';
 import { createSessionServices } from './services/session';
 import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 
-initializeLoopback();
+// The package probe does not initialize capture IPC or acquire media permissions.
+if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
 let services: ReturnType<typeof createSessionServices> | undefined;
 let shuttingDown = false;
 
@@ -56,6 +58,12 @@ void app
   .whenReady()
   .then(async () => {
     if (!ownsInstance) return;
+    if (process.argv.includes('--packaging-smoke')) {
+      const result = await runPackagingSmoke(process.resourcesPath, app.getPath('userData'));
+      console.log(`Packaging validation log: ${result.logPath}`);
+      app.exit(result.passed ? 0 : 1);
+      return;
+    }
     const audioDirectory = join(app.getPath('userData'), 'audio');
     mkdirSync(audioDirectory, { recursive: true });
     store = new MeetingStore(join(app.getPath('userData'), 'turnnote.db'), audioDirectory);

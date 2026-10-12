@@ -49,3 +49,5 @@ export { startCapture } from '../../apps/desktop/renderer/audio/capture';
 export { createCaptureRecording } from '../../apps/desktop/renderer/audio/meeting-recording';
 export { createMockRecording } from '../../apps/desktop/renderer/mock/mock-recording';
 export { App } from '../../apps/desktop/renderer/App';
+
+export { checkPackagedSidecar, runPackagingSmoke } from '../../apps/desktop/main/packaging-smoke';
