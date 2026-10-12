@@ -8,6 +8,7 @@ on:
       - 'services/asr-worker/**'
       - 'scripts/build-sidecar.mjs'
       - 'scripts/check-package-target.mjs'
+      - 'scripts/verify-package-contents.mjs'
       - 'scripts/validate-installed-package.ps1'
       - 'electron-builder.yml'
       - 'package.json'
@@ -35,6 +36,7 @@ jobs:
       - run: npm ci
       - run: pip install -r requirements-dev.txt
       - run: npm run package:mac:arm64
+      - run: node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
       - name: Install and validate DMG
         shell: bash
         run: |
@@ -74,6 +76,7 @@ jobs:
       - run: npm ci
       - run: pip install -r requirements-dev.txt
       - run: npm run package:win:x64
+      - run: node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
       - name: Install and validate NSIS package
         shell: pwsh
         run: |

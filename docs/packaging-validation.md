@@ -92,3 +92,32 @@ Windows artifact 同时保留正常和负向报告；两平台即使验证失败
 - Windows x64 不能由本机 arm64 构建后冒充已验证；Windows runner 负责构建、安装、
   启动并检查 SQLite、sidecar 和自检报告。
 - macOS x64 明确不属于 Issue #14 的交付或验收范围。
+
+## Issue #38：electron-builder 交付核对
+
+#14 已建立 DMG/NSIS 的构建和安装自检基线；#38 复用这些安装包，核对
+`electron-builder` 配置、应用入口和安装内容，不另建一套打包方案。
+
+| #38 验收项 | 当前依据 | 尚需确认 |
+| --- | --- | --- |
+| DMG/NSIS、应用标识及入口 | `electron-builder.yml` 指定 `uk.ac.abdn.turnnote`、Turnnote、DMG/NSIS；`package.json` 指定 `out/main/index.js` | PR 检查通过 |
+| 目标平台构建、安装、启动 | 上方 #14 的 macOS arm64 / Windows x64 原生安装与自检日志及产物 | 本 PR 的原生打包检查通过 |
+| 开发依赖、私人配置不进入应用包 | `scripts/verify-package-contents.mjs` 检查 `app.asar`、解包原生模块和资源目录；macOS arm64 本地安装包检查通过 | Windows x64 由本 PR 的原生检查确认 |
+| 可复现命令和产物 | 下方命令；DMG/NSIS 与验证报告由 `Packaging validation` workflow 上传 | PR 附最终 revision 的运行链接 |
+
+检查已打包应用内容：
+
+```bash
+node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
+node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
+```
+
+两条命令分别在对应平台执行，位于 `npm run package:mac:arm64` 或
+`npm run package:win:x64` 之后。脚本检查安装包里的名称、版本、入口文件，
+只允许应用代码、生产依赖和 `package.json` 进入应用归档；发现开发依赖、
+常见私人配置文件或意外顶层目录就失败。它检查文件路径，不能证明编译进代码里的
+内容没有秘密，因此仍须遵守仓库的凭证管理要求。
+
+#38 的边界是 Electron 安装包配置。真实 faster-whisper 模型与 sidecar 分发由 #39
+验收，资源路径与原生模块重编译由 #40 验收，macOS x64 及三平台矩阵由 #41 验收。
+当前包仍未签名，不作为正式 Release 发布。
