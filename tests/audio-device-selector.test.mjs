@@ -1,20 +1,9 @@
 // 挂载实际 AudioDeviceSelector，覆盖 #9 要求的 UI 状态与 React 接线；纯状态逻辑见 audio-device-state.test.mjs。
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { JSDOM } from 'jsdom';
+import { act, click, render, settle, window } from './support/dom.mjs';
 
-// React DOM 在加载时检测浏览器环境，必须先注入 jsdom 全局对象再动态导入
-const { window } = new JSDOM('<!doctype html><html><body></body></html>', {
-  url: 'http://localhost/',
-});
-const { document } = window;
-for (const key of ['window', 'document', 'navigator']) {
-  Object.defineProperty(globalThis, key, { value: window[key], configurable: true });
-}
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
-const { StrictMode, act, createElement } = await import('react');
-const { createRoot } = await import('react-dom/client');
+// 必须在 dom.mjs 注入 jsdom 全局对象之后再加载
 const {
   AudioDeviceSelector,
   ENUMERATE_FAILED_MESSAGE,
@@ -77,37 +66,10 @@ function fakeMediaDevices(initial) {
   };
 }
 
-/** 等待 mock Promise 与随后的 React 更新全部完成 */
-async function settle() {
-  for (let i = 0; i < 3; i += 1) {
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  }
-}
-
-/** 与 main.tsx 一样在 StrictMode 下挂载，测试结束时卸载并断言没有 React 报错 */
 async function mount(t, api, media) {
   window.turnnote = api;
   Object.defineProperty(window.navigator, 'mediaDevices', { value: media, configurable: true });
-  const errors = [];
-  const originalError = console.error;
-  console.error = (...args) => errors.push(args.join(' '));
-  const container = document.createElement('div');
-  document.body.append(container);
-  const root = createRoot(container);
-  let mounted = true;
-  const unmount = async () => {
-    if (!mounted) return;
-    mounted = false;
-    await act(() => root.unmount());
-    container.remove();
-  };
-  t.after(async () => {
-    await unmount();
-    console.error = originalError;
-    assert.deepEqual(errors, []);
-  });
-  await act(() => root.render(createElement(StrictMode, null, createElement(AudioDeviceSelector))));
-  await settle();
+  const { container, unmount } = await render(t, AudioDeviceSelector);
   const $ = (selector) => container.querySelector(selector);
   return {
     $,
@@ -126,11 +88,6 @@ async function choose(view, value) {
     view.select().value = value;
     view.select().dispatchEvent(new window.Event('change', { bubbles: true }));
   });
-  await settle();
-}
-
-async function click(element) {
-  await act(async () => element.click());
   await settle();
 }
 
@@ -226,6 +183,18 @@ test('no devices → devicechange connects one; refresh re-enumerates without le
 
   await view.unmount();
   assert.equal(media.listeners.size, 0);
+});
+
+test('browser placeholder devices before microphone access: no duplicate option, no "no devices" warning', async (t) => {
+  // 页面尚未获得麦克风授权时，Chrome 的 enumerateDevices 只返回 deviceId 和 label 都为空的占位设备
+  const { api } = apiWith();
+  const media = fakeMediaDevices([mic(''), speaker(''), { ...mic(''), kind: 'videoinput' }]);
+  const view = await mount(t, api, media);
+
+  // 占位设备的空值不能与“系统默认麦克风”重复（React duplicate key 会被 render 的 console.error 断言捕获）
+  assert.deepEqual(view.options(), [['', '系统默认麦克风', false]]);
+  assert.doesNotMatch(view.text(), /未检测到麦克风/);
+  assert.equal(view.select().disabled, false);
 });
 
 test('enumeration failure shows a recoverable error instead of "no devices"; refresh recovers', async (t) => {

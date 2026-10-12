@@ -19,11 +19,6 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
-    // 注入 dev:web 页面运行的测试脚本
-    files: ['tests/ui/page.js'],
-    languageOptions: { globals: globals.browser, sourceType: 'script' },
-  },
-  {
     files: ['apps/desktop/renderer/**/*.{ts,tsx}'],
     languageOptions: { globals: globals.browser },
     ...reactHooks.configs.flat.recommended,
