@@ -18,7 +18,7 @@ def run_worker(worker: Path, requests: list[dict[str, Any]], fake: bool) -> list
     for name in ("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV"):
         env.pop(name, None)
     with tempfile.TemporaryDirectory(prefix="turnnote-frozen-worker-") as cwd:
-        env["PATH"] = str(Path(env["SystemRoot"]) / "System32") if os.name == "nt" else cwd
+        env["PATH"] = cwd
         if any(shutil.which(name, path=env["PATH"]) for name in ("python", "python3", "py")):
             raise RuntimeError("Python is still available on the frozen worker PATH")
         result = subprocess.run(
