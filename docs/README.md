@@ -20,3 +20,4 @@
 
 - [工程说明](development.md)：目录结构、环境要求、命令和实现约束
 - [打包验证与 electron-builder 交付核对](packaging-validation.md)：#14 的安装证据、#38 的内容检查和剩余平台任务
+- [安装资源与原生模块](native-packaging.md)：#40 的 `extraResources` 路径、Electron 原生模块重编译和故障诊断
