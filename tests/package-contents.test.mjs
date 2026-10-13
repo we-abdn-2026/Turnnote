@@ -95,3 +95,9 @@ test('rejects private files nested in sidecar resources on macOS and Windows', a
     assert.throws(() => verifyPackageContents(appWithKey), /Private configuration.*signing\.pem/);
   }
 });
+
+test('rejects a substituted public CA bundle', async (t) => {
+  const app = await fixture(t, 'mac');
+  addResource(app, 'mac', 'asr-worker/_internal/certifi/cacert.pem', 'not the public CA bundle');
+  assert.throws(() => verifyPackageContents(app), /Unexpected public CA bundle contents/);
+});
