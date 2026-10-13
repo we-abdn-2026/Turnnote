@@ -25,6 +25,7 @@ export {
   activeConfirmation,
   deriveRecordingControls,
 } from '../../apps/desktop/renderer/workspace/recording-controls';
+export { MeetingWorkspace } from '../../apps/desktop/renderer/workspace/MeetingWorkspace';
 export { createInvokeApi } from '../../packages/contracts/src/bridge';
 export { createDispatcher } from '../../packages/contracts/src/invoke';
 export {
