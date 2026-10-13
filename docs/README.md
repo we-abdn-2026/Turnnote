@@ -20,3 +20,4 @@
 
 - [工程说明](development.md)：目录结构、环境要求、命令和实现约束
 - [打包验证与 electron-builder 交付核对](packaging-validation.md)：#14 的安装证据、#38 的内容检查和剩余平台任务
+- [三平台打包矩阵](packaging-matrix.md)：#41 的 macOS arm64、macOS x64、Windows x64 原生 CI 和产物保留规则
