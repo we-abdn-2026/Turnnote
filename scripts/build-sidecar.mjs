@@ -5,6 +5,9 @@ import { resolve } from 'node:path';
 const localExecutable = resolve(
   process.platform === 'win32' ? '.venv/Scripts/pyinstaller.exe' : '.venv/bin/pyinstaller',
 );
+const localPython = resolve(
+  process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python',
+);
 const executable =
   process.env.PYINSTALLER ??
   (existsSync(localExecutable)
@@ -12,6 +15,20 @@ const executable =
     : process.platform === 'win32'
       ? 'pyinstaller.exe'
       : 'pyinstaller');
+const python =
+  process.env.TURNNOTE_PACKAGING_PYTHON ??
+  (existsSync(localPython) ? localPython : process.platform === 'win32' ? 'python' : 'python3');
+
+const dependencies = spawnSync(
+  python,
+  ['-c', 'import av, ctranslate2, faster_whisper, onnxruntime'],
+  { stdio: 'ignore' },
+);
+if (dependencies.status !== 0) {
+  console.error('ASR runtime dependencies are missing from the packaging Python environment.');
+  console.error('Install requirements.txt and requirements-dev.txt before building the sidecar.');
+  process.exit(1);
+}
 
 const result = spawnSync(
   executable,
@@ -19,6 +36,8 @@ const result = spawnSync(
     '--noconfirm',
     '--clean',
     '--onedir',
+    '--collect-all',
+    'faster_whisper',
     '--name',
     'asr-worker',
     '--distpath',
