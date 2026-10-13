@@ -60,12 +60,14 @@ PyInstaller 6.22.3 和 Electron 44.4.5。以上链接固定对应该修复 revis
 
 ```bash
 npm run package:mac:arm64
+npm run package:mac:x64
 npm run package:win:x64
 ```
 
-两个命令都会先检查宿主平台和架构。PyInstaller 不支持交叉编译，因此：
+三个命令都会先检查宿主平台和架构。PyInstaller 不支持交叉编译，因此：
 
 - macOS arm64 必须在 Apple Silicon Mac 上构建；
+- macOS x64 必须在 Intel Mac 或对应原生 runner 上构建；
 - Windows x64 必须在 Windows x64 或对应原生 runner 上构建。
 
 Pull request 中涉及打包文件的改动会触发 `Packaging validation` workflow。它在
@@ -91,7 +93,8 @@ Windows artifact 同时保留正常和负向报告；两平台即使验证失败
 - 本次打包自检只验证 sidecar 的 `ping`，不代表真实 faster-whisper 模型推理已经通过。
 - Windows x64 不能由本机 arm64 构建后冒充已验证；Windows runner 负责构建、安装、
   启动并检查 SQLite、sidecar 和自检报告。
-- macOS x64 明确不属于 Issue #14 的交付或验收范围。
+- macOS x64 不属于 Issue #14 的历史交付；#41 的增量矩阵和产物规则见
+  [三平台打包矩阵](packaging-matrix.md)。
 
 ## Issue #38：electron-builder 交付核对
 
@@ -112,13 +115,13 @@ node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
 node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
 ```
 
-两条命令分别在对应平台执行，位于 `npm run package:mac:arm64` 或
-`npm run package:win:x64` 之后。脚本检查安装包里的名称、版本、入口文件，
+检查命令分别在对应平台执行，位于相应 `npm run package:*` 命令之后。脚本检查安装包里的
+名称、版本、入口文件，
 只允许应用代码、生产依赖和 `package.json` 进入应用归档；递归检查归档外的
 sidecar 等资源目录。归档内发现开发依赖或意外顶层目录，以及任意位置发现
 常见私人配置文件时，检查都会失败。它检查文件路径，不能证明编译进代码里的
 内容没有秘密，因此仍须遵守仓库的凭证管理要求。
 
 #38 的边界是 Electron 安装包配置。真实 faster-whisper 模型与 sidecar 分发由 #39
-验收，资源路径与原生模块重编译由 #40 验收，macOS x64 及三平台矩阵由 #41 验收。
-当前包仍未签名，不作为正式 Release 发布。
+验收，资源路径与原生模块重编译由 #40 验收；#41 的 macOS x64 及三平台矩阵见
+[三平台打包矩阵](packaging-matrix.md)。当前包仍未签名，不作为正式 Release 发布。
