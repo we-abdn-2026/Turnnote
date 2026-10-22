@@ -16,7 +16,9 @@ const NOT_IMPLEMENTED = JSON.stringify({ code: 'NOT_IMPLEMENTED', message: 'Not 
 async function createMeeting(page, title) {
   await page.eval(`__ui.type('#meeting-title', ${JSON.stringify(title)})`);
   await page.eval(`__ui.click('新建会议')`);
-  await page.waitFor(`__ui.status() === '已创建，未开始录音'`);
+  await page.waitFor(
+    `__ui.status() === '已创建，未开始录音' && document.querySelector('h2')?.textContent === ${JSON.stringify(title)}`,
+  );
   return page.eval(`(async () => {
     const list = await __ui.api.meetings.list();
     return list.value.find((m) => m.title === ${JSON.stringify(title)}).id;
@@ -39,6 +41,7 @@ test('create → start → stop shows Main-driven recording, captured and transc
   await page.waitFor(`__ui.status() === '录音中'`);
   await page.eval(`__ui.click('停止录音')`);
   await page.waitFor(`__ui.status() === '转写完成'`, { timeout: 8000 });
+  await page.waitFor(`document.querySelectorAll('.transcript-segment').length === 4`);
 
   assert.deepEqual(await page.eval('__ui.statusHistory'), [
     '已创建，未开始录音',
@@ -52,6 +55,102 @@ test('create → start → stop shows Main-driven recording, captured and transc
     await page.eval(`__ui.api.meetings.get(${JSON.stringify(id)}).then((r) => r.value.status)`),
     'transcribed',
   );
+  assert.deepEqual(
+    await page.eval(`({
+      id: document.querySelector('.transcript-segment').id,
+      start: document.querySelector('.transcript-segment').dataset.startMs,
+      time: document.querySelector('.transcript-time').textContent,
+      text: document.querySelector('.transcript-text').textContent,
+    })`),
+    {
+      id: 'transcript-segment-0',
+      start: '0',
+      time: '00:00–00:02',
+      text: "Let's review the launch plan for this week.",
+    },
+  );
+  assert.deepEqual(page.errors, []);
+});
+
+test('transcript shows a long bilingual, multiline list with stable segment anchors', async () => {
+  const page = await browser.open();
+  const segments = Array.from({ length: 120 }, (_, index) => ({
+    startMs: index * 1000,
+    endMs: (index + 1) * 1000,
+    text: index === 0 ? '第一行中文\nSecond line in English.' : `片段 ${index}`,
+  }));
+  await page.eval(
+    `__ui.faults['transcription.getSegments'] = { type: 'value', value: ${JSON.stringify(segments)} }`,
+  );
+  await createMeeting(page, 'Long transcript');
+  await page.waitFor(`document.querySelectorAll('.transcript-segment').length === 120`);
+
+  assert.deepEqual(
+    await page.eval(`({
+      firstId: document.querySelector('.transcript-segment').id,
+      firstIndex: document.querySelector('.transcript-segment').dataset.segmentIndex,
+      firstText: document.querySelector('.transcript-text').textContent,
+      lastId: document.querySelectorAll('.transcript-segment')[119].id,
+      lastTime: document.querySelectorAll('.transcript-time')[119].textContent,
+      scrolls: document.querySelector('.transcript-list').scrollHeight > document.querySelector('.transcript-list').clientHeight,
+    })`),
+    {
+      firstId: 'transcript-segment-0',
+      firstIndex: '0',
+      firstText: '第一行中文\nSecond line in English.',
+      lastId: 'transcript-segment-119',
+      lastTime: '01:59–02:00',
+      scrolls: true,
+    },
+  );
+  assert.deepEqual(page.errors, []);
+});
+
+test('transcript has empty and failure states, then retries successfully', async () => {
+  const page = await browser.open();
+  const id = await createMeeting(page, 'Empty transcript');
+  await page.waitFor(`__ui.text().includes('暂无转写内容')`);
+
+  await page.eval(`
+    __ui.faults['transcription.getSegments'] = {
+      type: 'result',
+      error: ${NOT_IMPLEMENTED},
+    };
+    __ui.api.meetings.rename(${JSON.stringify(id)}, 'Empty transcript renamed');
+  `);
+  await page.waitFor(
+    `__ui.alerts().some((message) => message.includes('转写内容加载失败，请重试。'))`,
+  );
+  await page.eval(`delete __ui.faults['transcription.getSegments']`);
+  await page.eval(`__ui.click('重新加载')`);
+  await page.waitFor(`__ui.text().includes('暂无转写内容')`);
+  assert.ok(await page.eval(`__ui.calls['transcription.getSegments'] >= 3`));
+  assert.deepEqual(await page.eval('__ui.alerts()'), []);
+  assert.deepEqual(page.errors, []);
+});
+
+test('switching meetings removes the previous transcript before the new request finishes', async () => {
+  const page = await browser.open();
+  await page.eval(`
+    __ui.faults['transcription.getSegments'] = {
+      type: 'value',
+      value: [{ startMs: 0, endMs: 1000, text: 'Only in the first meeting' }],
+    }
+  `);
+  await createMeeting(page, 'Transcript one');
+  await page.waitFor(`__ui.text().includes('Only in the first meeting')`);
+
+  await page.eval(`__ui.faults['transcription.getSegments'] = { type: 'hold' }`);
+  await createMeeting(page, 'Transcript two');
+  assert.equal(await page.eval(`__ui.text().includes('Only in the first meeting')`), false);
+  assert.equal(await page.eval(`document.querySelectorAll('.transcript-segment').length`), 0);
+  assert.equal(await page.eval(`__ui.text().includes('正在加载转写内容...')`), true);
+
+  await page.eval(`
+    delete __ui.faults['transcription.getSegments'];
+    __ui.release('transcription.getSegments');
+  `);
+  await page.waitFor(`__ui.text().includes('暂无转写内容')`);
   assert.deepEqual(page.errors, []);
 });
 

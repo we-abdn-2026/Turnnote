@@ -1,9 +1,11 @@
 // 录音工作区的会议会话：会议状态只来自 Main 的响应快照和 onMeetingUpdated 事件，
 // Renderer 不自行推导业务终态。不依赖 React，便于单元测试。
-import type { MeetingDetail, Result, TurnnoteApi } from '@shared/contracts';
+import type { MeetingDetail, Result, TranscriptSegment, TurnnoteApi } from '@shared/contracts';
 import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 
-type SessionApi = Pick<TurnnoteApi, 'meetings' | 'events'>;
+type SessionApi = Pick<TurnnoteApi, 'meetings' | 'transcription' | 'events'>;
+
+export type TranscriptLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface MeetingRecording {
   start(
@@ -28,10 +30,14 @@ export interface SessionState {
   warning: string | null;
   /** Renderer media is closed; Main may still be committing the saved audio. */
   captureStopped: boolean;
+  /** 当前会议的已提交转写片段；切换会议时同步清空，避免短暂显示上一场内容。 */
+  transcriptSegments: TranscriptSegment[];
+  transcriptState: TranscriptLoadState;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
 export const REQUEST_FAILED_MESSAGE = '操作失败，请重试。';
+export const TRANSCRIPT_LOAD_FAILED_MESSAGE = '转写内容加载失败，请重试。';
 
 /** Main 录音任务仍活动且 Renderer 尚未关闭媒体；保存等待不冒充正在采集 */
 export function isRecording(state: SessionState): boolean {
@@ -61,6 +67,8 @@ export interface MeetingSession {
   stop(): Promise<boolean>;
   /** 丢弃录音中或失败的录音，回到 created 以便重新录音 */
   discard(): Promise<boolean>;
+  /** 重新读取当前会议的已提交转写片段。 */
+  reloadTranscript(): Promise<void>;
 }
 
 const INITIAL: SessionState = {
@@ -70,6 +78,8 @@ const INITIAL: SessionState = {
   revision: 0,
   warning: null,
   captureStopped: false,
+  transcriptSegments: [],
+  transcriptState: 'idle',
 };
 
 export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
@@ -79,6 +89,8 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
   let eventSeq = 0;
   // 断开连接、切换会议后递增，使旧请求的响应失效
   let generation = 0;
+  // 同一会议可能因连续状态事件并发读取片段，只接受最后一次请求。
+  let transcriptRequest = 0;
 
   function set(patch: Partial<Omit<SessionState, 'revision'>>): void {
     const revision = 'meeting' in patch ? state.revision + 1 : state.revision;
@@ -91,6 +103,26 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     if (!state.meeting || meeting.id !== state.meeting.id) return;
     eventSeq += 1;
     set({ meeting });
+    void loadTranscript(meeting.id);
+  }
+
+  async function loadTranscript(meetingId: string): Promise<void> {
+    const token = generation;
+    const request = ++transcriptRequest;
+    set({ transcriptState: 'loading' });
+    let result: Result<TranscriptSegment[]> | null;
+    try {
+      result = await api.transcription.getSegments(meetingId);
+    } catch {
+      result = null;
+    }
+    if (token !== generation || request !== transcriptRequest || state.meeting?.id !== meetingId)
+      return;
+    if (!result || !result.ok) {
+      set({ transcriptState: 'error' });
+      return;
+    }
+    set({ transcriptSegments: result.value, transcriptState: 'ready' });
   }
 
   async function run(
@@ -116,9 +148,18 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     if (switchesMeeting) {
       generation += 1;
       eventSeq = 0;
-      set({ pending: null, meeting: result.value, captureStopped: false });
+      set({
+        pending: null,
+        meeting: result.value,
+        captureStopped: false,
+        transcriptSegments: [],
+        transcriptState: 'loading',
+      });
+      void loadTranscript(result.value.id);
     } else {
-      set({ pending: null, ...(eventSeq === seq && { meeting: result.value }) });
+      const acceptsResponse = eventSeq === seq;
+      set({ pending: null, ...(acceptsResponse && { meeting: result.value }) });
+      if (acceptsResponse) void loadTranscript(result.value.id);
     }
     return true;
   }
@@ -131,7 +172,10 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     const seq = eventSeq;
     try {
       const result = await api.meetings.get(meeting.id);
-      if (token === generation && eventSeq === seq && result.ok) set({ meeting: result.value });
+      if (token === generation && eventSeq === seq && result.ok) {
+        set({ meeting: result.value });
+        void loadTranscript(result.value.id);
+      }
     } catch {
       /* 保留已知快照，后续事件会继续更新 */
     }
@@ -177,6 +221,10 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
       const jobId = meeting?.activeJobId ?? meeting?.lastError?.jobId;
       if (!meeting || !jobId) return Promise.resolve(false);
       return run('discard', () => recording.discard(meeting.id, jobId));
+    },
+    async reloadTranscript() {
+      const meeting = state.meeting;
+      if (meeting) await loadTranscript(meeting.id);
     },
   };
 }

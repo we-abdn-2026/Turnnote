@@ -8,7 +8,12 @@ import {
 import type { MeetingStatus, TurnnoteApi } from '@shared/contracts';
 import { createCaptureRecording } from '../audio/meeting-recording';
 import type { MeetingRecording } from './meeting-session';
-import { availableActions, createMeetingSession, isRecording } from './meeting-session';
+import {
+  TRANSCRIPT_LOAD_FAILED_MESSAGE,
+  availableActions,
+  createMeetingSession,
+  isRecording,
+} from './meeting-session';
 import { RecordingControls } from './RecordingControls';
 
 export const STATUS_LABELS: Record<MeetingStatus, string> = {
@@ -22,6 +27,16 @@ export const STATUS_LABELS: Record<MeetingStatus, string> = {
   failed: '处理失败',
   deleted: '已删除',
 };
+
+export function formatTranscriptTime(milliseconds: number): string {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  const parts = [minutes, seconds].map((part) => String(part).padStart(2, '0'));
+  return hours > 0 ? `${String(hours).padStart(2, '0')}:${parts.join(':')}` : parts.join(':');
+}
 
 export function MeetingWorkspace({
   recordingFactory = createCaptureRecording,
@@ -87,6 +102,54 @@ export function MeetingWorkspace({
             {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
           </p>
           <RecordingControls session={session} state={state} />
+          <section className="transcript" aria-labelledby="transcript-heading">
+            <div className="transcript-heading">
+              <h3 id="transcript-heading">转写内容</h3>
+              {state.transcriptState === 'ready' && state.transcriptSegments.length > 0 && (
+                <span>{state.transcriptSegments.length} 个片段</span>
+              )}
+            </div>
+            {state.transcriptState === 'loading' && state.transcriptSegments.length === 0 && (
+              <p className="transcript-message" role="status">
+                正在加载转写内容...
+              </p>
+            )}
+            {state.transcriptState === 'error' && (
+              <div className="transcript-error" role="alert">
+                <p>{TRANSCRIPT_LOAD_FAILED_MESSAGE}</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void session.reloadTranscript()}
+                >
+                  重新加载
+                </button>
+              </div>
+            )}
+            {state.transcriptState === 'ready' && state.transcriptSegments.length === 0 && (
+              <p className="transcript-message">暂无转写内容</p>
+            )}
+            {state.transcriptSegments.length > 0 && (
+              <ol className="transcript-list" aria-label="转写片段">
+                {state.transcriptSegments.map((segment, index) => (
+                  <li
+                    className="transcript-segment"
+                    id={`transcript-segment-${index}`}
+                    data-segment-index={index}
+                    data-start-ms={segment.startMs}
+                    data-end-ms={segment.endMs}
+                    tabIndex={-1}
+                    key={`${index}-${segment.startMs}-${segment.endMs}`}
+                  >
+                    <time className="transcript-time">
+                      {formatTranscriptTime(segment.startMs)}–{formatTranscriptTime(segment.endMs)}
+                    </time>
+                    <span className="transcript-text">{segment.text}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
         </div>
       )}
     </section>
