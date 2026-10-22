@@ -40,6 +40,42 @@ function deferred() {
   return { promise, resolve };
 }
 
+function withEvents(api) {
+  const meetingListeners = new Set();
+  const progressListeners = new Set();
+  const offMeeting = api.events.onMeetingUpdated((meeting) => {
+    for (const listener of meetingListeners) listener(meeting);
+  });
+  const offProgress = api.events.onJobProgress((progress) => {
+    for (const listener of progressListeners) listener(progress);
+  });
+  return {
+    api: {
+      ...api,
+      events: {
+        onMeetingUpdated(listener) {
+          meetingListeners.add(listener);
+          return () => meetingListeners.delete(listener);
+        },
+        onJobProgress(listener) {
+          progressListeners.add(listener);
+          return () => progressListeners.delete(listener);
+        },
+      },
+    },
+    emitMeeting(meeting) {
+      for (const listener of meetingListeners) listener(meeting);
+    },
+    emitProgress(progress) {
+      for (const listener of progressListeners) listener(progress);
+    },
+    dispose() {
+      offMeeting();
+      offProgress();
+    },
+  };
+}
+
 test('create → start → stop: state follows Main snapshots and events through transcribed', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
   const session = createMeetingSession(api, createMockRecording(api));
@@ -77,6 +113,154 @@ test('events for other meetings never change the current meeting', async () => {
   assert.deepEqual(session.getState().meeting, mine);
   assert.equal(session.getState().error, null);
   disconnect();
+});
+
+test('job progress is scoped to the active meeting and job, monotonic, and cleared at completion', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  const events = withEvents(base);
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Progress');
+  const created = session.getState().meeting;
+  const startedAt = Date.parse(created.updatedAt) + 1000;
+  const active = {
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'job-current',
+    updatedAt: new Date(startedAt).toISOString(),
+  };
+  events.emitMeeting(active);
+  events.emitProgress({
+    meetingId: 'other-meeting',
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 80,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'old-job',
+    kind: 'transcribing',
+    percent: 80,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'generating',
+    percent: 80,
+  });
+  assert.equal(session.getState().jobProgress, null);
+
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 25,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 10,
+  });
+  assert.equal(session.getState().jobProgress.percent, 25);
+
+  events.emitMeeting({
+    ...active,
+    status: 'transcribed',
+    activeJobId: null,
+    updatedAt: new Date(startedAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().jobProgress, null);
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 100,
+  });
+  events.emitMeeting(active);
+  assert.equal(session.getState().meeting.status, 'transcribed');
+  assert.equal(session.getState().jobProgress, null);
+  await session.create('Next meeting');
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 50,
+  });
+  assert.equal(session.getState().meeting.title, 'Next meeting');
+  assert.equal(session.getState().jobProgress, null);
+  const nextMeeting = session.getState().meeting;
+  const generationAt = Date.parse(nextMeeting.updatedAt) + 1000;
+  const generating = {
+    ...nextMeeting,
+    status: 'generating',
+    activeJobId: 'generation-current',
+    updatedAt: new Date(generationAt).toISOString(),
+  };
+  events.emitMeeting(generating);
+  events.emitProgress({
+    meetingId: nextMeeting.id,
+    jobId: 'generation-current',
+    kind: 'generating',
+    percent: 40,
+  });
+  assert.equal(session.getState().jobProgress.percent, 40);
+  events.emitMeeting({
+    ...generating,
+    status: 'failed',
+    activeJobId: null,
+    lastError: {
+      kind: 'generating',
+      jobId: 'generation-current',
+      code: 'DEEPSEEK_UNAVAILABLE',
+      message: 'DeepSeek is unavailable.',
+    },
+    updatedAt: new Date(generationAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().meeting.status, 'failed');
+  assert.equal(session.getState().jobProgress, null);
+  events.emitMeeting(generating);
+  assert.equal(session.getState().meeting.status, 'failed');
+  disconnect();
+  events.dispose();
+});
+
+test('transcription cancellation is exposed as a saved recording and ignores the cancelled job', async () => {
+  const events = withEvents(createMockApi({ seed: false, delayMs: 1 }));
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Cancelled transcription');
+  const created = session.getState().meeting;
+  const startedAt = Date.parse(created.updatedAt) + 1000;
+  events.emitMeeting({
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'cancelled-job',
+    updatedAt: new Date(startedAt).toISOString(),
+  });
+  events.emitMeeting({
+    ...created,
+    status: 'captured',
+    activeJobId: null,
+    updatedAt: new Date(startedAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().cancelledKind, 'transcribing');
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'cancelled-job',
+    kind: 'transcribing',
+    percent: 100,
+  });
+  events.emitMeeting({
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'cancelled-job',
+    updatedAt: new Date(startedAt + 2000).toISOString(),
+  });
+  assert.equal(session.getState().meeting.status, 'captured');
+  assert.equal(session.getState().jobProgress, null);
+  disconnect();
+  events.dispose();
 });
 
 test('switching to a new meeting ignores late events from the previous one', async () => {
@@ -269,6 +453,8 @@ test('failed Result and rejection report a safe error and keep the last confirme
     error: 'Not available yet.',
     warning: null,
     captureStopped: false,
+    jobProgress: null,
+    cancelledKind: null,
     revision,
   });
   mode = 'reject';

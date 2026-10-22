@@ -40,6 +40,14 @@ export function MeetingWorkspace({
   const recording = isRecording(state);
   const { meeting } = state;
   const savePending = meeting?.status === 'recording' && state.captureStopped;
+  const processingKind =
+    meeting?.status === 'transcribing' || meeting?.status === 'generating' ? meeting.status : null;
+  const processingLabel =
+    processingKind === 'transcribing'
+      ? '转写进度'
+      : processingKind === 'generating'
+        ? '纪要生成进度'
+        : null;
 
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -83,9 +91,26 @@ export function MeetingWorkspace({
         <div className="meeting-panel">
           <h2>{meeting.title}</h2>
           <p className="meeting-status" role="status" aria-live="polite">
-            {savePending ? '录音已结束，等待保存' : STATUS_LABELS[meeting.status]}
+            {savePending
+              ? '录音已结束，等待保存'
+              : state.cancelledKind === 'transcribing' && meeting.status === 'captured'
+                ? '转写已取消，录音已保存'
+                : STATUS_LABELS[meeting.status]}
             {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
           </p>
+          {processingKind && processingLabel && (
+            <div className="processing-progress" aria-live="polite">
+              <div className="processing-progress-heading">
+                <span>{processingLabel}</span>
+                <span>{state.jobProgress ? `${state.jobProgress.percent}%` : '等待进度上报'}</span>
+              </div>
+              <progress
+                aria-label={processingLabel}
+                max={100}
+                {...(state.jobProgress ? { value: state.jobProgress.percent } : {})}
+              />
+            </div>
+          )}
           <RecordingControls session={session} state={state} />
         </div>
       )}

@@ -8,6 +8,8 @@
     held: {},
     subscribed: 0,
     unsubscribed: 0,
+    progressSubscribed: 0,
+    progressUnsubscribed: 0,
     statusHistory: [],
     api: null,
   };
@@ -46,6 +48,16 @@
         let active = true;
         return () => {
           if (active) ui.unsubscribed += 1;
+          active = false;
+          off();
+        };
+      },
+      onJobProgress(listener) {
+        ui.progressSubscribed += 1;
+        const off = api.events.onJobProgress(listener);
+        let active = true;
+        return () => {
+          if (active) ui.progressUnsubscribed += 1;
           active = false;
           off();
         };
