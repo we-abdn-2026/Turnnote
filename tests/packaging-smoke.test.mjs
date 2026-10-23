@@ -126,6 +126,55 @@ test('missing installed sidecar writes a failed report after a real SQLite check
     report.sidecarResource,
     `asr-worker/${process.platform === 'win32' ? 'asr-worker.exe' : 'asr-worker'}`,
   );
-  assert.equal(report.error, 'Sidecar could not start.');
+  assert.equal(report.errorCode, 'SIDECAR_CHECK_FAILED');
+  assert.equal(Object.hasOwn(report, 'error'), false);
   assert.equal(JSON.stringify(report).includes(root), false);
+});
+
+test('successful packaging report uses only fixed diagnostic fields', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'turnnote-package-success-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { passed, logPath } = await runPackagingSmoke(
+    join(root, 'private resources'),
+    join(root, 'user data'),
+    {
+      sqlite() {},
+      async sidecar() {},
+    },
+  );
+  const reportText = readFileSync(logPath, 'utf8');
+  const report = JSON.parse(reportText);
+  assert.equal(passed, true);
+  assert.equal(report.sqlite, 'ok');
+  assert.equal(report.sidecar, 'ok');
+  assert.equal(Object.hasOwn(report, 'errorCode'), false);
+  assert.equal(reportText.includes(root), false);
+});
+
+test('SQLite failure report never includes exception details or local paths', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'turnnote-package-sqlite-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const secret = 'sk-private-credential and complete confidential transcript and meeting note';
+  let sidecarCalled = false;
+  const { passed, logPath } = await runPackagingSmoke(
+    join(root, 'private resources'),
+    join(root, 'user data'),
+    {
+      sqlite() {
+        throw new Error(`${secret} at ${root}/turnnote.db`);
+      },
+      async sidecar() {
+        sidecarCalled = true;
+      },
+    },
+  );
+  const reportText = readFileSync(logPath, 'utf8');
+  const report = JSON.parse(reportText);
+  assert.equal(passed, false);
+  assert.equal(sidecarCalled, false);
+  assert.equal(report.sqlite, 'failed');
+  assert.equal(report.sidecar, 'failed');
+  assert.equal(report.errorCode, 'SQLITE_CHECK_FAILED');
+  for (const value of [secret, root, 'turnnote.db'])
+    assert.equal(reportText.includes(value), false);
 });

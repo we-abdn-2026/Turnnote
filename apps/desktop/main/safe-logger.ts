@@ -122,6 +122,7 @@ export class SafeLogger {
       ...(input.exceptionType ? { exceptionType: input.exceptionType } : {}),
       ...(input.diagnosticStage ? { diagnosticStage: input.diagnosticStage } : {}),
     };
+    const line = `${JSON.stringify(entry)}\n`;
     try {
       const directory = dirname(this.path);
       mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -130,20 +131,26 @@ export class SafeLogger {
       } catch {
         // Windows does not implement POSIX directory modes.
       }
+      let currentBytes = 0;
       try {
-        if (statSync(this.path).size >= MAX_LOG_BYTES) {
-          const previous = `${this.path}.1`;
-          try {
-            unlinkSync(previous);
-          } catch {
-            // The previous log may not exist.
-          }
-          renameSync(this.path, previous);
-        }
-      } catch {
-        // The current log may not exist yet.
+        currentBytes = statSync(this.path).size;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
       }
-      appendFileSync(this.path, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 });
+      if (currentBytes + Buffer.byteLength(line) > MAX_LOG_BYTES) {
+        const previous = `${this.path}.1`;
+        try {
+          unlinkSync(previous);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
+        }
+        try {
+          renameSync(this.path, previous);
+        } catch {
+          return;
+        }
+      }
+      appendFileSync(this.path, line, { encoding: 'utf8', mode: 0o600 });
       chmodSync(this.path, 0o600);
     } catch {
       // Diagnostics must never interrupt user work or fall back to an unsafe console dump.

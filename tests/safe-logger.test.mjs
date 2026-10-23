@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { SafeLogger, safeLogPath } from '../out/tests/runtime.mjs';
 
 const PRIVATE = {
@@ -99,4 +99,14 @@ test('safe logger keeps codes and diagnostic categories without credential, path
     ],
   );
   if (process.platform !== 'win32') assert.equal(statSync(path).mode & 0o777, 0o600);
+});
+
+test('a failed log rotation does not append beyond the size limit', (t) => {
+  const { logger, path } = fixture(t);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, 'x'.repeat(1_000_000));
+  mkdirSync(`${path}.1`);
+  logger.info('main', 'started');
+  assert.equal(statSync(path).size, 1_000_000);
+  assert.equal(statSync(`${path}.1`).isDirectory(), true);
 });

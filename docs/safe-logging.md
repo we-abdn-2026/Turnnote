@@ -1,6 +1,7 @@
 # 安全诊断日志
 
-Turnnote 的 Main、IPC、ASR sidecar 和 DeepSeek 客户端共用结构化安全日志策略。日志用于定位
+Turnnote 的 Main、IPC 和 ASR sidecar 使用结构化安全日志策略。DeepSeek 客户端尚未实现；
+当前只预留了 `deepseek` 来源和过滤测试，正式客户端接入后仍需验证异常路径。日志用于定位
 错误发生在哪一层，不记录请求或会议内容。
 
 ## 日志位置
@@ -11,7 +12,8 @@ Turnnote 的 Main、IPC、ASR sidecar 和 DeepSeek 客户端共用结构化安�
 - Windows：`%APPDATA%\\Turnnote\\logs\\turnnote.log`
 
 实际目录名称可能随应用名称或开发环境变化，应以 Electron 的 `userData` 路径为准。日志采用
-JSON Lines，每条一行；当前文件达到 1 MB 后轮换为 `turnnote.log.1`，只保留一份旧日志。
+JSON Lines，每条一行；写入将超过 1 MB 时轮换为 `turnnote.log.1`，只保留一份旧日志。
+若备份无法移除或当前文件无法重命名，则暂时跳过新日志，避免文件继续增长。
 目录和文件在支持 POSIX 权限的平台分别限制为 `0700` 和 `0600`。
 
 ## 可以分享的字段
