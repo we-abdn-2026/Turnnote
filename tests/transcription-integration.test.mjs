@@ -68,6 +68,7 @@ function fixture(t, overrides = {}) {
   const store = new MeetingStore(databasePath, audioDirectory);
   const events = [];
   const progress = [];
+  const progressListeners = new Set();
   const options = {
     audioDirectory,
     modelsDirectory: join(root, 'models'),
@@ -80,7 +81,10 @@ function fixture(t, overrides = {}) {
       }),
     permissions: () => ({ microphone: 'unknown', screen: 'unknown' }),
     emitMeeting: (meeting) => events.push(meeting),
-    emitProgress: (event) => progress.push(event),
+    emitProgress: (event) => {
+      progress.push(event);
+      for (const listener of progressListeners) listener(event);
+    },
     ...overrides,
   };
   const services = createSessionServices(store, options);
@@ -100,6 +104,7 @@ function fixture(t, overrides = {}) {
     api,
     events,
     progress,
+    progressListeners,
     captured() {
       const path = join(audioDirectory, 'controlled.wav');
       writeFileSync(path, 'controlled input');
@@ -125,6 +130,10 @@ test('workspace capture retries a rolled-back save and launches exactly one auto
       onMeetingUpdated(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);
+      },
+      onJobProgress(listener) {
+        f.progressListeners.add(listener);
+        return () => f.progressListeners.delete(listener);
       },
     },
   };

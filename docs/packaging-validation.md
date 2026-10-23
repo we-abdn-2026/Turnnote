@@ -123,5 +123,7 @@ sidecar 等资源目录。归档内发现开发依赖或意外顶层目录，以
 内容没有秘密，因此仍须遵守仓库的凭证管理要求。
 
 #38 的边界是 Electron 安装包配置。真实 faster-whisper 模型与 sidecar 分发由 #39
-验收，资源路径与原生模块重编译由 #40 验收；#41 的 macOS x64 及三平台矩阵见
-[三平台打包矩阵](packaging-matrix.md)。当前包仍未签名，不作为正式 Release 发布。
+验收；#40 的资源路径、原生模块重编译和故障报告见
+[安装资源与原生模块](native-packaging.md)；#41 的 macOS x64 及三平台矩阵见
+[三平台打包矩阵](packaging-matrix.md)。
+当前包仍未签名，不作为正式 Release 发布。
