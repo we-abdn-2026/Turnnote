@@ -1,1 +1,4 @@
 faster-whisper==1.2.1
+# Recent ONNX Runtime wheels omit Intel macOS; keep that runner on the last universal wheel.
+onnxruntime==1.21.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'
+onnxruntime==1.30.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'
