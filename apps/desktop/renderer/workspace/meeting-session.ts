@@ -182,12 +182,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     const seq = eventSeq;
     try {
       const result = await api.meetings.get(meeting.id);
-      if (
-        token === generation &&
-        eventSeq === seq &&
-        result.ok &&
-        !isStaleMeeting(meeting, result.value, settledJobs)
-      ) {
+      if (token === generation && eventSeq === seq && result.ok) {
         set({
           meeting: result.value,
           jobProgress:
@@ -290,11 +285,23 @@ function isStaleMeeting(
 
   // A different active job is a retry or a later stage started after the current one settled.
   if (next.activeJobId && next.activeJobId !== current.activeJobId) return false;
-  if (current.status === 'failed') return next.status !== 'failed' && !next.activeJobId;
+  if (next.status === 'deleted') return false;
 
   if (STATUS_ORDER[next.status] >= STATUS_ORDER[current.status]) return false;
-  // These are the two supported cancellation/rollback transitions.
+  // These are the supported recovery/cancellation transitions without a new active job.
   if (current.status === 'recording' && next.status === 'created') return false;
   if (current.status === 'transcribing' && next.status === 'captured') return false;
+  if (
+    current.status === 'failed' &&
+    current.lastError?.kind === 'recording' &&
+    next.status === 'created'
+  )
+    return false;
+  if (
+    current.status === 'failed' &&
+    current.lastError?.kind === 'generating' &&
+    next.status === 'ready'
+  )
+    return false;
   return true;
 }

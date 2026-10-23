@@ -263,6 +263,67 @@ test('transcription cancellation is exposed as a saved recording and ignores the
   events.dispose();
 });
 
+test('supported recovery events move failed meetings to ready or deleted', async () => {
+  const api = createMockApi({
+    seed: false,
+    delayMs: 1,
+    generationError: 'DEEPSEEK_UNAVAILABLE',
+  });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Recover generation');
+  await session.start();
+  await session.stop();
+  await until(session, (state) => state.meeting.status === 'transcribed');
+  const generationId = session.getState().meeting.id;
+  await api.settings.setApiKey('test-only-key');
+  assert.equal((await api.notes.generate(generationId)).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  assert.equal(session.getState().meeting.lastError.kind, 'generating');
+
+  const edited = await api.notes.saveEdit(
+    generationId,
+    {
+      summary: 'Recovered with a manual edit.',
+      keyTopics: [],
+      decisions: [],
+      openQuestions: [],
+      actionItems: [],
+    },
+    0,
+  );
+  assert.equal(edited.ok, true);
+  await until(session, (state) => state.meeting.status === 'ready');
+
+  await session.create('Delete failed recording');
+  await session.start();
+  const { id, activeJobId } = session.getState().meeting;
+  assert.equal((await api.recording.fail(id, activeJobId, 'CAPTURE_FAILED')).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  assert.equal((await api.meetings.delete(id)).ok, true);
+  await until(session, (state) => state.meeting.status === 'deleted');
+  disconnect();
+});
+
+test('reconnect accepts an authoritative recovery snapshot after recording failure', async () => {
+  const api = createMockApi({ seed: false, delayMs: 1 });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+  await session.create('Recover while disconnected');
+  await session.start();
+  const { id, activeJobId } = session.getState().meeting;
+  assert.equal((await api.recording.fail(id, activeJobId, 'CAPTURE_FAILED')).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  disconnect();
+
+  assert.equal((await api.recording.cancel(id, activeJobId)).ok, true);
+  assert.equal((await api.meetings.get(id)).value.status, 'created');
+  const reconnect = session.connect();
+  await until(session, (state) => state.meeting.status === 'created');
+  reconnect();
+});
+
 test('switching to a new meeting ignores late events from the previous one', async () => {
   const api = createMockApi({ seed: false, delayMs: 5 });
   const session = createMeetingSession(api, createMockRecording(api));

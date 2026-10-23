@@ -76,6 +76,19 @@ test('workspace shows transcription and generation progress through their termin
   await startRecording(page);
   await page.waitFor(`__ui.status() === '录音中'`);
   await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() === '正在转写'`);
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress-heading')?.textContent.includes('等待进度上报')`,
+    ),
+    true,
+  );
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress')?.querySelector('progress')?.hasAttribute('value')`,
+    ),
+    false,
+  );
   await page.waitFor(
     `document.querySelector('.processing-progress')?.querySelector('progress')?.hasAttribute('value')`,
   );
