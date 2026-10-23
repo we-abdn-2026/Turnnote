@@ -7,6 +7,8 @@ on:
       - 'apps/desktop/main/**'
       - 'services/asr-worker/**'
       - 'scripts/build-sidecar.mjs'
+      - 'scripts/prepare-asr-validation-model.py'
+      - 'scripts/validate-bundled-sidecar.py'
       - 'scripts/check-package-target.mjs'
       - 'scripts/verify-package-contents.mjs'
       - 'scripts/validate-installed-package.ps1'
@@ -14,6 +16,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'requirements-dev.txt'
+      - 'requirements.txt'
+      - 'tests/fixtures/sample-en.wav'
 
 permissions:
   contents: read
@@ -32,9 +36,11 @@ jobs:
         with:
           python-version-file: .python-version
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - run: npm ci
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: npm run test:electron
       - run: npm run package:mac:arm64
       - run: node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
@@ -67,6 +73,15 @@ jobs:
           node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
             "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json"
           hdiutil detach "$RUNNER_TEMP/turnnote-dmg"
+      - name: Validate installed worker with local tiny model
+        shell: bash
+        run: |
+          python scripts/prepare-asr-validation-model.py "$RUNNER_TEMP/turnnote-asr-model"
+          python scripts/validate-bundled-sidecar.py \
+            --worker "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/Resources/asr-worker/asr-worker" \
+            --model "$RUNNER_TEMP/turnnote-asr-model" \
+            --audio tests/fixtures/sample-en.wav \
+            --report "$RUNNER_TEMP/turnnote-asr-validation.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -74,8 +89,10 @@ jobs:
           name: turnnote-macos-arm64
           path: |
             dist-packaging/*.dmg
+            build/sidecar/asr-worker/**
             ${{ runner.temp }}/turnnote-user-data/packaging-validation.json
             ${{ runner.temp }}/turnnote-user-data-failure/packaging-validation.json
+            ${{ runner.temp }}/turnnote-asr-validation.json
 
   windows-x64:
     runs-on: windows-latest
@@ -90,9 +107,11 @@ jobs:
         with:
           python-version-file: .python-version
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - run: npm ci
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: npm run test:electron
       - run: npm run package:win:x64
       - run: node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
@@ -111,6 +130,15 @@ jobs:
           # Include spaces to exercise Windows argument quoting.
           ./scripts/validate-installed-package.ps1 -InstallDir $installDir `
             -UserDataRoot (Join-Path $env:RUNNER_TEMP 'turnnote user data')
+      - name: Validate installed worker with local tiny model
+        shell: pwsh
+        run: |
+          python scripts/prepare-asr-validation-model.py (Join-Path $env:RUNNER_TEMP 'turnnote-asr-model')
+          python scripts/validate-bundled-sidecar.py `
+            --worker (Join-Path $env:RUNNER_TEMP 'turnnote-installed\resources\asr-worker\asr-worker.exe') `
+            --model (Join-Path $env:RUNNER_TEMP 'turnnote-asr-model') `
+            --audio tests/fixtures/sample-en.wav `
+            --report (Join-Path $env:RUNNER_TEMP 'turnnote-asr-validation.json')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -118,5 +146,7 @@ jobs:
           name: turnnote-windows-x64
           path: |
             dist-packaging/*.exe
+            build/sidecar/asr-worker/**
             ${{ runner.temp }}/turnnote user data/packaging-validation.json
             ${{ runner.temp }}/turnnote user data-failure/packaging-validation.json
+            ${{ runner.temp }}/turnnote-asr-validation.json
