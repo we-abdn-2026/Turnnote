@@ -60,11 +60,80 @@ test('workspace has one recording owner and cleans subscriptions in StrictMode',
   await createMeeting(page, 'Cleanup');
   assert.equal(await page.eval(`document.querySelectorAll('.recording-controls').length`), 1);
   assert.equal(await page.eval(`document.querySelectorAll('.device-selector').length`), 1);
-  const { subscribed, unsubscribed } = await page.eval(
-    '({ subscribed: __ui.subscribed, unsubscribed: __ui.unsubscribed })',
+  const { subscribed, unsubscribed, progressSubscribed, progressUnsubscribed } = await page.eval(
+    '({ subscribed: __ui.subscribed, unsubscribed: __ui.unsubscribed, progressSubscribed: __ui.progressSubscribed, progressUnsubscribed: __ui.progressUnsubscribed })',
   );
   assert.ok(subscribed >= 2, `subscribed ${subscribed}`);
   assert.equal(subscribed - unsubscribed, 1);
+  assert.ok(progressSubscribed >= 2, `progress subscribed ${progressSubscribed}`);
+  assert.equal(progressSubscribed - progressUnsubscribed, 1);
+  assert.deepEqual(page.errors, []);
+});
+
+test('workspace shows transcription and generation progress through their terminal states', async () => {
+  const page = await browser.open();
+  const id = await createMeeting(page, 'Processing progress');
+  await startRecording(page);
+  await page.waitFor(`__ui.status() === '录音中'`);
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() === '正在转写'`);
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress-heading')?.textContent.includes('等待进度上报')`,
+    ),
+    true,
+  );
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress')?.querySelector('progress')?.hasAttribute('value')`,
+    ),
+    false,
+  );
+  await page.waitFor(
+    `document.querySelector('.processing-progress')?.querySelector('progress')?.hasAttribute('value')`,
+  );
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress-heading').textContent.includes('转写进度')`,
+    ),
+    true,
+  );
+  await page.waitFor(`__ui.status() === '转写完成'`, { timeout: 8000 });
+  assert.equal(await page.eval(`document.querySelector('.processing-progress')`), null);
+
+  const generation = await page.eval(`(async () => {
+    await __ui.api.settings.setApiKey('test-only-key');
+    return await __ui.api.notes.generate(${JSON.stringify(id)});
+  })()`);
+  assert.equal(generation.ok, true, JSON.stringify(generation));
+  await page.waitFor(`__ui.status() === '正在生成纪要'`);
+  await page.waitFor(
+    `document.querySelector('.processing-progress')?.querySelector('progress')?.hasAttribute('value')`,
+  );
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress-heading').textContent.includes('纪要生成进度')`,
+    ),
+    true,
+  );
+  await page.waitFor(`__ui.status() === '纪要已生成'`, { timeout: 8000 });
+  assert.equal(await page.eval(`document.querySelector('.processing-progress')`), null);
+  assert.deepEqual(page.errors, []);
+});
+
+test('workspace reports transcription cancellation and ignores its late progress', async () => {
+  const page = await browser.open();
+  const id = await createMeeting(page, 'Cancel transcription');
+  await startRecording(page);
+  await page.waitFor(`__ui.status() === '录音中'`);
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() === '正在转写'`);
+  await page.eval(`(async () => {
+    const meeting = (await __ui.api.meetings.get(${JSON.stringify(id)})).value;
+    await __ui.api.transcription.cancel(meeting.id, meeting.activeJobId);
+  })()`);
+  await page.waitFor(`__ui.status() === '转写已取消，录音已保存'`);
+  assert.equal(await page.eval(`document.querySelector('.processing-progress')`), null);
   assert.deepEqual(page.errors, []);
 });
 

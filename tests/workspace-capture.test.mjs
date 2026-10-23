@@ -46,6 +46,9 @@ function backend(t, mediaOptions = {}) {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      onJobProgress() {
+        return () => {};
+      },
     },
   };
   t.after(async () => {
