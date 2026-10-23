@@ -3,14 +3,17 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SidecarCommand } from './services/sidecar';
+import { packagedSidecarResource, resolvePackagedSidecarPath } from './services/sidecar-command';
 
 interface SmokeResult {
   checkedAt: string;
   platform: NodeJS.Platform;
   architecture: string;
+  electronVersion: string;
+  modulesAbi: string;
   sqlite: 'ok' | 'failed';
   sidecar: 'ok' | 'failed';
-  sidecarPath: string;
+  sidecarResource: string;
   error?: string;
 }
 
@@ -90,18 +93,16 @@ export async function runPackagingSmoke(
   resourcesPath: string,
   userDataPath: string,
 ): Promise<{ passed: boolean; logPath: string }> {
-  const sidecarPath = join(
-    resourcesPath,
-    'asr-worker',
-    process.platform === 'win32' ? 'asr-worker.exe' : 'asr-worker',
-  );
+  const sidecarPath = resolvePackagedSidecarPath(resourcesPath, process.platform);
   const result: SmokeResult = {
     checkedAt: new Date().toISOString(),
     platform: process.platform,
     architecture: process.arch,
+    electronVersion: process.versions.electron ?? 'unknown',
+    modulesAbi: process.versions.modules,
     sqlite: 'failed',
     sidecar: 'failed',
-    sidecarPath,
+    sidecarResource: packagedSidecarResource(process.platform),
   };
 
   try {
