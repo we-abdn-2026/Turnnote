@@ -19,8 +19,10 @@ Issue #41 在 #14 的 macOS arm64、Windows x64 基线上增加 macOS Intel x64�
 - `Turnnote-0.1.0-windows-x64.exe`
 
 版本号来自 `package.json`；上表展示当前 `0.1.0` 对应名称。每个 artifact 保留 14 天，
-包含该平台安装包和 `packaging-validation.json`。Windows 额外保留缺失 sidecar 的负向
-报告。失败时 GitHub Actions job 和具体步骤日志仍可定位；同一 PR 的新提交会取消旧的
+包含该平台安装包、sidecar 构建内容、正常与缺失 sidecar 的 `packaging-validation.json`
+报告，以及真实小模型转写验证报告。macOS Intel 依赖 `onnxruntime 1.21.0` 的
+universal2 wheel；其他目标保留 `1.30.0`，版本按平台在 `requirements.txt` 中固定。
+失败时 GitHub Actions job 和具体步骤日志仍可定位；同一 PR 的新提交会取消旧的
 打包运行，避免把旧 revision 的产物误当作最新结果。
 
 ## 验收边界
@@ -31,5 +33,5 @@ Issue #41 在 #14 的 macOS arm64、Windows x64 基线上增加 macOS Intel x64�
 GitHub Release。
 
 三目标最终验收必须引用同一 PR revision 的三个成功 job 和三个可下载 artifact。
-若 #39 或 #40 在本任务之后合并，需要先同步最新 `dev`，再用完整 sidecar 和原生模块配置
-重跑三目标矩阵，不能沿用旧 revision 的成功结果。
+#39 已进入 `dev`；本分支包含 #40 的实现。#40 合入 `dev` 后，仍需同步当时的最新
+`dev` 并确认三目标矩阵通过，不能沿用旧 revision 的成功结果。

@@ -18,6 +18,7 @@ on:
       - 'requirements-dev.txt'
       - 'requirements.txt'
       - 'tests/fixtures/sample-en.wav'
+      - 'docs/packaging-matrix.md'
 
 permissions:
   contents: read
