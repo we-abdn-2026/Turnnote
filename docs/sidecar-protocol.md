@@ -153,6 +153,8 @@ Sidecar 自己写的诊断只包含阶段和异常类型名（如 `decode failed
 
 ## 模型存储
 
-模型存储在 `userData/models/<model>/`。首次使用时 Main Process 下载并校验。
+模型存储在 `userData/models/<model>/`。当前 Main 尚无自动下载实现，真实运行前需单独
+准备完整的本地模型目录；打包验收的模型准备方式见
+[Sidecar 打包与真实模型验证](sidecar-packaging.md)。
 
 Sidecar 只读取 `modelPath`，不访问网络。加载前检查 `model.bin`、`config.json`、`tokenizer.json` 都存在；faster-whisper 在缺 `tokenizer.json` 时会调用 `Tokenizer.from_pretrained` 联网下载，且不受 `local_files_only` 控制。

@@ -1,9 +1,16 @@
 // 录音工作区的会议会话：会议状态只来自 Main 的响应快照和 onMeetingUpdated 事件，
 // Renderer 不自行推导业务终态。不依赖 React，便于单元测试。
-import type { MeetingDetail, Result, TranscriptSegment, TurnnoteApi } from '@shared/contracts';
+import type {
+  JobProgress,
+  MeetingDetail,
+  Result,
+  TranscriptSegment,
+  TurnnoteApi,
+} from '@shared/contracts';
 import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 
 type SessionApi = Pick<TurnnoteApi, 'meetings' | 'transcription' | 'events'>;
+type ProcessingKind = JobProgress['kind'];
 
 export type TranscriptLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -30,6 +37,10 @@ export interface SessionState {
   warning: string | null;
   /** Renderer media is closed; Main may still be committing the saved audio. */
   captureStopped: boolean;
+  /** Latest progress for the active transcribing/generating job. */
+  jobProgress: JobProgress | null;
+  /** A transition back to captured means the active transcription was cancelled. */
+  cancelledKind: ProcessingKind | null;
   /** 当前会议的已提交转写片段；切换会议时同步清空，避免短暂显示上一场内容。 */
   transcriptSegments: TranscriptSegment[];
   transcriptState: TranscriptLoadState;
@@ -78,6 +89,8 @@ const INITIAL: SessionState = {
   revision: 0,
   warning: null,
   captureStopped: false,
+  jobProgress: null,
+  cancelledKind: null,
   transcriptSegments: [],
   transcriptState: 'idle',
 };
@@ -85,10 +98,12 @@ const INITIAL: SessionState = {
 export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
   let state = INITIAL;
   const listeners = new Set<() => void>();
+  const settledJobs = new Set<string>();
   // 当前会议收到事件的次数；请求期间有更新事件时以事件为准，丢弃较旧的响应快照
   let eventSeq = 0;
   // 断开连接、切换会议后递增，使旧请求的响应失效
   let generation = 0;
+  let connection = 0;
   // 同一会议可能因连续状态事件并发读取片段，只接受最后一次请求。
   let transcriptRequest = 0;
 
@@ -100,10 +115,46 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
 
   function onMeetingUpdated(meeting: MeetingDetail): void {
     // 只接受当前会议的事件，其他会议的更新和失败不影响本界面
-    if (!state.meeting || meeting.id !== state.meeting.id) return;
+    const current = state.meeting;
+    if (!current || meeting.id !== current.id || isStaleMeeting(current, meeting, settledJobs))
+      return;
+    const activeJobId = current.activeJobId;
+    if (activeJobId && meeting.activeJobId !== activeJobId) settledJobs.add(activeJobId);
+    const cancelledKind =
+      current.status === 'transcribing' && meeting.status === 'captured' && !meeting.activeJobId
+        ? 'transcribing'
+        : meeting.status === 'captured'
+          ? state.cancelledKind
+          : null;
     eventSeq += 1;
-    set({ meeting });
+    const jobProgress =
+      state.jobProgress?.jobId === meeting.activeJobId &&
+      isProcessing(meeting.status, state.jobProgress.kind)
+        ? state.jobProgress
+        : null;
+    set({ meeting, jobProgress, cancelledKind });
     void loadTranscript(meeting.id);
+  }
+
+  function onJobProgress(progress: JobProgress): void {
+    const meeting = state.meeting;
+    if (
+      !meeting ||
+      progress.meetingId !== meeting.id ||
+      progress.jobId !== meeting.activeJobId ||
+      !isProcessing(meeting.status, progress.kind) ||
+      !Number.isFinite(progress.percent)
+    )
+      return;
+    const percent = Math.min(100, Math.max(0, progress.percent));
+    const previous = state.jobProgress;
+    if (
+      previous?.jobId === progress.jobId &&
+      previous.kind === progress.kind &&
+      percent < previous.percent
+    )
+      return;
+    set({ jobProgress: { ...progress, percent }, cancelledKind: null });
   }
 
   async function loadTranscript(meetingId: string): Promise<void> {
@@ -152,6 +203,8 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
         pending: null,
         meeting: result.value,
         captureStopped: false,
+        jobProgress: null,
+        cancelledKind: null,
         transcriptSegments: [],
         transcriptState: 'loading',
       });
@@ -173,7 +226,14 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     try {
       const result = await api.meetings.get(meeting.id);
       if (token === generation && eventSeq === seq && result.ok) {
-        set({ meeting: result.value });
+        set({
+          meeting: result.value,
+          jobProgress:
+            state.jobProgress?.jobId === result.value.activeJobId &&
+            isProcessing(result.value.status, state.jobProgress.kind)
+              ? state.jobProgress
+              : null,
+        });
         void loadTranscript(result.value.id);
       }
     } catch {
@@ -188,20 +248,32 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
       return () => listeners.delete(listener);
     },
     connect() {
-      const unsubscribe = api.events.onMeetingUpdated(onMeetingUpdated);
+      const token = ++connection;
+      const isConnected = (): boolean => token === connection;
+      const unsubscribeMeeting = api.events.onMeetingUpdated((meeting) => {
+        if (isConnected()) onMeetingUpdated(meeting);
+      });
+      const unsubscribeProgress = api.events.onJobProgress((progress) => {
+        if (isConnected()) onJobProgress(progress);
+      });
       void refresh();
       return () => {
-        unsubscribe();
-        generation += 1;
-        recording.disconnect();
-        if (state.pending) set({ pending: null });
+        const wasCurrentConnection = isConnected();
+        if (wasCurrentConnection) connection += 1;
+        unsubscribeMeeting();
+        unsubscribeProgress();
+        if (wasCurrentConnection) {
+          generation += 1;
+          recording.disconnect();
+          if (state.pending) set({ pending: null });
+        }
       };
     },
     create: (title) => run('create', () => api.meetings.create(title), { switchesMeeting: true }),
     start() {
       const token = generation;
       return run('start', () => {
-        set({ captureStopped: false });
+        set({ captureStopped: false, jobProgress: null, cancelledKind: null });
         return recording.start(state.meeting!.id, {
           stopped: () => {
             if (token === generation) set({ captureStopped: true });
@@ -227,4 +299,67 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
       if (meeting) await loadTranscript(meeting.id);
     },
   };
+}
+
+function isProcessing(status: MeetingDetail['status'], kind: ProcessingKind): boolean {
+  return (
+    (kind === 'transcribing' && status === 'transcribing') ||
+    (kind === 'generating' && status === 'generating')
+  );
+}
+
+const STATUS_ORDER: Record<MeetingDetail['status'], number> = {
+  created: 0,
+  recording: 1,
+  captured: 2,
+  transcribing: 3,
+  transcribed: 4,
+  generating: 5,
+  ready: 6,
+  failed: 7,
+  deleted: 8,
+};
+
+function isStaleMeeting(
+  current: MeetingDetail,
+  next: MeetingDetail,
+  settledJobs: Set<string>,
+): boolean {
+  const nextJobId =
+    next.activeJobId ?? (next.status === 'failed' ? next.lastError?.jobId : undefined);
+  if (nextJobId && settledJobs.has(nextJobId)) return true;
+  // Failure snapshots carry the completed job identity in lastError. A failure from an older
+  // attempt must not terminate the active retry, even when both snapshots share updatedAt.
+  if (
+    current.activeJobId &&
+    next.status === 'failed' &&
+    next.lastError?.jobId !== current.activeJobId
+  )
+    return true;
+  const currentTime = Date.parse(current.updatedAt);
+  const nextTime = Date.parse(next.updatedAt);
+  if (Number.isFinite(currentTime) && Number.isFinite(nextTime) && nextTime < currentTime)
+    return true;
+
+  // A different active job is a retry or a later stage started after the current one settled.
+  if (next.activeJobId && next.activeJobId !== current.activeJobId) return false;
+  if (next.status === 'deleted') return false;
+
+  if (STATUS_ORDER[next.status] >= STATUS_ORDER[current.status]) return false;
+  // These are the supported recovery/cancellation transitions without a new active job.
+  if (current.status === 'recording' && next.status === 'created') return false;
+  if (current.status === 'transcribing' && next.status === 'captured') return false;
+  if (
+    current.status === 'failed' &&
+    current.lastError?.kind === 'recording' &&
+    next.status === 'created'
+  )
+    return false;
+  if (
+    current.status === 'failed' &&
+    current.lastError?.kind === 'generating' &&
+    next.status === 'ready'
+  )
+    return false;
+  return true;
 }

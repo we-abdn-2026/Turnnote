@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { extractFile, listPackage } from '@electron/asar';
@@ -9,6 +10,9 @@ const projectPackage = JSON.parse(
 const allowedTopLevel = new Set(['node_modules', 'out', 'package.json']);
 const privateName =
   /^(?:\.env(?:\..*)?|\.npmrc|\.git|\.aws|\.ssh|[^/]+\.(?:pem|key|p12|pfx|db|sqlite|sqlite3))$/i;
+// certifi 2026.7.22 ships a public CA trust store needed by the frozen ASR runtime.
+const publicCaBundle = 'asr-worker/_internal/certifi/cacert.pem';
+const publicCaSha256 = '9cc2a774b5198dcff14d9be1e66091f538975d867ce029a96bce15a55dfd730f';
 
 export function normalizeArchivePath(path) {
   return path.replaceAll('\\', '/').replace(/^\/+/, '');
@@ -66,7 +70,13 @@ export function verifyPackageContents(appDirectory) {
     assertSafePath(relative(unpacked, path).split(sep).join('/'));
   }
   for (const path of walk(resources)) {
-    assertNoPrivatePath(relative(resources, path).split(sep).join('/'));
+    const resourcePath = relative(resources, path).split(sep).join('/');
+    if (resourcePath === publicCaBundle) {
+      const hash = createHash('sha256').update(readFileSync(path)).digest('hex');
+      if (hash !== publicCaSha256) throw new Error('Unexpected public CA bundle contents');
+      continue;
+    }
+    assertNoPrivatePath(resourcePath);
   }
 
   console.log(

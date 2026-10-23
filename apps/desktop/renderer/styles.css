@@ -101,6 +101,23 @@ h1 {
   color: #475569;
   margin: 8px 0 20px;
 }
+.processing-progress {
+  margin: -8px 0 20px;
+  max-width: 480px;
+}
+.processing-progress-heading {
+  color: #334155;
+  display: flex;
+  font-size: 14px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.processing-progress progress {
+  accent-color: #2563eb;
+  display: block;
+  height: 8px;
+  width: 100%;
+}
 .meeting-actions {
   display: flex;
   gap: 12px;
