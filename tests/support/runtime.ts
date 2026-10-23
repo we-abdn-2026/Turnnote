@@ -18,6 +18,7 @@ export {
 } from '../../apps/desktop/renderer/components/audio-device-state';
 export {
   REQUEST_FAILED_MESSAGE,
+  TRANSCRIPT_LOAD_FAILED_MESSAGE,
   availableActions,
   createMeetingSession,
   isRecording,

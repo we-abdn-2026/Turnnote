@@ -40,6 +40,42 @@ function deferred() {
   return { promise, resolve };
 }
 
+function withEvents(api) {
+  const meetingListeners = new Set();
+  const progressListeners = new Set();
+  const offMeeting = api.events.onMeetingUpdated((meeting) => {
+    for (const listener of meetingListeners) listener(meeting);
+  });
+  const offProgress = api.events.onJobProgress((progress) => {
+    for (const listener of progressListeners) listener(progress);
+  });
+  return {
+    api: {
+      ...api,
+      events: {
+        onMeetingUpdated(listener) {
+          meetingListeners.add(listener);
+          return () => meetingListeners.delete(listener);
+        },
+        onJobProgress(listener) {
+          progressListeners.add(listener);
+          return () => progressListeners.delete(listener);
+        },
+      },
+    },
+    emitMeeting(meeting) {
+      for (const listener of meetingListeners) listener(meeting);
+    },
+    emitProgress(progress) {
+      for (const listener of progressListeners) listener(progress);
+    },
+    dispose() {
+      offMeeting();
+      offProgress();
+    },
+  };
+}
+
 test('create → start → stop: state follows Main snapshots and events through transcribed', async () => {
   const api = createMockApi({ seed: false, delayMs: 1 });
   const session = createMeetingSession(api, createMockRecording(api));
@@ -56,10 +92,110 @@ test('create → start → stop: state follows Main snapshots and events through
   assert.ok(session.getState().meeting.activeJobId);
 
   assert.equal(await session.stop(), true);
-  await until(session, (s) => s.meeting.status === 'transcribed');
+  await until(
+    session,
+    (s) =>
+      s.meeting.status === 'transcribed' &&
+      s.transcriptState === 'ready' &&
+      s.transcriptSegments.length === 4,
+  );
   disconnect();
   assert.deepEqual(statuses, ['created', 'recording', 'captured', 'transcribing', 'transcribed']);
+  assert.equal(session.getState().transcriptSegments[0].startMs, 0);
   assert.equal(session.getState().error, null);
+});
+
+test('switching meetings clears segments immediately and ignores the previous request', async () => {
+  let nextId = 1;
+  const gates = new Map();
+  const meeting = (id, title) => ({
+    id,
+    title,
+    status: 'created',
+    createdAt: '2026-10-22T00:00:00.000Z',
+    updatedAt: '2026-10-22T00:00:00.000Z',
+    retainAudio: false,
+    hasAudio: false,
+    keywords: [],
+    activeJobId: null,
+    lastError: null,
+  });
+  const api = {
+    meetings: {
+      create: async (title) => ({ ok: true, value: meeting(`meeting-${nextId++}`, title) }),
+      get: async (id) => ({ ok: true, value: meeting(id, id) }),
+    },
+    transcription: {
+      getSegments: (id) => {
+        const gate = deferred();
+        gates.set(id, gate);
+        return gate.promise;
+      },
+    },
+    events: {
+      onMeetingUpdated: () => () => {},
+      onJobProgress: () => () => {},
+    },
+  };
+  const recording = { disconnect() {} };
+  const session = createMeetingSession(api, recording);
+  const disconnect = session.connect();
+
+  await session.create('First');
+  assert.equal(session.getState().transcriptState, 'loading');
+  await session.create('Second');
+  assert.equal(session.getState().meeting.id, 'meeting-2');
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  gates.get('meeting-1').resolve({
+    ok: true,
+    value: [{ startMs: 0, endMs: 1000, text: 'old meeting text' }],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.getState().transcriptState, 'loading');
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  gates.get('meeting-2').resolve({
+    ok: true,
+    value: [{ startMs: 1000, endMs: 2000, text: 'current meeting text' }],
+  });
+  await until(session, (state) => state.transcriptState === 'ready');
+  assert.deepEqual(session.getState().transcriptSegments, [
+    { startMs: 1000, endMs: 2000, text: 'current meeting text' },
+  ]);
+  disconnect();
+});
+
+test('segment loading failure has an independent retry path', async () => {
+  const base = createMockApi({ seed: false });
+  let fails = true;
+  let calls = 0;
+  const expected = [{ startMs: 0, endMs: 1500, text: '重试成功。' }];
+  const api = {
+    ...base,
+    transcription: {
+      ...base.transcription,
+      getSegments: async () => {
+        calls += 1;
+        return fails
+          ? { ok: false, error: { code: 'INTERNAL', message: 'Internal error.' } }
+          : { ok: true, value: expected };
+      },
+    },
+  };
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+  await session.create('Retry transcript');
+  await until(session, (state) => state.transcriptState === 'error');
+  assert.equal(session.getState().error, null);
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  fails = false;
+  await session.reloadTranscript();
+  assert.equal(calls, 2);
+  assert.equal(session.getState().transcriptState, 'ready');
+  assert.deepEqual(session.getState().transcriptSegments, expected);
+  disconnect();
 });
 
 test('events for other meetings never change the current meeting', async () => {
@@ -77,6 +213,252 @@ test('events for other meetings never change the current meeting', async () => {
   assert.deepEqual(session.getState().meeting, mine);
   assert.equal(session.getState().error, null);
   disconnect();
+});
+
+test('job progress is scoped to the active meeting and job, monotonic, and cleared at completion', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  const events = withEvents(base);
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Progress');
+  const created = session.getState().meeting;
+  const startedAt = Date.parse(created.updatedAt) + 1000;
+  const active = {
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'job-current',
+    updatedAt: new Date(startedAt).toISOString(),
+  };
+  events.emitMeeting(active);
+  events.emitProgress({
+    meetingId: 'other-meeting',
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 80,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'old-job',
+    kind: 'transcribing',
+    percent: 80,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'generating',
+    percent: 80,
+  });
+  assert.equal(session.getState().jobProgress, null);
+
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 25,
+  });
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 10,
+  });
+  assert.equal(session.getState().jobProgress.percent, 25);
+
+  events.emitMeeting({
+    ...active,
+    status: 'transcribed',
+    activeJobId: null,
+    updatedAt: new Date(startedAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().jobProgress, null);
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 100,
+  });
+  events.emitMeeting(active);
+  assert.equal(session.getState().meeting.status, 'transcribed');
+  assert.equal(session.getState().jobProgress, null);
+  await session.create('Next meeting');
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'job-current',
+    kind: 'transcribing',
+    percent: 50,
+  });
+  assert.equal(session.getState().meeting.title, 'Next meeting');
+  assert.equal(session.getState().jobProgress, null);
+  const nextMeeting = session.getState().meeting;
+  const generationAt = Date.parse(nextMeeting.updatedAt) + 1000;
+  const generating = {
+    ...nextMeeting,
+    status: 'generating',
+    activeJobId: 'generation-current',
+    updatedAt: new Date(generationAt).toISOString(),
+  };
+  events.emitMeeting(generating);
+  events.emitProgress({
+    meetingId: nextMeeting.id,
+    jobId: 'generation-current',
+    kind: 'generating',
+    percent: 40,
+  });
+  assert.equal(session.getState().jobProgress.percent, 40);
+  events.emitMeeting({
+    ...generating,
+    status: 'failed',
+    activeJobId: null,
+    lastError: {
+      kind: 'generating',
+      jobId: 'generation-current',
+      code: 'DEEPSEEK_UNAVAILABLE',
+      message: 'DeepSeek is unavailable.',
+    },
+    updatedAt: new Date(generationAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().meeting.status, 'failed');
+  assert.equal(session.getState().jobProgress, null);
+  events.emitMeeting(generating);
+  assert.equal(session.getState().meeting.status, 'failed');
+  disconnect();
+  events.dispose();
+});
+
+test('transcription cancellation is exposed as a saved recording and ignores the cancelled job', async () => {
+  const events = withEvents(createMockApi({ seed: false, delayMs: 1 }));
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Cancelled transcription');
+  const created = session.getState().meeting;
+  const startedAt = Date.parse(created.updatedAt) + 1000;
+  events.emitMeeting({
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'cancelled-job',
+    updatedAt: new Date(startedAt).toISOString(),
+  });
+  events.emitMeeting({
+    ...created,
+    status: 'captured',
+    activeJobId: null,
+    updatedAt: new Date(startedAt + 1000).toISOString(),
+  });
+  assert.equal(session.getState().cancelledKind, 'transcribing');
+  events.emitProgress({
+    meetingId: created.id,
+    jobId: 'cancelled-job',
+    kind: 'transcribing',
+    percent: 100,
+  });
+  events.emitMeeting({
+    ...created,
+    status: 'transcribing',
+    activeJobId: 'cancelled-job',
+    updatedAt: new Date(startedAt + 2000).toISOString(),
+  });
+  assert.equal(session.getState().meeting.status, 'captured');
+  assert.equal(session.getState().jobProgress, null);
+  disconnect();
+  events.dispose();
+});
+
+test('supported recovery events move failed meetings to ready or deleted', async () => {
+  const api = createMockApi({
+    seed: false,
+    delayMs: 1,
+    generationError: 'DEEPSEEK_UNAVAILABLE',
+  });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Recover generation');
+  await session.start();
+  await session.stop();
+  await until(session, (state) => state.meeting.status === 'transcribed');
+  const generationId = session.getState().meeting.id;
+  await api.settings.setApiKey('test-only-key');
+  assert.equal((await api.notes.generate(generationId)).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  assert.equal(session.getState().meeting.lastError.kind, 'generating');
+
+  const edited = await api.notes.saveEdit(
+    generationId,
+    {
+      summary: 'Recovered with a manual edit.',
+      keyTopics: [],
+      decisions: [],
+      openQuestions: [],
+      actionItems: [],
+    },
+    0,
+  );
+  assert.equal(edited.ok, true);
+  await until(session, (state) => state.meeting.status === 'ready');
+
+  await session.create('Delete failed recording');
+  await session.start();
+  const { id, activeJobId } = session.getState().meeting;
+  assert.equal((await api.recording.fail(id, activeJobId, 'CAPTURE_FAILED')).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  assert.equal((await api.meetings.delete(id)).ok, true);
+  await until(session, (state) => state.meeting.status === 'deleted');
+  disconnect();
+});
+
+test('reconnect accepts an authoritative recovery snapshot after recording failure', async () => {
+  const api = createMockApi({ seed: false, delayMs: 1 });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+  await session.create('Recover while disconnected');
+  await session.start();
+  const { id, activeJobId } = session.getState().meeting;
+  assert.equal((await api.recording.fail(id, activeJobId, 'CAPTURE_FAILED')).ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+  disconnect();
+
+  assert.equal((await api.recording.cancel(id, activeJobId)).ok, true);
+  assert.equal((await api.meetings.get(id)).value.status, 'created');
+  const reconnect = session.connect();
+  await until(session, (state) => state.meeting.status === 'created');
+  reconnect();
+});
+
+test('same-timestamp failure from an old job cannot replace an active retry', async () => {
+  const events = withEvents(createMockApi({ seed: false, delayMs: 5 }));
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Ignore stale failure');
+  await session.start();
+  const first = session.getState().meeting;
+  const failed = await events.api.recording.fail(first.id, first.activeJobId, 'CAPTURE_FAILED');
+  assert.equal(failed.ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+
+  assert.equal(await session.discard(), true);
+  assert.equal(await session.start(), true);
+  const retry = session.getState().meeting;
+  assert.equal(retry.status, 'recording');
+  assert.notEqual(retry.activeJobId, first.activeJobId);
+
+  events.emitMeeting({ ...failed.value, updatedAt: retry.updatedAt });
+  assert.equal(session.getState().meeting.status, 'recording');
+  assert.equal(session.getState().meeting.activeJobId, retry.activeJobId);
+
+  const renamed = await events.api.meetings.rename(first.id, 'Retry still active');
+  assert.equal(renamed.ok, true);
+  assert.equal(session.getState().meeting.title, 'Retry still active');
+  assert.equal(session.getState().meeting.activeJobId, retry.activeJobId);
+
+  assert.equal(await session.stop(), true);
+  await until(session, (state) => state.meeting.status === 'transcribing');
+  const transcriptionJobId = session.getState().meeting.activeJobId;
+  await until(session, (state) => state.jobProgress?.jobId === transcriptionJobId);
+  await until(session, (state) => state.meeting.status === 'transcribed');
+  assert.equal(session.getState().meeting.activeJobId, null);
+  assert.equal(session.getState().jobProgress, null);
+  disconnect();
+  events.dispose();
 });
 
 test('switching to a new meeting ignores late events from the previous one', async () => {
@@ -269,6 +651,10 @@ test('failed Result and rejection report a safe error and keep the last confirme
     error: 'Not available yet.',
     warning: null,
     captureStopped: false,
+    transcriptSegments: [],
+    transcriptState: 'ready',
+    jobProgress: null,
+    cancelledKind: null,
     revision,
   });
   mode = 'reject';

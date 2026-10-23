@@ -8,6 +8,8 @@
     held: {},
     subscribed: 0,
     unsubscribed: 0,
+    progressSubscribed: 0,
+    progressUnsubscribed: 0,
     statusHistory: [],
     api: null,
   };
@@ -21,6 +23,8 @@
       const fault = ui.faults[key];
       if (fault?.once) delete ui.faults[key];
       if (fault?.type === 'result') return Promise.resolve({ ok: false, error: fault.error });
+      if (fault?.type === 'value')
+        return Promise.resolve({ ok: true, value: structuredClone(fault.value) });
       if (fault?.type === 'reject') return Promise.reject(new Error('ipc closed at /private/path'));
       if (fault?.type === 'hold') {
         return new Promise((resolve) => {
@@ -46,6 +50,16 @@
         let active = true;
         return () => {
           if (active) ui.unsubscribed += 1;
+          active = false;
+          off();
+        };
+      },
+      onJobProgress(listener) {
+        ui.progressSubscribed += 1;
+        const off = api.events.onJobProgress(listener);
+        let active = true;
+        return () => {
+          if (active) ui.progressUnsubscribed += 1;
           active = false;
           off();
         };
