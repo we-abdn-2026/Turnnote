@@ -324,6 +324,43 @@ test('reconnect accepts an authoritative recovery snapshot after recording failu
   reconnect();
 });
 
+test('same-timestamp failure from an old job cannot replace an active retry', async () => {
+  const events = withEvents(createMockApi({ seed: false, delayMs: 5 }));
+  const session = createMeetingSession(events.api, createMockRecording(events.api));
+  const disconnect = session.connect();
+  await session.create('Ignore stale failure');
+  await session.start();
+  const first = session.getState().meeting;
+  const failed = await events.api.recording.fail(first.id, first.activeJobId, 'CAPTURE_FAILED');
+  assert.equal(failed.ok, true);
+  await until(session, (state) => state.meeting.status === 'failed');
+
+  assert.equal(await session.discard(), true);
+  assert.equal(await session.start(), true);
+  const retry = session.getState().meeting;
+  assert.equal(retry.status, 'recording');
+  assert.notEqual(retry.activeJobId, first.activeJobId);
+
+  events.emitMeeting({ ...failed.value, updatedAt: retry.updatedAt });
+  assert.equal(session.getState().meeting.status, 'recording');
+  assert.equal(session.getState().meeting.activeJobId, retry.activeJobId);
+
+  const renamed = await events.api.meetings.rename(first.id, 'Retry still active');
+  assert.equal(renamed.ok, true);
+  assert.equal(session.getState().meeting.title, 'Retry still active');
+  assert.equal(session.getState().meeting.activeJobId, retry.activeJobId);
+
+  assert.equal(await session.stop(), true);
+  await until(session, (state) => state.meeting.status === 'transcribing');
+  const transcriptionJobId = session.getState().meeting.activeJobId;
+  await until(session, (state) => state.jobProgress?.jobId === transcriptionJobId);
+  await until(session, (state) => state.meeting.status === 'transcribed');
+  assert.equal(session.getState().meeting.activeJobId, null);
+  assert.equal(session.getState().jobProgress, null);
+  disconnect();
+  events.dispose();
+});
+
 test('switching to a new meeting ignores late events from the previous one', async () => {
   const api = createMockApi({ seed: false, delayMs: 5 });
   const session = createMeetingSession(api, createMockRecording(api));

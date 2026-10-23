@@ -277,7 +277,17 @@ function isStaleMeeting(
   next: MeetingDetail,
   settledJobs: Set<string>,
 ): boolean {
-  if (next.activeJobId && settledJobs.has(next.activeJobId)) return true;
+  const nextJobId =
+    next.activeJobId ?? (next.status === 'failed' ? next.lastError?.jobId : undefined);
+  if (nextJobId && settledJobs.has(nextJobId)) return true;
+  // Failure snapshots carry the completed job identity in lastError. A failure from an older
+  // attempt must not terminate the active retry, even when both snapshots share updatedAt.
+  if (
+    current.activeJobId &&
+    next.status === 'failed' &&
+    next.lastError?.jobId !== current.activeJobId
+  )
+    return true;
   const currentTime = Date.parse(current.updatedAt);
   const nextTime = Date.parse(next.updatedAt);
   if (Number.isFinite(currentTime) && Number.isFinite(nextTime) && nextTime < currentTime)
