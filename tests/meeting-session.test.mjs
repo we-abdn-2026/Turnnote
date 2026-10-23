@@ -92,10 +92,110 @@ test('create → start → stop: state follows Main snapshots and events through
   assert.ok(session.getState().meeting.activeJobId);
 
   assert.equal(await session.stop(), true);
-  await until(session, (s) => s.meeting.status === 'transcribed');
+  await until(
+    session,
+    (s) =>
+      s.meeting.status === 'transcribed' &&
+      s.transcriptState === 'ready' &&
+      s.transcriptSegments.length === 4,
+  );
   disconnect();
   assert.deepEqual(statuses, ['created', 'recording', 'captured', 'transcribing', 'transcribed']);
+  assert.equal(session.getState().transcriptSegments[0].startMs, 0);
   assert.equal(session.getState().error, null);
+});
+
+test('switching meetings clears segments immediately and ignores the previous request', async () => {
+  let nextId = 1;
+  const gates = new Map();
+  const meeting = (id, title) => ({
+    id,
+    title,
+    status: 'created',
+    createdAt: '2026-10-22T00:00:00.000Z',
+    updatedAt: '2026-10-22T00:00:00.000Z',
+    retainAudio: false,
+    hasAudio: false,
+    keywords: [],
+    activeJobId: null,
+    lastError: null,
+  });
+  const api = {
+    meetings: {
+      create: async (title) => ({ ok: true, value: meeting(`meeting-${nextId++}`, title) }),
+      get: async (id) => ({ ok: true, value: meeting(id, id) }),
+    },
+    transcription: {
+      getSegments: (id) => {
+        const gate = deferred();
+        gates.set(id, gate);
+        return gate.promise;
+      },
+    },
+    events: {
+      onMeetingUpdated: () => () => {},
+      onJobProgress: () => () => {},
+    },
+  };
+  const recording = { disconnect() {} };
+  const session = createMeetingSession(api, recording);
+  const disconnect = session.connect();
+
+  await session.create('First');
+  assert.equal(session.getState().transcriptState, 'loading');
+  await session.create('Second');
+  assert.equal(session.getState().meeting.id, 'meeting-2');
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  gates.get('meeting-1').resolve({
+    ok: true,
+    value: [{ startMs: 0, endMs: 1000, text: 'old meeting text' }],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.getState().transcriptState, 'loading');
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  gates.get('meeting-2').resolve({
+    ok: true,
+    value: [{ startMs: 1000, endMs: 2000, text: 'current meeting text' }],
+  });
+  await until(session, (state) => state.transcriptState === 'ready');
+  assert.deepEqual(session.getState().transcriptSegments, [
+    { startMs: 1000, endMs: 2000, text: 'current meeting text' },
+  ]);
+  disconnect();
+});
+
+test('segment loading failure has an independent retry path', async () => {
+  const base = createMockApi({ seed: false });
+  let fails = true;
+  let calls = 0;
+  const expected = [{ startMs: 0, endMs: 1500, text: '重试成功。' }];
+  const api = {
+    ...base,
+    transcription: {
+      ...base.transcription,
+      getSegments: async () => {
+        calls += 1;
+        return fails
+          ? { ok: false, error: { code: 'INTERNAL', message: 'Internal error.' } }
+          : { ok: true, value: expected };
+      },
+    },
+  };
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+  await session.create('Retry transcript');
+  await until(session, (state) => state.transcriptState === 'error');
+  assert.equal(session.getState().error, null);
+  assert.deepEqual(session.getState().transcriptSegments, []);
+
+  fails = false;
+  await session.reloadTranscript();
+  assert.equal(calls, 2);
+  assert.equal(session.getState().transcriptState, 'ready');
+  assert.deepEqual(session.getState().transcriptSegments, expected);
+  disconnect();
 });
 
 test('events for other meetings never change the current meeting', async () => {
@@ -551,6 +651,8 @@ test('failed Result and rejection report a safe error and keep the last confirme
     error: 'Not available yet.',
     warning: null,
     captureStopped: false,
+    transcriptSegments: [],
+    transcriptState: 'ready',
     jobProgress: null,
     cancelledKind: null,
     revision,
