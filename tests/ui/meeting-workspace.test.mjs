@@ -74,11 +74,14 @@ test('create → start → stop shows Main-driven recording, captured and transc
 
 test('transcript shows a long bilingual, multiline list with stable segment anchors', async () => {
   const page = await browser.open();
-  const segments = Array.from({ length: 120 }, (_, index) => ({
-    startMs: index * 1000,
-    endMs: (index + 1) * 1000,
-    text: index === 0 ? '第一行中文\nSecond line in English.' : `片段 ${index}`,
-  }));
+  const segments = Array.from({ length: 120 }, (_, index) => {
+    const startMs = index === 119 ? 3_601_000 : index * 1000;
+    return {
+      startMs,
+      endMs: startMs + 1000,
+      text: index === 0 ? '第一行中文\nSecond line in English.' : `片段 ${index}`,
+    };
+  });
   await page.eval(
     `__ui.faults['transcription.getSegments'] = { type: 'value', value: ${JSON.stringify(segments)} }`,
   );
@@ -92,6 +95,12 @@ test('transcript shows a long bilingual, multiline list with stable segment anch
       firstText: document.querySelector('.transcript-text').textContent,
       lastId: document.querySelectorAll('.transcript-segment')[119].id,
       lastTime: document.querySelectorAll('.transcript-time')[119].textContent,
+      hourGapIsVisible: (() => {
+        const row = document.querySelectorAll('.transcript-segment')[119];
+        const time = row.querySelector('.transcript-time').getBoundingClientRect();
+        const text = row.querySelector('.transcript-text').getBoundingClientRect();
+        return text.left - time.right >= 15;
+      })(),
       scrolls: document.querySelector('.transcript-list').scrollHeight > document.querySelector('.transcript-list').clientHeight,
     })`),
     {
@@ -99,7 +108,8 @@ test('transcript shows a long bilingual, multiline list with stable segment anch
       firstIndex: '0',
       firstText: '第一行中文\nSecond line in English.',
       lastId: 'transcript-segment-119',
-      lastTime: '01:59–02:00',
+      lastTime: '01:00:01–01:00:02',
+      hourGapIsVisible: true,
       scrolls: true,
     },
   );

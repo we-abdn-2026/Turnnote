@@ -183,7 +183,7 @@ button.danger {
   border-radius: 6px;
   display: grid;
   gap: 16px;
-  grid-template-columns: 108px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   padding: 12px;
   scroll-margin: 16px;
 }
