@@ -10,6 +10,17 @@ export interface SidecarLocation {
   env?: NodeJS.ProcessEnv;
 }
 
+export function packagedSidecarResource(platform: NodeJS.Platform): string {
+  return `asr-worker/${platform === 'win32' ? 'asr-worker.exe' : 'asr-worker'}`;
+}
+
+export function resolvePackagedSidecarPath(
+  resourcesPath: string,
+  platform: NodeJS.Platform,
+): string {
+  return join(resourcesPath, ...packagedSidecarResource(platform).split('/'));
+}
+
 /** Paths belong to Main; neither executable nor model paths come from Renderer. */
 export function resolveSidecarCommand({
   isPackaged,
@@ -22,7 +33,7 @@ export function resolveSidecarCommand({
   if (isPackaged) {
     return withFakeFlag(
       {
-        command: join(resourcesPath, 'asr-worker', windows ? 'asr-worker.exe' : 'asr-worker'),
+        command: resolvePackagedSidecarPath(resourcesPath, platform),
         args: [],
       },
       env,

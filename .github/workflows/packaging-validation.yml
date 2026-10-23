@@ -41,6 +41,7 @@ jobs:
             requirements-dev.txt
       - run: npm ci
       - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: npm run test:electron
       - run: npm run package:mac:arm64
       - run: node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
       - name: Install and validate DMG
@@ -51,9 +52,25 @@ jobs:
             -nobrowse -readonly -mountpoint "$RUNNER_TEMP/turnnote-dmg"
           ditto "$RUNNER_TEMP/turnnote-dmg/Turnnote.app" \
             "$RUNNER_TEMP/turnnote-installed/Turnnote.app"
+
+          worker="$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/Resources/asr-worker/asr-worker"
+          disabled="$worker.validation-disabled"
+          mv "$worker" "$disabled"
+          trap 'test ! -e "$disabled" || mv "$disabled" "$worker"' EXIT
+          set +e
+          "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/MacOS/Turnnote" \
+            --packaging-smoke --user-data-dir="$RUNNER_TEMP/turnnote-user-data-failure"
+          rejected=$?
+          set -e
+          test "$rejected" -eq 1
+          mv "$disabled" "$worker"
+          trap - EXIT
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "failed" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+            "$RUNNER_TEMP/turnnote-user-data-failure/packaging-validation.json"
+
           "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/MacOS/Turnnote" \
             --packaging-smoke --user-data-dir="$RUNNER_TEMP/turnnote-user-data"
-          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "ok") process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
             "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json"
           hdiutil detach "$RUNNER_TEMP/turnnote-dmg"
       - name: Validate installed worker with local tiny model
@@ -74,6 +91,7 @@ jobs:
             dist-packaging/*.dmg
             build/sidecar/asr-worker/**
             ${{ runner.temp }}/turnnote-user-data/packaging-validation.json
+            ${{ runner.temp }}/turnnote-user-data-failure/packaging-validation.json
             ${{ runner.temp }}/turnnote-asr-validation.json
 
   windows-x64:
@@ -94,6 +112,7 @@ jobs:
             requirements-dev.txt
       - run: npm ci
       - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: npm run test:electron
       - run: npm run package:win:x64
       - run: node scripts/verify-package-contents.mjs dist-packaging/win-unpacked
       - name: Install and validate NSIS package

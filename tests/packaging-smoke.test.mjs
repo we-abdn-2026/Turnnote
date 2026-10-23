@@ -118,7 +118,14 @@ test('missing installed sidecar writes a failed report after a real SQLite check
   const report = JSON.parse(readFileSync(logPath, 'utf8'));
   assert.equal(report.platform, process.platform);
   assert.equal(report.architecture, process.arch);
+  assert.equal(report.electronVersion, 'unknown');
+  assert.equal(report.modulesAbi, process.versions.modules);
   assert.equal(report.sqlite, 'ok');
   assert.equal(report.sidecar, 'failed');
+  assert.equal(
+    report.sidecarResource,
+    `asr-worker/${process.platform === 'win32' ? 'asr-worker.exe' : 'asr-worker'}`,
+  );
   assert.equal(report.error, 'Sidecar could not start.');
+  assert.equal(JSON.stringify(report).includes(root), false);
 });
