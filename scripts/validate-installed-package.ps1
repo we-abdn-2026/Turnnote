@@ -20,9 +20,18 @@ function Invoke-PackagingSmoke([string]$UserData) {
   if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
     throw "Packaging validation report was not found at $reportPath."
   }
-  $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+  $reportJson = Get-Content -LiteralPath $reportPath -Raw
+  if ($reportJson.Contains($InstallDir) -or $reportJson.Contains($UserData)) {
+    throw 'Packaging validation report exposed a local installation or user data path.'
+  }
+  $report = $reportJson | ConvertFrom-Json
+  if ($report.PSObject.Properties.Name -contains 'sidecarPath') {
+    throw 'Packaging validation report exposed an absolute sidecar path.'
+  }
   if ($report.platform -ne 'win32' -or $report.architecture -ne 'x64' -or
-      $report.sqlite -ne 'ok' -or $report.sidecar -ne 'ok') {
+      $report.sqlite -ne 'ok' -or $report.sidecar -ne 'ok' -or
+      $report.sidecarResource -ne 'asr-worker/asr-worker.exe' -or
+      $report.electronVersion -eq 'unknown' -or $report.modulesAbi -notmatch '^\d+$') {
     throw 'Packaging validation report did not pass the Windows x64 checks.'
   }
   $report | ConvertTo-Json -Depth 5
@@ -42,10 +51,15 @@ try {
     $rejected = $true
   }
   if (-not $rejected) { throw 'The CI gate accepted a missing installed sidecar.' }
-  $failureReport = Get-Content -LiteralPath (Join-Path $failureUserData 'packaging-validation.json') -Raw |
-    ConvertFrom-Json
+  $failureReportJson = Get-Content -LiteralPath (Join-Path $failureUserData 'packaging-validation.json') -Raw
+  $failureReport = $failureReportJson | ConvertFrom-Json
+  if ($failureReport.PSObject.Properties.Name -contains 'sidecarPath') {
+    throw 'Negative control report exposed an absolute sidecar path.'
+  }
   if ($failureReport.platform -ne 'win32' -or $failureReport.architecture -ne 'x64' -or
-      $failureReport.sqlite -ne 'ok' -or $failureReport.sidecar -ne 'failed') {
+      $failureReport.sqlite -ne 'ok' -or $failureReport.sidecar -ne 'failed' -or
+      $failureReport.sidecarResource -ne 'asr-worker/asr-worker.exe' -or
+      $failureReport.electronVersion -eq 'unknown' -or $failureReport.modulesAbi -notmatch '^\d+$') {
     throw 'Negative control did not reach the real sidecar failure path.'
   }
   Write-Output 'Negative control: the CI gate rejected the missing sidecar with exit code 1.'
