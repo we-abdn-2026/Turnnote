@@ -4,6 +4,7 @@ import type { JobProgress, MeetingDetail } from '@shared/contracts';
 import { ok, requireCondition, TurnnoteError } from '@shared/result';
 import type { MeetingStore, ProcessingJob } from '../storage/database';
 import { SidecarError, transcribe, type SidecarCommand } from './sidecar';
+import type { SafeLogger } from '../safe-logger';
 
 export interface TranscriptionOptions {
   audioDirectory: string;
@@ -13,6 +14,7 @@ export interface TranscriptionOptions {
   emitProgress: (progress: JobProgress) => void;
   pingTimeoutMs?: number;
   idleTimeoutMs?: number;
+  logger?: SafeLogger;
 }
 
 export function createTranscriptionService(store: MeetingStore, options: TranscriptionOptions) {
@@ -86,6 +88,11 @@ export function createTranscriptionService(store: MeetingStore, options: Transcr
       // Only catalogued codes survive; stderr, paths and SQLite diagnostics stay private.
       const code =
         error instanceof SidecarError || error instanceof TurnnoteError ? error.code : 'INTERNAL';
+      if (error instanceof SidecarError) {
+        options.logger?.sidecarFailure(code, error.stderrTail, error);
+      } else {
+        options.logger?.error('main', 'transcription_failed', code, error);
+      }
       if (store.failJob(job.id, code)) emit(store.get(job.meetingId));
     }
   }

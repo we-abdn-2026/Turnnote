@@ -20,4 +20,6 @@
 
 - [工程说明](development.md)：目录结构、环境要求、命令和实现约束
 - [打包验证与 electron-builder 交付核对](packaging-validation.md)：#14 的安装证据、#38 的内容检查和剩余平台任务
+- [安全诊断日志](safe-logging.md)：日志位置、可分享字段和凭证、路径、会议正文的隐私边界
+- [安装资源与原生模块](native-packaging.md)：#40 的 `extraResources` 路径、Electron 原生模块重编译和故障诊断
 - [Sidecar 打包与真实模型验证](sidecar-packaging.md)：#39 的 onedir 依赖、模型边界和原生平台验收

@@ -65,7 +65,10 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 `npm test -- tests/storage.test.mjs` 可运行指定测试。测试脚本用 esbuild 将 TypeScript 和正式 SQL migrations 构建到 out/tests，再运行 Node test runner，不使用测试专用 schema。
 
-better-sqlite3 13 使用 Node-API 预编译模块；当前依赖不需要在 Node 和 Electron ABI 间反复重编译。仍须在打包验证中确认三个目标平台的原生模块加载和资源布局，不能用 Node 单测替代安装包验收。
+better-sqlite3 13 是原生生产依赖。`electron-builder` 在各目标平台按 Electron 版本和架构
+执行顺序重编译；`npm run test:electron` 验证开发环境的 Electron 运行时，安装包自检验证
+安装后的原生模块和 sidecar 资源布局。Node 单测不能代替这两项验收，配置与复现方式见
+[安装资源与原生模块](native-packaging.md)。
 
 Main 启动时迁移数据库、结束中断的转写/生成任务并继续未完成的删除。录音 header 修复已接入，未结束录音保留音频并标记 INTERRUPTED；失败不重建或静默清空数据库。
 

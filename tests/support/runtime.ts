@@ -4,6 +4,7 @@ export { migrate, migrations } from '../../apps/desktop/main/storage/migrations'
 export { SidecarError, transcribe, withFakeFlag } from '../../apps/desktop/main/services/sidecar';
 export { resolveSidecarCommand } from '../../apps/desktop/main/services/sidecar-command';
 export { createSessionServices } from '../../apps/desktop/main/services/session';
+export { SafeLogger, safeLogPath } from '../../apps/desktop/main/safe-logger';
 export { createMockApi } from '../../apps/desktop/renderer/mock/mock-api';
 export { AudioDeviceSelector } from '../../apps/desktop/renderer/components/AudioDeviceSelector';
 export {

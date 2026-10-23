@@ -4,6 +4,11 @@ productName: Turnnote
 directories:
   output: dist-packaging
 
+# Keep native dependencies aligned with the target Electron runtime and architecture.
+npmRebuild: true
+nativeRebuilder: sequential
+buildDependenciesFromSource: false
+
 files:
   - out/**/*
   - package.json
