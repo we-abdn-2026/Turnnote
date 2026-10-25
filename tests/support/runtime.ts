@@ -52,3 +52,13 @@ export { createMockRecording } from '../../apps/desktop/renderer/mock/mock-recor
 export { App } from '../../apps/desktop/renderer/App';
 
 export { checkPackagedSidecar, runPackagingSmoke } from '../../apps/desktop/main/packaging-smoke';
+
+export {
+  NOTE_EXAMPLE,
+  NOTE_RESPONSE_FORMAT,
+  NOTE_SYSTEM_PROMPT,
+  UNSPECIFIED,
+  buildNoteMessages,
+  formatTranscript,
+  parseNoteResponse,
+} from '../../apps/desktop/main/services/note-prompt';
