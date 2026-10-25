@@ -15,6 +15,7 @@
 - [数据库 Schema](database-schema.md)：表结构、索引、状态机、崩溃恢复
 - [Sidecar 协议](sidecar-protocol.md)：Python 转写进程通信协议
 - [Platform Audio 接口](platform-audio.md)：跨平台音频采集统一接口
+- [纪要生成 Prompt 与输出校验](note-generation.md)：DeepSeek prompt 模板、结构化输出校验和共享 fixture
 
 ## 工程操作
 
