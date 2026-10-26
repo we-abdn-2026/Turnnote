@@ -45,7 +45,8 @@ export type ErrorCode =
   | 'DEEPSEEK_RATE_LIMITED'
   | 'DEEPSEEK_TIMEOUT'
   | 'DEEPSEEK_INVALID_RESPONSE'
-  | 'DEEPSEEK_UNAVAILABLE';
+  | 'DEEPSEEK_UNAVAILABLE'
+  | 'TRANSCRIPT_TOO_LONG';
 
 export interface AppError {
   code: ErrorCode;

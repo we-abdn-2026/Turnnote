@@ -73,7 +73,8 @@ export const defaultSettings: AppSettings = {
   includeSystemAudio: true,
   transcriptionModel: 'small',
   transcriptionLanguage: 'auto',
-  deepseekModel: 'deepseek-chat',
+  // deepseek-chat 已于 2026-07-24 停用
+  deepseekModel: 'deepseek-flash',
 };
 
 export const errorCodeSchema = z.enum(Object.keys(errorMessages) as [ErrorCode, ...ErrorCode[]]);

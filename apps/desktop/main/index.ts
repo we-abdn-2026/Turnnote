@@ -88,6 +88,7 @@ void app
           appPath: app.getAppPath(),
           resourcesPath: process.resourcesPath,
         }),
+      // TODO(#16): 接入 safeStorage 凭证服务；接入前 notes.generate 返回 API_KEY_MISSING
       emitMeeting: (meeting) => publish(eventChannels.meetingUpdated, meeting),
       emitProgress: (progress) => publish(eventChannels.jobProgress, progress),
       permissions: () => ({
