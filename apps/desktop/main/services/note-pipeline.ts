@@ -98,7 +98,33 @@ function earliest<T extends Sourced>(kept: T, duplicate: T): T {
   return times.length ? { ...kept, timestampMs: Math.min(...times) } : kept;
 }
 
-const explicit = (kept: string, duplicate: string) => (kept === UNSPECIFIED ? duplicate : kept);
+type ActionItem = MeetingNote['actionItems'][number];
+
+/** a 的负责人和日期都与 b 相同，或 b 对应字段为 unspecified */
+const covers = (a: ActionItem, b: ActionItem) =>
+  (b.owner === UNSPECIFIED || textKey(a.owner) === textKey(b.owner)) &&
+  (b.dueDate === UNSPECIFIED || textKey(a.dueDate) === textKey(b.dueDate));
+
+/**
+ * 同一任务只在一条完全覆盖另一条时合并，保留更明确的一条和最早的来源时间。
+ * 负责人或日期冲突、或两条各自只有一部分信息时都保留为独立条目，不拼出原文没有的组合。
+ */
+function dedupeActionItems(items: readonly ActionItem[]): ActionItem[] {
+  const kept: ActionItem[] = [];
+  for (const item of items) {
+    const i = kept.findIndex(
+      (other) =>
+        textKey(other.task) === textKey(item.task) && (covers(other, item) || covers(item, other)),
+    );
+    if (i === -1) {
+      kept.push(item);
+    } else {
+      const [specific, other] = covers(kept[i], item) ? [kept[i], item] : [item, kept[i]];
+      kept[i] = earliest(specific, other);
+    }
+  }
+  return kept;
+}
 
 /** 去除完全重复的条目（忽略大小写和空白）；语义合并由合并 prompt 完成 */
 export function dedupeNote(note: MeetingNote): MeetingNote {
@@ -108,15 +134,7 @@ export function dedupeNote(note: MeetingNote): MeetingNote {
     keyTopics: unique(note.keyTopics, textKey, same),
     decisions: unique(note.decisions, (item) => textKey(item.text), earliest),
     openQuestions: unique(note.openQuestions, textKey, same),
-    actionItems: unique(
-      note.actionItems,
-      (item) => textKey(item.task),
-      (kept, duplicate) => ({
-        ...earliest(kept, duplicate),
-        owner: explicit(kept.owner, duplicate.owner),
-        dueDate: explicit(kept.dueDate, duplicate.dueDate),
-      }),
-    ),
+    actionItems: dedupeActionItems(note.actionItems),
   };
 }
 

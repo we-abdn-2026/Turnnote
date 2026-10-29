@@ -74,7 +74,7 @@ test('only timestamps equal to an existing segment start survive', () => {
   ]);
 });
 
-test('exact duplicates collapse to the earliest source and an explicit owner/date', () => {
+test('exact duplicates collapse to the earliest source', () => {
   const deduped = dedupeNote(
     note({
       keyTopics: ['Pricing', ' pricing ', 'Launch'],
@@ -93,8 +93,44 @@ test('exact duplicates collapse to the earliest source and an explicit owner/dat
   assert.deepEqual(deduped.keyTopics, ['Pricing', 'Launch']);
   assert.deepEqual(deduped.decisions, [{ text: 'Ship Friday', timestampMs: 1000 }]);
   assert.deepEqual(deduped.openQuestions, ['Price?']);
+  // 两条各有一部分信息，拼起来是原文没有的组合，保持独立
   assert.deepEqual(deduped.actionItems, [
-    { task: 'Draft notes', owner: 'Alex', dueDate: 'Thursday', timestampMs: 3000 },
+    { task: 'Draft notes', owner: 'unspecified', dueDate: 'Thursday' },
+    { task: 'Draft notes', owner: 'Alex', dueDate: 'unspecified', timestampMs: 3000 },
+  ]);
+});
+
+test('action items with the same task but different owner or date are all kept with their own sources', async () => {
+  const item = (task, owner, dueDate, timestampMs) => ({ task, owner, dueDate, timestampMs });
+  const { request } = scripted([
+    note({
+      actionItems: [
+        // 同任务不同负责人
+        item('提交报告', 'Alice', 'Friday', 0),
+        item('提交报告', 'Bob', 'Monday', 1000),
+        // 同负责人不同日期
+        item('Review PR', 'Carol', 'Tuesday', 2000),
+        item('Review PR', 'Carol', 'Wednesday', 3000),
+        // 完全重复（忽略大小写和空白），取最早来源
+        item('Book room', 'Dan', 'Friday', 5000),
+        item('book  room', 'dan', 'friday', 4000),
+        // unspecified 兼容：并入更明确的一条
+        item('Send deck', 'unspecified', 'unspecified', 7000),
+        item('Send deck', 'Eve', 'Thursday', 6000),
+        item('Call vendor', 'Frank', 'Monday', 8000),
+        item('Call vendor', 'Frank', 'unspecified', 9000),
+      ],
+    }),
+  ]);
+  const result = await generateNote({ segments: SEGMENTS, request });
+  assert.deepEqual(result.actionItems, [
+    item('提交报告', 'Alice', 'Friday', 0),
+    item('提交报告', 'Bob', 'Monday', 1000),
+    item('Review PR', 'Carol', 'Tuesday', 2000),
+    item('Review PR', 'Carol', 'Wednesday', 3000),
+    item('Book room', 'Dan', 'Friday', 4000),
+    item('Send deck', 'Eve', 'Thursday', 6000),
+    item('Call vendor', 'Frank', 'Monday', 8000),
   ]);
 });
 
