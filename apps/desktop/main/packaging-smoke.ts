@@ -3,15 +3,23 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SidecarCommand } from './services/sidecar';
+import { packagedSidecarResource, resolvePackagedSidecarPath } from './services/sidecar-command';
 
 interface SmokeResult {
   checkedAt: string;
   platform: NodeJS.Platform;
   architecture: string;
+  electronVersion: string;
+  modulesAbi: string;
   sqlite: 'ok' | 'failed';
   sidecar: 'ok' | 'failed';
-  sidecarPath: string;
-  error?: string;
+  sidecarResource: string;
+  errorCode?: 'SQLITE_CHECK_FAILED' | 'SIDECAR_CHECK_FAILED';
+}
+
+interface PackagingChecks {
+  sqlite: () => void;
+  sidecar: (command: SidecarCommand) => Promise<void>;
 }
 
 function checkSqlite(): void {
@@ -89,28 +97,33 @@ export function checkPackagedSidecar(command: SidecarCommand, timeoutMs = 10_000
 export async function runPackagingSmoke(
   resourcesPath: string,
   userDataPath: string,
+  checks: PackagingChecks = { sqlite: checkSqlite, sidecar: checkPackagedSidecar },
 ): Promise<{ passed: boolean; logPath: string }> {
-  const sidecarPath = join(
-    resourcesPath,
-    'asr-worker',
-    process.platform === 'win32' ? 'asr-worker.exe' : 'asr-worker',
-  );
+  const sidecarPath = resolvePackagedSidecarPath(resourcesPath, process.platform);
   const result: SmokeResult = {
     checkedAt: new Date().toISOString(),
     platform: process.platform,
     architecture: process.arch,
+    electronVersion: process.versions.electron ?? 'unknown',
+    modulesAbi: process.versions.modules,
     sqlite: 'failed',
     sidecar: 'failed',
-    sidecarPath,
+    sidecarResource: packagedSidecarResource(process.platform),
   };
 
   try {
-    checkSqlite();
+    checks.sqlite();
     result.sqlite = 'ok';
-    await checkPackagedSidecar({ command: sidecarPath, args: [] });
-    result.sidecar = 'ok';
-  } catch (error) {
-    result.error = error instanceof Error ? error.message : String(error);
+  } catch {
+    result.errorCode = 'SQLITE_CHECK_FAILED';
+  }
+  if (result.sqlite === 'ok') {
+    try {
+      await checks.sidecar({ command: sidecarPath, args: [] });
+      result.sidecar = 'ok';
+    } catch {
+      result.errorCode = 'SIDECAR_CHECK_FAILED';
+    }
   }
 
   mkdirSync(userDataPath, { recursive: true });
