@@ -1,18 +1,21 @@
 // 录音工作区的会议会话：会议状态只来自 Main 的响应快照和 onMeetingUpdated 事件，
 // Renderer 不自行推导业务终态。不依赖 React，便于单元测试。
+import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 import type {
   JobProgress,
   MeetingDetail,
+  NoteVersion,
   Result,
   TranscriptSegment,
   TurnnoteApi,
 } from '@shared/contracts';
-import { canCancelRecording, canStartJob } from '@shared/lifecycle';
 
-type SessionApi = Pick<TurnnoteApi, 'meetings' | 'transcription' | 'events'>;
+type SessionApi = Pick<TurnnoteApi, 'meetings' | 'transcription' | 'notes' | 'events'>;
 type ProcessingKind = JobProgress['kind'];
 
 export type TranscriptLoadState = 'idle' | 'loading' | 'ready' | 'error';
+
+export type NoteLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface MeetingRecording {
   start(
@@ -44,11 +47,14 @@ export interface SessionState {
   /** 当前会议的已提交转写片段；切换会议时同步清空，避免短暂显示上一场内容。 */
   transcriptSegments: TranscriptSegment[];
   transcriptState: TranscriptLoadState;
+  note: NoteVersion | null;
+  noteState: NoteLoadState;
 }
 
 // 底层异常可能包含路径或传输细节，界面只展示通用信息
 export const REQUEST_FAILED_MESSAGE = '操作失败，请重试。';
 export const TRANSCRIPT_LOAD_FAILED_MESSAGE = '转写内容加载失败，请重试。';
+export const NOTE_LOAD_FAILED_MESSAGE = '纪要加载失败，请重试。';
 
 /** Main 录音任务仍活动且 Renderer 尚未关闭媒体；保存等待不冒充正在采集 */
 export function isRecording(state: SessionState): boolean {
@@ -80,6 +86,8 @@ export interface MeetingSession {
   discard(): Promise<boolean>;
   /** 重新读取当前会议的已提交转写片段。 */
   reloadTranscript(): Promise<void>;
+  /** 重新读取当前会议的最新纪要。 */
+  reloadNote(): Promise<void>;
 }
 
 const INITIAL: SessionState = {
@@ -93,6 +101,8 @@ const INITIAL: SessionState = {
   cancelledKind: null,
   transcriptSegments: [],
   transcriptState: 'idle',
+  note: null,
+  noteState: 'idle',
 };
 
 export function createMeetingSession(api: SessionApi, recording: MeetingRecording): MeetingSession {
@@ -106,6 +116,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
   let connection = 0;
   // 同一会议可能因连续状态事件并发读取片段，只接受最后一次请求。
   let transcriptRequest = 0;
+  let noteRequest = 0;
 
   function set(patch: Partial<Omit<SessionState, 'revision'>>): void {
     const revision = 'meeting' in patch ? state.revision + 1 : state.revision;
@@ -134,6 +145,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
         : null;
     set({ meeting, jobProgress, cancelledKind });
     void loadTranscript(meeting.id);
+    void loadNote(meeting.id);
   }
 
   function onJobProgress(progress: JobProgress): void {
@@ -176,6 +188,28 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     set({ transcriptSegments: result.value, transcriptState: 'ready' });
   }
 
+  async function loadNote(meetingId: string): Promise<void> {
+    const token = generation;
+    const request = ++noteRequest;
+    set({ noteState: 'loading' });
+
+    let result: Result<NoteVersion | null> | null;
+    try {
+      result = await api.notes.getLatest(meetingId);
+    } catch {
+      result = null;
+    }
+
+    if (token !== generation || request !== noteRequest || state.meeting?.id !== meetingId) return;
+
+    if (!result || !result.ok) {
+      set({ noteState: 'error' });
+      return;
+    }
+
+    set({ note: result.value, noteState: 'ready' });
+  }
+
   async function run(
     action: SessionAction,
     request: () => Promise<Result<MeetingDetail>>,
@@ -207,12 +241,18 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
         cancelledKind: null,
         transcriptSegments: [],
         transcriptState: 'loading',
+        note: null,
+        noteState: 'loading',
       });
       void loadTranscript(result.value.id);
+      void loadNote(result.value.id);
     } else {
       const acceptsResponse = eventSeq === seq;
       set({ pending: null, ...(acceptsResponse && { meeting: result.value }) });
-      if (acceptsResponse) void loadTranscript(result.value.id);
+      if (acceptsResponse) {
+        void loadTranscript(result.value.id);
+        void loadNote(result.value.id);
+      }
     }
     return true;
   }
@@ -235,6 +275,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
               : null,
         });
         void loadTranscript(result.value.id);
+        void loadNote(result.value.id);
       }
     } catch {
       /* 保留已知快照，后续事件会继续更新 */
@@ -297,6 +338,10 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     async reloadTranscript() {
       const meeting = state.meeting;
       if (meeting) await loadTranscript(meeting.id);
+    },
+    async reloadNote() {
+      const meeting = state.meeting;
+      if (meeting) await loadNote(meeting.id);
     },
   };
 }

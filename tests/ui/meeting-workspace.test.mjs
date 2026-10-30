@@ -365,3 +365,134 @@ test('create failure keeps the typed title and selects no meeting', async () => 
     true,
   );
 });
+
+test('note display renders every section, optional times and unspecified values', async () => {
+  const page = await browser.open();
+  const version = {
+    version: 1,
+    source: 'generated',
+    createdAt: '2026-10-30T05:00:00.000Z',
+    note: {
+      summary:
+        'The team agreed on the Friday launch. averylongunbrokenwordthatexceedsthecontentwidthandmustwrapcleanly. 团队还确认需要准备发布说明和回滚方案。',
+      keyTopics: ['Launch plan', 'Pricing'],
+      decisions: [
+        { text: 'Ship the beta on Friday.', timestampMs: 2400 },
+        { text: 'Keep the current price until customer interviews finish.' },
+      ],
+      openQuestions: ['What is the team plan price?'],
+      actionItems: [
+        {
+          task: 'Prepare the release notes',
+          owner: 'Alex',
+          dueDate: 'unspecified',
+          timestampMs: 5200,
+        },
+        {
+          task: 'Collect pricing feedback',
+          owner: 'unspecified',
+          dueDate: 'unspecified',
+        },
+        {
+          task: 'Publish the launch announcement',
+          owner: 'Jordan Lee',
+          dueDate: 'Friday',
+        },
+      ],
+    },
+  };
+
+  await page.eval(
+    `__ui.faults['notes.getLatest'] = { type: 'value', value: ${JSON.stringify(version)} }`,
+  );
+  await createMeeting(page, 'Note display');
+  await page.waitFor(`__ui.text().includes('Ship the beta on Friday.')`);
+
+  assert.equal(await page.eval(`document.querySelector('.note-source').textContent`), 'AI 生成');
+  assert.equal(
+    await page.eval(`document.querySelector('.note-meta span:last-child').textContent`),
+    '版本 1',
+  );
+
+  const displayed = await page.eval(`(() => {
+    const summary = document.querySelector('.note-summary p');
+    return {
+      headings: [...document.querySelectorAll('.note-content h4')].map((h) => h.textContent),
+      summary: summary.textContent,
+      summaryWraps: summary.scrollWidth <= summary.clientWidth,
+      topics: [...document.querySelectorAll('.note-topics li')].map((li) => li.textContent),
+      decisions: [...document.querySelectorAll('[aria-label="决策"] li')].map(
+        (li) => li.querySelector('.note-item-text').textContent,
+      ),
+      decisionTimes: [...document.querySelectorAll('[aria-label="决策"] .note-time')].map(
+        (time) => time.textContent,
+      ),
+      questions: [...document.querySelectorAll('[aria-label="未决问题"] li')].map(
+        (li) => li.textContent,
+      ),
+      actionMeta: [...document.querySelectorAll('.note-action')].map((item) =>
+        [...item.querySelectorAll('dd')].map((dd) => dd.textContent),
+      ),
+      actionTimes: [...document.querySelectorAll('.note-action .note-time')].map(
+        (time) => time.textContent,
+      ),
+    };
+  })()`);
+
+  assert.deepEqual(displayed.headings, ['摘要', '关键主题', '决策', '未决问题', '行动项']);
+  assert.equal(displayed.summary.includes('mustwrapcleanly'), true);
+  assert.equal(displayed.summaryWraps, true);
+  assert.deepEqual(displayed.topics, ['Launch plan', 'Pricing']);
+  assert.deepEqual(displayed.decisions, [
+    'Ship the beta on Friday.',
+    'Keep the current price until customer interviews finish.',
+  ]);
+  assert.deepEqual(displayed.decisionTimes, ['00:02']);
+  assert.deepEqual(displayed.questions, ['What is the team plan price?']);
+  assert.deepEqual(displayed.actionMeta, [
+    ['Alex', '未指定'],
+    ['未指定', '未指定'],
+    ['Jordan Lee', 'Friday'],
+  ]);
+  assert.deepEqual(displayed.actionTimes, ['00:05']);
+  assert.deepEqual(page.errors, []);
+});
+
+test('switching meetings clears the previous note while the new note loads', async () => {
+  const page = await browser.open();
+  const firstVersion = {
+    version: 1,
+    source: 'generated',
+    createdAt: '2026-10-30T05:00:00.000Z',
+    note: {
+      summary: 'Only in the first meeting',
+      keyTopics: ['First topic'],
+      decisions: [],
+      openQuestions: [],
+      actionItems: [],
+    },
+  };
+
+  await page.eval(
+    `__ui.faults['notes.getLatest'] = { type: 'value', value: ${JSON.stringify(firstVersion)} }`,
+  );
+  await createMeeting(page, 'Note one');
+  await page.waitFor(`__ui.text().includes('Only in the first meeting')`);
+
+  await page.eval(`__ui.faults['notes.getLatest'] = { type: 'hold' }`);
+  await createMeeting(page, 'Note two');
+
+  assert.equal(await page.eval(`__ui.text().includes('Only in the first meeting')`), false);
+  assert.equal(await page.eval(`document.querySelector('.note-content')`), null);
+  assert.equal(await page.eval(`__ui.text().includes('正在加载纪要...')`), true);
+  assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'Note two');
+
+  await page.eval(`
+    delete __ui.faults['notes.getLatest'];
+    __ui.release('notes.getLatest');
+  `);
+  await page.waitFor(`__ui.text().includes('暂无纪要内容')`);
+
+  assert.equal(await page.eval(`__ui.text().includes('Only in the first meeting')`), false);
+  assert.deepEqual(page.errors, []);
+});

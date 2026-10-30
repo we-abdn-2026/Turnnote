@@ -132,26 +132,33 @@ button.danger {
 }
 
 /* 转写片段 */
-.transcript {
+.transcript,
+.meeting-note {
   border-top: 1px solid #e2e8f0;
   margin-top: 24px;
   padding-top: 20px;
 }
-.transcript-heading {
+.transcript-heading,
+.note-heading {
   align-items: baseline;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
 }
-.transcript-heading h3 {
+.transcript-heading h3,
+.note-heading h3 {
   font-size: 18px;
   margin: 0;
 }
 .transcript-heading span,
-.transcript-message {
+.note-heading span,
+.transcript-message,
+.note-message {
   color: #64748b;
   font-size: 14px;
 }
-.transcript-message {
+.transcript-message,
+.note-message {
   margin: 16px 0 0;
 }
 .transcript-error {
@@ -202,6 +209,104 @@ button.danger {
   line-height: 1.6;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+.note-content {
+  margin-top: 16px;
+}
+.note-summary h4,
+.note-section h4 {
+  color: #475569;
+  font-size: 14px;
+  margin: 20px 0 8px;
+}
+.note-summary p {
+  line-height: 1.75;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.note-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.note-topics li {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  padding: 5px 10px;
+}
+.note-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+}
+.note-list li {
+  line-height: 1.65;
+  padding-left: 4px;
+}
+.note-item-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.note-time {
+  color: #64748b;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-left: 12px;
+  white-space: nowrap;
+}
+.note-empty {
+  color: #64748b;
+  margin: 0;
+}
+.note-action-list {
+  list-style: none;
+  padding-left: 0;
+}
+.note-action {
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 12px;
+}
+.note-action-main {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.note-action-main .note-item-text {
+  font-weight: 500;
+  min-width: 0;
+}
+.note-action-main .note-time {
+  margin-left: 0;
+}
+.note-action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 8px 0 0;
+}
+.note-action-meta div {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.note-action-meta dt {
+  color: #64748b;
+  flex: none;
+}
+.note-action-meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* 录音控制 */

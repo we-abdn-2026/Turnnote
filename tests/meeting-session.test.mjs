@@ -108,6 +108,7 @@ test('create → start → stop: state follows Main snapshots and events through
 test('switching meetings clears segments immediately and ignores the previous request', async () => {
   let nextId = 1;
   const gates = new Map();
+  const noteGates = new Map();
   const meeting = (id, title) => ({
     id,
     title,
@@ -132,6 +133,13 @@ test('switching meetings clears segments immediately and ignores the previous re
         return gate.promise;
       },
     },
+    notes: {
+      getLatest: (id) => {
+        const gate = deferred();
+        noteGates.set(id, gate);
+        return gate.promise;
+      },
+    },
     events: {
       onMeetingUpdated: () => () => {},
       onJobProgress: () => () => {},
@@ -143,9 +151,13 @@ test('switching meetings clears segments immediately and ignores the previous re
 
   await session.create('First');
   assert.equal(session.getState().transcriptState, 'loading');
+  assert.equal(session.getState().noteState, 'loading');
+
   await session.create('Second');
   assert.equal(session.getState().meeting.id, 'meeting-2');
   assert.deepEqual(session.getState().transcriptSegments, []);
+  assert.equal(session.getState().note, null);
+  assert.equal(session.getState().noteState, 'loading');
 
   gates.get('meeting-1').resolve({
     ok: true,
@@ -163,6 +175,40 @@ test('switching meetings clears segments immediately and ignores the previous re
   assert.deepEqual(session.getState().transcriptSegments, [
     { startMs: 1000, endMs: 2000, text: 'current meeting text' },
   ]);
+
+  const oldNote = {
+    version: 1,
+    source: 'generated',
+    createdAt: '2026-10-22T00:00:00.000Z',
+    note: {
+      summary: 'old meeting note',
+      keyTopics: [],
+      decisions: [],
+      openQuestions: [],
+      actionItems: [],
+    },
+  };
+
+  const currentNote = {
+    ...oldNote,
+    note: {
+      ...oldNote.note,
+      summary: 'current meeting note',
+    },
+  };
+
+  noteGates.get('meeting-1').resolve({ ok: true, value: oldNote });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(session.getState().noteState, 'loading');
+  assert.equal(session.getState().note, null);
+
+  noteGates.get('meeting-2').resolve({ ok: true, value: currentNote });
+  await until(session, (state) => state.noteState === 'ready');
+
+  assert.deepEqual(session.getState().note, currentNote);
+  assert.equal(session.getState().note?.note.summary, 'current meeting note');
+
   disconnect();
 });
 
@@ -195,6 +241,104 @@ test('segment loading failure has an independent retry path', async () => {
   assert.equal(calls, 2);
   assert.equal(session.getState().transcriptState, 'ready');
   assert.deepEqual(session.getState().transcriptSegments, expected);
+  disconnect();
+});
+
+test('note loading failure has an independent retry path', async () => {
+  const base = createMockApi({ seed: false });
+  let fails = true;
+  let calls = 0;
+  const expected = {
+    version: 1,
+    source: 'generated',
+    createdAt: '2026-10-30T05:00:00.000Z',
+    note: {
+      summary: '纪要重试成功。',
+      keyTopics: ['Retry'],
+      decisions: [],
+      openQuestions: [],
+      actionItems: [],
+    },
+  };
+  const api = {
+    ...base,
+    notes: {
+      ...base.notes,
+      getLatest: async () => {
+        calls += 1;
+        return fails
+          ? { ok: false, error: { code: 'INTERNAL', message: 'Internal error.' } }
+          : { ok: true, value: expected };
+      },
+    },
+  };
+
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Retry note');
+  await until(session, (state) => state.noteState === 'error');
+
+  assert.equal(session.getState().error, null);
+  assert.equal(session.getState().note, null);
+
+  fails = false;
+  await session.reloadNote();
+
+  assert.equal(calls, 2);
+  assert.equal(session.getState().noteState, 'ready');
+  assert.deepEqual(session.getState().note, expected);
+  assert.equal(session.getState().error, null);
+
+  disconnect();
+});
+
+test('meeting updates reload the latest generated and edited note version', async () => {
+  const api = createMockApi({ seed: false, delayMs: 1 });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Note updates');
+  await session.start();
+  await session.stop();
+  await until(session, (state) => state.meeting?.status === 'transcribed');
+
+  const meetingId = session.getState().meeting.id;
+  await api.settings.setApiKey('test-only-key');
+  assert.equal((await api.notes.generate(meetingId)).ok, true);
+
+  await until(
+    session,
+    (sessionState) =>
+      sessionState.noteState === 'ready' &&
+      sessionState.note?.version === 1 &&
+      sessionState.note.source === 'generated',
+  );
+  assert.ok(session.getState().note.note.summary.length > 0);
+  assert.deepEqual(session.getState().note.note.keyTopics.slice(0, 2), ['Launch plan', 'Pricing']);
+
+  const latest = (await api.notes.getLatest(meetingId)).value;
+  assert.ok(latest);
+  assert.equal(
+    (
+      await api.notes.saveEdit(
+        meetingId,
+        { ...latest.note, summary: 'Edited by the user.' },
+        latest.version,
+      )
+    ).ok,
+    true,
+  );
+
+  await until(
+    session,
+    (sessionState) =>
+      sessionState.noteState === 'ready' &&
+      sessionState.note?.version === 2 &&
+      sessionState.note.source === 'user',
+  );
+  assert.equal(session.getState().note.note.summary, 'Edited by the user.');
+
   disconnect();
 });
 
@@ -653,6 +797,8 @@ test('failed Result and rejection report a safe error and keep the last confirme
     captureStopped: false,
     transcriptSegments: [],
     transcriptState: 'ready',
+    note: null,
+    noteState: 'ready',
     jobProgress: null,
     cancelledKind: null,
     revision,
