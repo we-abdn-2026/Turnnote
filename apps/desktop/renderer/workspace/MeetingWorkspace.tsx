@@ -10,6 +10,7 @@ import { createCaptureRecording } from '../audio/meeting-recording';
 import type { MeetingRecording } from './meeting-session';
 import {
   TRANSCRIPT_LOAD_FAILED_MESSAGE,
+  NOTE_LOAD_FAILED_MESSAGE,
   availableActions,
   createMeetingSession,
   isRecording,
@@ -36,6 +37,11 @@ export function formatTranscriptTime(milliseconds: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const parts = [minutes, seconds].map((part) => String(part).padStart(2, '0'));
   return hours > 0 ? `${String(hours).padStart(2, '0')}:${parts.join(':')}` : parts.join(':');
+}
+
+function displayNoteValue(value: string): string {
+  const normalized = value.trim();
+  return normalized === '' || normalized.toLowerCase() === 'unspecified' ? '未指定' : normalized;
 }
 
 export function MeetingWorkspace({
@@ -173,6 +179,139 @@ export function MeetingWorkspace({
                   </li>
                 ))}
               </ol>
+            )}
+          </section>
+          <section className="meeting-note" aria-labelledby="note-heading">
+            <div className="note-heading">
+              <h3 id="note-heading">会议纪要</h3>
+              {state.note && (
+                <div className="note-meta">
+                  <span className={`note-source note-source-${state.note.source}`}>
+                    {state.note.source === 'generated' ? 'AI 生成' : '用户编辑'}
+                  </span>
+                  <span>版本 {state.note.version}</span>
+                </div>
+              )}
+            </div>
+
+            {state.noteState === 'loading' && !state.note && (
+              <p className="note-message" role="status">
+                正在加载纪要...
+              </p>
+            )}
+
+            {state.noteState === 'error' && (
+              <div className="note-error" role="alert">
+                <p>{NOTE_LOAD_FAILED_MESSAGE}</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void session.reloadNote()}
+                >
+                  重新加载纪要
+                </button>
+              </div>
+            )}
+
+            {state.noteState === 'ready' && !state.note && (
+              <p className="note-message">暂无纪要内容</p>
+            )}
+
+            {state.note && (
+              <p className="note-review-notice" role="note">
+                纪要是根据转写整理的内容，可能不准确。请核对决策、行动项、负责人和截止日期是否与会议实际讨论一致。
+              </p>
+            )}
+
+            {state.note && (
+              <article className="note-content">
+                <section className="note-summary" aria-labelledby="note-summary-heading">
+                  <h4 id="note-summary-heading">摘要</h4>
+                  <p>{state.note.note.summary.trim() || '未填写'}</p>
+                </section>
+                <section className="note-section" aria-labelledby="note-topics-heading">
+                  <h4 id="note-topics-heading">关键主题</h4>
+                  {state.note.note.keyTopics.length > 0 ? (
+                    <ul className="note-topics" aria-label="关键主题">
+                      {state.note.note.keyTopics.map((topic, index) => (
+                        <li key={`${index}-${topic}`}>{topic.trim() || '未指定'}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="note-empty">未指定</p>
+                  )}
+                </section>
+
+                <section className="note-section" aria-labelledby="note-decisions-heading">
+                  <h4 id="note-decisions-heading">决策</h4>
+                  {state.note.note.decisions.length > 0 ? (
+                    <ol className="note-list" aria-label="决策">
+                      {state.note.note.decisions.map((decision, index) => (
+                        <li key={`${index}-${decision.timestampMs ?? 'no-time'}`}>
+                          <span className="note-item-text">{decision.text.trim() || '未指定'}</span>
+                          {decision.timestampMs !== undefined && (
+                            <time className="note-time">
+                              {formatTranscriptTime(decision.timestampMs)}
+                            </time>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="note-empty">未指定</p>
+                  )}
+                </section>
+
+                <section className="note-section" aria-labelledby="note-questions-heading">
+                  <h4 id="note-questions-heading">未决问题</h4>
+                  {state.note.note.openQuestions.length > 0 ? (
+                    <ol className="note-list" aria-label="未决问题">
+                      {state.note.note.openQuestions.map((question, index) => (
+                        <li key={`${index}-${question}`}>
+                          <span className="note-item-text">{question.trim() || '未指定'}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="note-empty">未指定</p>
+                  )}
+                </section>
+
+                <section className="note-section" aria-labelledby="note-actions-heading">
+                  <h4 id="note-actions-heading">行动项</h4>
+                  {state.note.note.actionItems.length > 0 ? (
+                    <ol className="note-list note-action-list" aria-label="行动项">
+                      {state.note.note.actionItems.map((item, index) => (
+                        <li
+                          className="note-action"
+                          key={`${index}-${item.timestampMs ?? 'no-time'}`}
+                        >
+                          <div className="note-action-main">
+                            <span className="note-item-text">{item.task.trim() || '未指定'}</span>
+                            {item.timestampMs !== undefined && (
+                              <time className="note-time">
+                                {formatTranscriptTime(item.timestampMs)}
+                              </time>
+                            )}
+                          </div>
+                          <dl className="note-action-meta">
+                            <div>
+                              <dt>负责人</dt>
+                              <dd>{displayNoteValue(item.owner)}</dd>
+                            </div>
+                            <div>
+                              <dt>截止时间</dt>
+                              <dd>{displayNoteValue(item.dueDate)}</dd>
+                            </div>
+                          </dl>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="note-empty">未指定</p>
+                  )}
+                </section>
+              </article>
             )}
           </section>
         </div>
