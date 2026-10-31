@@ -83,12 +83,12 @@ jobs:
           test "$rejected" -eq 1
           mv "$disabled" "$worker"
           trap - EXIT
-          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "failed" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "failed" || r.sidecarResource !== "asr-worker/asr-worker" || r.errorCode !== "SIDECAR_CHECK_FAILED" || Object.hasOwn(r, "error") || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
             "$RUNNER_TEMP/turnnote-user-data-failure/packaging-validation.json" "$PACKAGE_ARCH"
 
           "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/MacOS/Turnnote" \
             --packaging-smoke --user-data-dir="$RUNNER_TEMP/turnnote-user-data"
-          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "errorCode") || Object.hasOwn(r, "error") || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
             "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json" "$PACKAGE_ARCH"
           hdiutil detach "$RUNNER_TEMP/turnnote-dmg"
       - name: Validate installed worker with local tiny model

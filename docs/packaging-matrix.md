@@ -33,5 +33,6 @@ universal2 wheel；其他目标保留 `1.30.0`，版本按平台在 `requirement
 GitHub Release。
 
 三目标最终验收必须引用同一 PR revision 的三个成功 job 和三个可下载 artifact。
-#39 已进入 `dev`；本分支包含 #40 的实现。#40 合入 `dev` 后，仍需同步当时的最新
-`dev` 并确认三目标矩阵通过，不能沿用旧 revision 的成功结果。
+#39 的真实 sidecar、#40 的资源与原生模块门禁，以及 #79 的固定安全错误码已经进入
+`dev`。本分支在该基线上增加三平台矩阵；最终验收必须使用当前 head 的运行和产物，
+不能沿用整合前 revision 的成功结果。

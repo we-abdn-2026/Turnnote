@@ -9,6 +9,7 @@ import { runPackagingSmoke } from './packaging-smoke';
 import { createSessionServices } from './services/session';
 import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
+import { SafeLogger, safeLogPath } from './safe-logger';
 
 // The package probe does not initialize capture IPC or acquire media permissions.
 if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
@@ -17,6 +18,7 @@ let shuttingDown = false;
 
 let window: BrowserWindow | undefined;
 let store: MeetingStore | undefined;
+let logger: SafeLogger | undefined;
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 app.on('second-instance', () => {
@@ -25,7 +27,8 @@ app.on('second-instance', () => {
 });
 
 function interruptRecording(): void {
-  void services?.interruptRecording().catch(() => {
+  void services?.interruptRecording().catch((error) => {
+    logger?.error('main', 'recording_interrupt_failed', 'INTERNAL', error);
     /* Keep ownership for retry; startup recovery handles unavailable storage. */
   });
 }
@@ -58,9 +61,11 @@ void app
   .whenReady()
   .then(async () => {
     if (!ownsInstance) return;
+    logger = new SafeLogger(safeLogPath(app.getPath('userData')));
+    logger.info('main', 'started');
     if (process.argv.includes('--packaging-smoke')) {
       const result = await runPackagingSmoke(process.resourcesPath, app.getPath('userData'));
-      console.log(`Packaging validation log: ${result.logPath}`);
+      console.log('Packaging validation report written.');
       app.exit(result.passed ? 0 : 1);
       return;
     }
@@ -90,6 +95,7 @@ void app
         }),
       emitMeeting: (meeting) => publish(eventChannels.meetingUpdated, meeting),
       emitProgress: (progress) => publish(eventChannels.jobProgress, progress),
+      logger,
       permissions: () => ({
         microphone:
           process.platform === 'darwin'
@@ -106,23 +112,27 @@ void app
     await services.recover();
     // 清理上次未完成的删除；失败时保留墓碑，下一次启动继续。
     for (const meeting of store.getDeleted()) await services.handlers.meetings!.delete!(meeting.id);
-    registerIpc({
-      ...services.handlers,
-      app: {
-        getInfo: async () =>
-          ok({
-            name: 'Turnnote',
-            version: app.getVersion(),
-            platform: process.platform as 'darwin' | 'win32' | 'linux',
-          }),
+    registerIpc(
+      {
+        ...services.handlers,
+        app: {
+          getInfo: async () =>
+            ok({
+              name: 'Turnnote',
+              version: app.getVersion(),
+              platform: process.platform as 'darwin' | 'win32' | 'linux',
+            }),
+        },
       },
-    });
+      logger,
+    );
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   })
-  .catch(() => {
+  .catch((error) => {
+    logger?.error('main', 'startup_failed', 'INTERNAL', error);
     dialog.showErrorBox(
       'Turnnote could not start',
       'Local meeting data could not be opened. Your saved data has been kept. Check disk access and use the latest application version.',

@@ -33,8 +33,9 @@ Issue #40 复用 #14、#38 和 #39 的现有打包链路，不增加第二套重
 ## 诊断与报告
 
 自检报告写入指定的 Electron `userData/packaging-validation.json`，只记录平台、架构、
-Electron 版本、Node modules ABI、SQLite/sidecar 状态和 sidecar 相对资源路径。报告不记录
-安装目录、用户数据目录、会议内容或子进程原始错误输出。
+Electron 版本、Node modules ABI、SQLite/sidecar 状态、sidecar 相对资源路径和固定错误码
+（`SQLITE_CHECK_FAILED` 或 `SIDECAR_CHECK_FAILED`）。报告不记录安装目录、用户数据目录、
+会议内容、异常详情或子进程原始错误输出。
 
 原生 CI 会临时移走安装后的 sidecar，确认相同门禁以退出码 1 拒绝缺失资源，同时仍能
 加载 SQLite；恢复资源后再验证成功路径。macOS arm64 和 Windows x64 均上传安装包、

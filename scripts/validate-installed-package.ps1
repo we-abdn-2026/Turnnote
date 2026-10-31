@@ -28,6 +28,10 @@ function Invoke-PackagingSmoke([string]$UserData) {
   if ($report.PSObject.Properties.Name -contains 'sidecarPath') {
     throw 'Packaging validation report exposed an absolute sidecar path.'
   }
+  if ($report.PSObject.Properties.Name -contains 'error' -or
+      $report.PSObject.Properties.Name -contains 'errorCode') {
+    throw 'Successful packaging validation report contained an error field.'
+  }
   if ($report.platform -ne 'win32' -or $report.architecture -ne 'x64' -or
       $report.sqlite -ne 'ok' -or $report.sidecar -ne 'ok' -or
       $report.sidecarResource -ne 'asr-worker/asr-worker.exe' -or
@@ -55,6 +59,10 @@ try {
   $failureReport = $failureReportJson | ConvertFrom-Json
   if ($failureReport.PSObject.Properties.Name -contains 'sidecarPath') {
     throw 'Negative control report exposed an absolute sidecar path.'
+  }
+  if ($failureReport.PSObject.Properties.Name -contains 'error' -or
+      $failureReport.errorCode -ne 'SIDECAR_CHECK_FAILED') {
+    throw 'Negative control report did not use the fixed sidecar error code.'
   }
   if ($failureReport.platform -ne 'win32' -or $failureReport.architecture -ne 'x64' -or
       $failureReport.sqlite -ne 'ok' -or $failureReport.sidecar -ne 'failed' -or
