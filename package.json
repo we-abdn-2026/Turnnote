@@ -20,6 +20,7 @@
     "test:electron": "node scripts/check-electron-storage.mjs",
     "build:sidecar": "node scripts/build-sidecar.mjs",
     "package:mac:arm64": "node scripts/check-package-target.mjs darwin arm64 && npm run build:sidecar && npm run build && electron-builder --mac dmg --arm64",
+    "package:mac:x64": "node scripts/check-package-target.mjs darwin x64 && npm run build:sidecar && npm run build && electron-builder --mac dmg --x64",
     "package:win:x64": "node scripts/check-package-target.mjs win32 x64 && npm run build:sidecar && npm run build && electron-builder --win nsis --x64",
     "test:ui": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/ui/*.test.mjs\"",
     "labels:sync": "node scripts/sync-labels.mjs"

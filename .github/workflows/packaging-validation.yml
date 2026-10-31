@@ -18,14 +18,30 @@ on:
       - 'requirements-dev.txt'
       - 'requirements.txt'
       - 'tests/fixtures/sample-en.wav'
+      - 'docs/packaging-matrix.md'
 
 permissions:
   contents: read
 
+concurrency:
+  group: packaging-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  macos-arm64:
-    runs-on: macos-15
+  macos:
+    name: macos-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            app-output: mac-arm64
+          - arch: x64
+            runner: macos-15-intel
+            app-output: mac
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -42,13 +58,15 @@ jobs:
       - run: npm ci
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: npm run test:electron
-      - run: npm run package:mac:arm64
-      - run: node scripts/verify-package-contents.mjs dist-packaging/mac-arm64/Turnnote.app
+      - run: npm run package:mac:${{ matrix.arch }}
+      - run: node scripts/verify-package-contents.mjs dist-packaging/${{ matrix.app-output }}/Turnnote.app
       - name: Install and validate DMG
         shell: bash
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
         run: |
           mkdir "$RUNNER_TEMP/turnnote-dmg" "$RUNNER_TEMP/turnnote-installed"
-          hdiutil attach dist-packaging/Turnnote-0.1.0-arm64.dmg \
+          hdiutil attach "dist-packaging/Turnnote-0.1.0-macos-$PACKAGE_ARCH.dmg" \
             -nobrowse -readonly -mountpoint "$RUNNER_TEMP/turnnote-dmg"
           ditto "$RUNNER_TEMP/turnnote-dmg/Turnnote.app" \
             "$RUNNER_TEMP/turnnote-installed/Turnnote.app"
@@ -65,13 +83,13 @@ jobs:
           test "$rejected" -eq 1
           mv "$disabled" "$worker"
           trap - EXIT
-          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "failed" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
-            "$RUNNER_TEMP/turnnote-user-data-failure/packaging-validation.json"
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "failed" || r.sidecarResource !== "asr-worker/asr-worker" || r.errorCode !== "SIDECAR_CHECK_FAILED" || Object.hasOwn(r, "error") || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+            "$RUNNER_TEMP/turnnote-user-data-failure/packaging-validation.json" "$PACKAGE_ARCH"
 
           "$RUNNER_TEMP/turnnote-installed/Turnnote.app/Contents/MacOS/Turnnote" \
             --packaging-smoke --user-data-dir="$RUNNER_TEMP/turnnote-user-data"
-          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== "arm64" || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
-            "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json"
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (r.platform !== "darwin" || r.architecture !== process.argv[2] || r.sqlite !== "ok" || r.sidecar !== "ok" || r.sidecarResource !== "asr-worker/asr-worker" || Object.hasOwn(r, "errorCode") || Object.hasOwn(r, "error") || Object.hasOwn(r, "sidecarPath") || r.electronVersion === "unknown" || !/^\d+$/.test(r.modulesAbi)) process.exit(1); console.log(JSON.stringify(r, null, 2));' \
+            "$RUNNER_TEMP/turnnote-user-data/packaging-validation.json" "$PACKAGE_ARCH"
           hdiutil detach "$RUNNER_TEMP/turnnote-dmg"
       - name: Validate installed worker with local tiny model
         shell: bash
@@ -86,9 +104,10 @@ jobs:
         if: always()
         with:
           if-no-files-found: error
-          name: turnnote-macos-arm64
+          name: turnnote-macos-${{ matrix.arch }}
+          retention-days: 14
           path: |
-            dist-packaging/*.dmg
+            dist-packaging/Turnnote-0.1.0-macos-${{ matrix.arch }}.dmg
             build/sidecar/asr-worker/**
             ${{ runner.temp }}/turnnote-user-data/packaging-validation.json
             ${{ runner.temp }}/turnnote-user-data-failure/packaging-validation.json
@@ -144,8 +163,9 @@ jobs:
         with:
           if-no-files-found: error
           name: turnnote-windows-x64
+          retention-days: 14
           path: |
-            dist-packaging/*.exe
+            dist-packaging/Turnnote-0.1.0-windows-x64.exe
             build/sidecar/asr-worker/**
             ${{ runner.temp }}/turnnote user data/packaging-validation.json
             ${{ runner.temp }}/turnnote user data-failure/packaging-validation.json
