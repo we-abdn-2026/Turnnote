@@ -27,6 +27,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   DEEPSEEK_TIMEOUT: 'The DeepSeek request timed out.',
   DEEPSEEK_INVALID_RESPONSE: 'DeepSeek returned an invalid meeting note.',
   DEEPSEEK_UNAVAILABLE: 'DeepSeek is currently unavailable.',
+  TRANSCRIPT_TOO_LONG: 'The transcript is too long to summarize. Your transcript has been kept.',
 };
 
 export class TurnnoteError extends Error {
