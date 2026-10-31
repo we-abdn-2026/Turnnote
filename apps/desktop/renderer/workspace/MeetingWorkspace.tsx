@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { MeetingStatus, TurnnoteApi } from '@shared/contracts';
+import type { MeetingDetail, MeetingStatus, TurnnoteApi } from '@shared/contracts';
 import { createCaptureRecording } from '../audio/meeting-recording';
 import type { MeetingRecording } from './meeting-session';
 import {
@@ -38,6 +38,15 @@ export function formatTranscriptTime(milliseconds: number): string {
   return hours > 0 ? `${String(hours).padStart(2, '0')}:${parts.join(':')}` : parts.join(':');
 }
 
+function canShowGenerationAction(meeting: MeetingDetail): boolean {
+  return (
+    meeting.status === 'transcribed' ||
+    meeting.status === 'generating' ||
+    meeting.status === 'ready' ||
+    (meeting.status === 'failed' && meeting.lastError?.kind === 'generating')
+  );
+}
+
 export function MeetingWorkspace({
   recordingFactory = createCaptureRecording,
 }: {
@@ -48,12 +57,33 @@ export function MeetingWorkspace({
   );
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const [title, setTitle] = useState('');
+  const [generationPrompt, setGenerationPrompt] = useState<{
+    meetingId: string;
+    revision: number;
+  } | null>(null);
 
   useEffect(() => session.connect(), [session]);
 
   const actions = availableActions(state);
   const recording = isRecording(state);
   const { meeting } = state;
+  const generationPromptOpen =
+    !!meeting &&
+    generationPrompt?.meetingId === meeting.id &&
+    generationPrompt.revision === state.revision &&
+    actions.generate;
+
+  useEffect(() => {
+    if (!generationPromptOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setGenerationPrompt(null);
+    };
+
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [generationPromptOpen]);
+
   const savePending = meeting?.status === 'recording' && state.captureStopped;
   const processingKind =
     meeting?.status === 'transcribing' || meeting?.status === 'generating' ? meeting.status : null;
@@ -67,6 +97,28 @@ export function MeetingWorkspace({
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (await session.create(title)) setTitle('');
+  }
+
+  function openGenerationPrompt(): void {
+    const current = state.meeting;
+    if (!current || !actions.generate) return;
+
+    setGenerationPrompt({
+      meetingId: current.id,
+      revision: state.revision,
+    });
+  }
+
+  function closeGenerationPrompt(): void {
+    setGenerationPrompt(null);
+  }
+
+  async function confirmGeneration(): Promise<void> {
+    if (!generationPromptOpen) return;
+
+    // 先关闭确认框；会话层仍会拒绝重复请求。
+    setGenerationPrompt(null);
+    await session.generate();
   }
 
   return (
@@ -173,6 +225,53 @@ export function MeetingWorkspace({
                   </li>
                 ))}
               </ol>
+            )}
+          </section>
+          <section className="note-generation" aria-labelledby="generation-heading">
+            <div className="note-generation-heading">
+              <div>
+                <h3 id="generation-heading">AI 会议纪要</h3>
+                <p className="note-generation-help">
+                  根据已保存的转写生成会议纪要，发送前会再次确认。
+                </p>
+              </div>
+              {canShowGenerationAction(meeting) && (
+                <button type="button" onClick={openGenerationPrompt} disabled={!actions.generate}>
+                  {state.pending === 'generate' ? '正在生成...' : '生成会议纪要'}
+                </button>
+              )}
+            </div>
+
+            {generationPromptOpen && (
+              <div
+                className="generation-consent"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="generation-consent-title"
+                aria-describedby="generation-consent-description"
+              >
+                <button
+                  type="button"
+                  className="generation-consent-close"
+                  aria-label="关闭发送确认"
+                  onClick={closeGenerationPrompt}
+                >
+                  ×
+                </button>
+                <strong id="generation-consent-title">发送会议内容给 DeepSeek？</strong>
+                <p id="generation-consent-description">
+                  将向 DeepSeek
+                  发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。
+                </p>
+                <div className="meeting-actions">
+                  <button type="button" onClick={() => void confirmGeneration()}>
+                    确认发送并生成
+                  </button>
+                  <button type="button" className="secondary" onClick={closeGenerationPrompt}>
+                    取消
+                  </button>
+                </div>
+              </div>
             )}
           </section>
         </div>

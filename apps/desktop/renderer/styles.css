@@ -204,6 +204,57 @@ button.danger {
   white-space: pre-wrap;
 }
 
+/* 纪要生成确认 */
+.note-generation {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.note-generation-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+.note-generation-heading h3 {
+  font-size: 18px;
+  margin: 0;
+}
+.note-generation-help {
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.generation-consent {
+  background: #fff8e1;
+  border: 1px solid #f0b429;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 20px 48px 20px 20px;
+  position: relative;
+}
+.generation-consent > strong {
+  color: #5f4c00;
+  display: block;
+  margin-bottom: 8px;
+}
+.generation-consent > p {
+  line-height: 1.6;
+  margin: 0 0 16px;
+  overflow-wrap: anywhere;
+}
+button.generation-consent-close {
+  background: transparent;
+  color: #5f4c00;
+  font-size: 20px;
+  line-height: 1;
+  padding: 8px 12px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
 /* 录音控制 */
 .recording-indicator,
 .processing-indicator {

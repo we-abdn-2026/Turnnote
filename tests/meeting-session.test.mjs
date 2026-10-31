@@ -579,6 +579,97 @@ test('reconnecting refreshes the snapshot missed while disconnected', async () =
   second();
 });
 
+test('generation requires transcript and duplicate requests send once', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  const gate = deferred();
+  let calls = 0;
+  const api = {
+    ...base,
+    notes: {
+      ...base.notes,
+      generate: async (id) => {
+        calls += 1;
+        await gate.promise;
+        return base.notes.generate(id);
+      },
+    },
+  };
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Generate once');
+  assert.equal(await session.generate(), false);
+
+  await session.start();
+  await session.stop();
+  await until(
+    session,
+    (state) => state.meeting.status === 'transcribed' && state.transcriptSegments.length === 4,
+  );
+
+  await base.settings.setApiKey('test-only-key');
+
+  const first = session.generate();
+  const second = session.generate();
+  assert.equal(await second, false);
+  assert.equal(calls, 1);
+
+  gate.resolve();
+  assert.equal(await first, true);
+  await until(session, (state) => state.meeting.status === 'ready');
+  assert.equal(calls, 1);
+
+  disconnect();
+});
+
+test('generation failure keeps the transcript and can be retried', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  let attempts = 0;
+  const api = {
+    ...base,
+    notes: {
+      ...base.notes,
+      generate: async (id) => {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            ok: false,
+            error: {
+              code: 'DEEPSEEK_UNAVAILABLE',
+              message: 'DeepSeek is currently unavailable.',
+            },
+          };
+        }
+        return base.notes.generate(id);
+      },
+    },
+  };
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  await session.create('Retry generation');
+  await session.start();
+  await session.stop();
+  await until(
+    session,
+    (state) => state.meeting.status === 'transcribed' && state.transcriptSegments.length === 4,
+  );
+  await base.settings.setApiKey('test-only-key');
+
+  assert.equal(await session.generate(), false);
+  assert.equal(attempts, 1);
+  assert.equal(session.getState().meeting.status, 'transcribed');
+  assert.equal(session.getState().transcriptSegments.length, 4);
+  assert.equal(session.getState().error, 'DeepSeek is currently unavailable.');
+
+  assert.equal(await session.generate(), true);
+  await until(session, (state) => state.meeting.status === 'ready');
+  assert.equal(attempts, 2);
+  assert.equal(session.getState().error, null);
+
+  disconnect();
+});
+
 test('duplicate start/stop while a request is pending sends only one request', async () => {
   const base = createMockApi({ seed: false, delayMs: 1 });
   const calls = { start: 0, stop: 0 };
@@ -688,6 +779,7 @@ test('failed recording can be discarded and recorded again', async () => {
     start: false,
     stop: false,
     discard: true,
+    generate: false,
   });
   assert.equal(await session.discard(), true);
   assert.equal(session.getState().meeting.status, 'created');
@@ -704,8 +796,20 @@ test('available actions follow meeting status; processing states are never start
     lastError: null,
     ...extra,
   });
-  const actions = (m, pending = null) => availableActions({ meeting: m, pending, error: null });
-  assert.deepEqual(actions(null), { create: true, start: false, stop: false, discard: false });
+  const actions = (m, pending = null) =>
+    availableActions({
+      meeting: m,
+      pending,
+      error: null,
+      transcriptSegments: [],
+    });
+  assert.deepEqual(actions(null), {
+    create: true,
+    start: false,
+    stop: false,
+    discard: false,
+    generate: false,
+  });
   assert.equal(actions(meeting('created')).start, true);
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).stop, true);
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).create, false);
@@ -722,5 +826,6 @@ test('available actions follow meeting status; processing states are never start
     start: false,
     stop: false,
     discard: false,
+    generate: false,
   });
 });
