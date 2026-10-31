@@ -31,6 +31,17 @@ async function startRecording(page) {
   await page.eval(`__ui.click('已告知，开始录音')`);
 }
 
+/** 新建会议并等待 mock 完成转写 */
+async function createTranscribedMeeting(page, title) {
+  const id = await createMeeting(page, title);
+  await startRecording(page);
+  await page.waitFor(`__ui.status() === '录音中'`);
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() === '转写完成'`, { timeout: 8000 });
+  await page.waitFor(`document.querySelectorAll('.transcript-segment').length === 4`);
+  return id;
+}
+
 test('create → start → stop shows Main-driven recording, captured and transcribing updates', async () => {
   const page = await browser.open();
   const id = await createMeeting(page, 'Weekly planning');
@@ -364,4 +375,112 @@ test('create failure keeps the typed title and selects no meeting', async () => 
     await page.eval(`__ui.buttons().find((b) => b.label === '新建会议').disabled`),
     true,
   );
+});
+
+test('generation sends only after explicit confirmation', async () => {
+  const page = await browser.open();
+  await createTranscribedMeeting(page, 'Confirm generation');
+  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.waitFor(`__ui.text().includes('生成会议纪要')`);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+
+  const disclosure = await page.eval(`(() => {
+    const dialog = document.querySelector('[role="alertdialog"]');
+    return {
+      title: dialog?.querySelector('strong')?.textContent ?? null,
+      text: dialog?.innerText ?? '',
+      buttons: [...(dialog?.querySelectorAll('button') ?? [])].map((button) => ({
+        label: button.textContent,
+        ariaLabel: button.getAttribute('aria-label'),
+      })),
+    };
+  })()`);
+
+  assert.equal(disclosure.title, '发送会议内容给 DeepSeek？');
+  assert.match(disclosure.text, /发送本次会议已保存的转写文本/);
+  assert.match(disclosure.text, /生成纪要所需的必要上下文/);
+  assert.match(disclosure.text, /原始音频不会发送/);
+  assert.ok(disclosure.buttons.some((button) => button.label === '确认发送并生成'));
+  assert.ok(disclosure.buttons.some((button) => button.label === '取消'));
+
+  await page.eval(`__ui.click('取消')`);
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  await page.eval(`document.querySelector('[aria-label="关闭发送确认"]')?.click()`);
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  await page.eval(
+    `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+  );
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+
+  await page.eval(`__ui.faults['notes.generate'] = { type: 'hold' }`);
+  await page.eval(`__ui.click('生成会议纪要')`);
+  await page.eval(`__ui.click('确认发送并生成')`);
+  await page.waitFor(`__ui.calls['notes.generate'] === 1`);
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(
+    await page.eval(`(() => {
+      const button = __ui.buttons().find((item) => item.label === '正在生成...');
+      return button?.disabled ?? false;
+    })()`),
+    true,
+  );
+  assert.equal(await page.eval(`__ui.text().includes('test-only-secret')`), false);
+
+  await page.eval(`
+    delete __ui.faults['notes.generate'];
+    __ui.release('notes.generate');
+  `);
+  await page.waitFor(`__ui.status() === '纪要已生成'`, { timeout: 8000 });
+  assert.equal(await page.eval(`__ui.calls['notes.generate']`), 1);
+  assert.deepEqual(page.errors, []);
+});
+
+test('generation failure is safe and retry requires confirmation', async () => {
+  const page = await browser.open();
+  await createTranscribedMeeting(page, 'Retry confirmed generation');
+  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+
+  await page.eval(`
+    __ui.faults['notes.generate'] = {
+      type: 'result',
+      once: true,
+      error: {
+        code: 'DEEPSEEK_UNAVAILABLE',
+        message: 'DeepSeek is currently unavailable.'
+      }
+    }
+  `);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+  await page.eval(`__ui.click('确认发送并生成')`);
+
+  await page.waitFor(
+    `__ui.alerts().some((message) => message.includes('DeepSeek is currently unavailable.'))`,
+  );
+  assert.equal(await page.eval(`__ui.calls['notes.generate']`), 1);
+  assert.equal(await page.eval(`__ui.status()`), '转写完成');
+  assert.equal(await page.eval(`document.querySelectorAll('.transcript-segment').length`), 4);
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(await page.eval(`__ui.text().includes('test-only-secret')`), false);
+
+  // 重试必须重新打开确认框，不能直接再次调用生成接口。
+  await page.eval(`__ui.click('生成会议纪要')`);
+  assert.equal(await page.eval(`__ui.calls['notes.generate']`), 1);
+  assert.equal(await page.eval(`!!document.querySelector('[role="alertdialog"]')`), true);
+
+  await page.eval(`__ui.click('确认发送并生成')`);
+  await page.waitFor(`__ui.status() === '纪要已生成'`, { timeout: 8000 });
+  assert.equal(await page.eval(`__ui.calls['notes.generate']`), 2);
+  assert.deepEqual(await page.eval('__ui.alerts()'), []);
+  assert.deepEqual(page.errors, []);
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { finished } from 'node:stream/promises';
 import test from 'node:test';
 import { createPackage } from '@electron/asar';
 import {
@@ -39,7 +40,8 @@ async function fixture(t, layout, extraFiles = {}, includeMain = true) {
     mkdirSync(join(destination, '..'), { recursive: true });
     writeFileSync(destination, content);
   }
-  await createPackage(source, join(resources, 'app.asar'));
+  const archive = await createPackage(source, join(resources, 'app.asar'));
+  await finished(archive);
   return app;
 }
 
