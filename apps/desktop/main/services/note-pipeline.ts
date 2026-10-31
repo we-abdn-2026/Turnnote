@@ -92,8 +92,8 @@ function unique<T>(
   return [...kept.values()];
 }
 
-/** 重复条目取最早的来源时间 */
-function earliest<T extends Sourced>(kept: T, duplicate: T): T {
+/** 决策去重时，重复条目取最早的来源时间 */
+function earliestDecision<T extends Sourced>(kept: T, duplicate: T): T {
   const times = [kept.timestampMs, duplicate.timestampMs].filter((time) => time !== undefined);
   return times.length ? { ...kept, timestampMs: Math.min(...times) } : kept;
 }
@@ -106,8 +106,8 @@ const covers = (a: ActionItem, b: ActionItem) =>
   (b.dueDate === UNSPECIFIED || textKey(a.dueDate) === textKey(b.dueDate));
 
 /**
- * 同一任务只在一条完全覆盖另一条时合并，保留更明确的一条和最早的来源时间。
- * 负责人或日期冲突、或两条各自只有一部分信息时都保留为独立条目，不拼出原文没有的组合。
+ * 同一任务只在一条完全覆盖另一条时合并，保留更明确一条的原时间戳。
+ * 完全重复时取最早时间戳。负责人或日期冲突、或两条各自只有一部分信息时都保留为独立条目。
  */
 function dedupeActionItems(items: readonly ActionItem[]): ActionItem[] {
   const kept: ActionItem[] = [];
@@ -119,8 +119,14 @@ function dedupeActionItems(items: readonly ActionItem[]): ActionItem[] {
     if (i === -1) {
       kept.push(item);
     } else {
-      const [specific, other] = covers(kept[i], item) ? [kept[i], item] : [item, kept[i]];
-      kept[i] = earliest(specific, other);
+      // 完全重复：取最早时间戳；否则保留更完整条目的时间
+      const keptItem = kept[i];
+      const bothCover = covers(keptItem, item) && covers(item, keptItem);
+      kept[i] = bothCover
+        ? earliestDecision(keptItem, item)
+        : covers(keptItem, item)
+          ? keptItem
+          : item;
     }
   }
   return kept;
@@ -132,7 +138,7 @@ export function dedupeNote(note: MeetingNote): MeetingNote {
   return {
     summary: note.summary,
     keyTopics: unique(note.keyTopics, textKey, same),
-    decisions: unique(note.decisions, (item) => textKey(item.text), earliest),
+    decisions: unique(note.decisions, (item) => textKey(item.text), earliestDecision),
     openQuestions: unique(note.openQuestions, textKey, same),
     actionItems: dedupeActionItems(note.actionItems),
   };

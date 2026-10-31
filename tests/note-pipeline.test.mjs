@@ -114,7 +114,7 @@ test('action items with the same task but different owner or date are all kept w
         // 完全重复（忽略大小写和空白），取最早来源
         item('Book room', 'Dan', 'Friday', 5000),
         item('book  room', 'dan', 'friday', 4000),
-        // unspecified 兼容：并入更明确的一条
+        // unspecified 兼容：并入更明确的一条，保留完整项自己的时间戳
         item('Send deck', 'unspecified', 'unspecified', 7000),
         item('Send deck', 'Eve', 'Thursday', 6000),
         item('Call vendor', 'Frank', 'Monday', 8000),
@@ -131,6 +131,47 @@ test('action items with the same task but different owner or date are all kept w
     item('Book room', 'Dan', 'Friday', 4000),
     item('Send deck', 'Eve', 'Thursday', 6000),
     item('Call vendor', 'Frank', 'Monday', 8000),
+  ]);
+});
+
+test("merging an incomplete item into a complete one preserves the complete item's source", async () => {
+  const item = (task, owner, dueDate, timestampMs) => ({ task, owner, dueDate, timestampMs });
+  // 正序：0ms 不完整在前，1000ms 完整在后
+  const forward = scripted([
+    note({
+      actionItems: [
+        item('提交报告', 'unspecified', 'unspecified', 0),
+        item('提交报告', 'Alice', 'Friday', 1000),
+      ],
+    }),
+  ]);
+  const resultForward = await generateNote({ segments: SEGMENTS, request: forward.request });
+  assert.deepEqual(resultForward.actionItems, [item('提交报告', 'Alice', 'Friday', 1000)]);
+
+  // 逆序：1000ms 完整在前，0ms 不完整在后
+  const reverse = scripted([
+    note({
+      actionItems: [
+        item('提交报告', 'Alice', 'Friday', 1000),
+        item('提交报告', 'unspecified', 'unspecified', 0),
+      ],
+    }),
+  ]);
+  const resultReverse = await generateNote({ segments: SEGMENTS, request: reverse.request });
+  assert.deepEqual(resultReverse.actionItems, [item('提交报告', 'Alice', 'Friday', 1000)]);
+
+  // 完整项无来源：不从不完整项补时间戳
+  const noSource = scripted([
+    note({
+      actionItems: [
+        item('提交报告', 'unspecified', 'unspecified', 0),
+        item('提交报告', 'Alice', 'Friday', undefined),
+      ],
+    }),
+  ]);
+  const resultNoSource = await generateNote({ segments: SEGMENTS, request: noSource.request });
+  assert.deepEqual(resultNoSource.actionItems, [
+    { task: '提交报告', owner: 'Alice', dueDate: 'Friday' },
   ]);
 });
 
