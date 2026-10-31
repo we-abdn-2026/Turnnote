@@ -455,6 +455,32 @@ test('note display renders every section, optional times and unspecified values'
     ['Jordan Lee', 'Friday'],
   ]);
   assert.deepEqual(displayed.actionTimes, ['00:05']);
+
+  const reviewNotice = await page.eval(`(() => {
+    const notice = document.querySelector('.note-review-notice');
+    return {
+      role: notice?.getAttribute('role') ?? null,
+      text: notice?.textContent ?? '',
+    };
+  })()`);
+
+  assert.equal(reviewNotice.role, 'note');
+  assert.match(reviewNotice.text, /可能不准确/);
+  assert.match(reviewNotice.text, /决策/);
+  assert.match(reviewNotice.text, /行动项/);
+  assert.match(reviewNotice.text, /负责人/);
+  assert.match(reviewNotice.text, /截止日期/);
+
+  // 用户编辑来源也不能替代事实核对提示。
+  const userVersion = { ...version, source: 'user' };
+  await page.eval(
+    `__ui.faults['notes.getLatest'] = { type: 'value', value: ${JSON.stringify(userVersion)} }`,
+  );
+  await createMeeting(page, 'Edited note');
+  await page.waitFor(`__ui.text().includes('Ship the beta on Friday.')`);
+
+  assert.equal(await page.eval(`document.querySelector('.note-source').textContent`), '用户编辑');
+  assert.equal(await page.eval(`!!document.querySelector('.note-review-notice')`), true);
   assert.deepEqual(page.errors, []);
 });
 
@@ -494,5 +520,57 @@ test('switching meetings clears the previous note while the new note loads', asy
   await page.waitFor(`__ui.text().includes('暂无纪要内容')`);
 
   assert.equal(await page.eval(`__ui.text().includes('Only in the first meeting')`), false);
+  assert.deepEqual(page.errors, []);
+});
+
+test('note loading failure stays local and retries after Result or rejection', async () => {
+  const page = await browser.open();
+  await page.eval(`
+    __ui.faults['notes.getLatest'] = {
+      type: 'result',
+      error: ${NOT_IMPLEMENTED}
+    }
+  `);
+
+  const id = await createMeeting(page, 'Note load failure');
+  await page.waitFor(`!!document.querySelector('.note-error')`);
+
+  assert.match(
+    await page.eval(`document.querySelector('.note-error').innerText`),
+    /纪要加载失败，请重试/,
+  );
+  assert.equal(await page.eval(`document.querySelector('.workspace-error')`), null);
+  assert.equal(await page.eval(`__ui.status()`), '已创建，未开始录音');
+  assert.equal(
+    await page.eval(`__ui.buttons().find((button) => button.label === '开始录音')?.disabled`),
+    false,
+  );
+
+  await page.eval(`delete __ui.faults['notes.getLatest']`);
+  await page.eval(`__ui.click('重新加载纪要')`);
+  await page.waitFor(`__ui.text().includes('暂无纪要内容')`);
+
+  // Promise rejection 也必须是纪要局部错误，而不是影响整个会议。
+  await page.eval(`__ui.faults['notes.getLatest'] = { type: 'reject' }`);
+  await page.eval(`__ui.api.meetings.rename(${JSON.stringify(id)}, 'Note load rejected')`);
+  await page.waitFor(`!!document.querySelector('.note-error')`);
+
+  assert.match(
+    await page.eval(`document.querySelector('.note-error').innerText`),
+    /纪要加载失败，请重试/,
+  );
+  assert.equal(await page.eval(`document.querySelector('.workspace-error')`), null);
+  assert.equal(await page.eval(`__ui.status()`), '已创建，未开始录音');
+  assert.equal(
+    await page.eval(`__ui.buttons().find((button) => button.label === '开始录音')?.disabled`),
+    false,
+  );
+
+  await page.eval(`delete __ui.faults['notes.getLatest']`);
+  await page.eval(`__ui.click('重新加载纪要')`);
+  await page.waitFor(`__ui.text().includes('暂无纪要内容')`);
+
+  assert.ok(await page.eval(`__ui.calls['notes.getLatest'] >= 3`));
+  assert.deepEqual(await page.eval('__ui.alerts()'), []);
   assert.deepEqual(page.errors, []);
 });

@@ -218,6 +218,12 @@ export function MeetingWorkspace({
             )}
 
             {state.note && (
+              <p className="note-review-notice" role="note">
+                纪要是根据转写整理的内容，可能不准确。请核对决策、行动项、负责人和截止日期是否与会议实际讨论一致。
+              </p>
+            )}
+
+            {state.note && (
               <article className="note-content">
                 <section className="note-summary" aria-labelledby="note-summary-heading">
                   <h4 id="note-summary-heading">摘要</h4>
