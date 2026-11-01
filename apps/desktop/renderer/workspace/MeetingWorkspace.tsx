@@ -53,6 +53,22 @@ function displayNoteValue(value: string): string {
   return normalized === '' || normalized.toLowerCase() === 'unspecified' ? '未指定' : normalized;
 }
 
+type KeywordMessage = {
+  tone: 'status' | 'error';
+  text: string;
+};
+
+interface KeywordEditorState {
+  meetingId: string;
+  values: string[];
+  input: string;
+  message: KeywordMessage | null;
+}
+
+function sameKeywords(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((keyword, index) => keyword === right[index]);
+}
+
 export function MeetingWorkspace({
   recordingFactory = createCaptureRecording,
 }: {
@@ -63,6 +79,7 @@ export function MeetingWorkspace({
   );
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const [title, setTitle] = useState('');
+  const [keywordEditor, setKeywordEditor] = useState<KeywordEditorState | null>(null);
   const [generationPrompt, setGenerationPrompt] = useState<{
     meetingId: string;
     revision: number;
@@ -73,6 +90,14 @@ export function MeetingWorkspace({
   const actions = availableActions(state);
   const recording = isRecording(state);
   const { meeting } = state;
+  const activeKeywordEditor =
+    meeting && keywordEditor?.meetingId === meeting.id ? keywordEditor : null;
+
+  const savedKeywords = meeting?.keywords ?? [];
+  const keywordDraft = activeKeywordEditor?.values ?? savedKeywords;
+  const keywordInput = activeKeywordEditor?.input ?? '';
+  const keywordMessage = activeKeywordEditor?.message ?? null;
+  const keywordsDirty = !sameKeywords(keywordDraft, savedKeywords);
   const generationPromptOpen =
     !!meeting &&
     generationPrompt?.meetingId === meeting.id &&
@@ -99,6 +124,15 @@ export function MeetingWorkspace({
       : processingKind === 'generating'
         ? '纪要生成进度'
         : null;
+  const regenerate = state.note !== null;
+  const generationActionLabel =
+    state.pending === 'generate'
+      ? regenerate
+        ? '正在重新生成...'
+        : '正在生成...'
+      : regenerate
+        ? '重新生成会议纪要'
+        : '生成会议纪要';
 
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -108,9 +142,111 @@ export function MeetingWorkspace({
     if (await session.create(title)) setTitle('');
   }
 
+  function updateKeywordEditor(
+    patch: Partial<Pick<KeywordEditorState, 'values' | 'input' | 'message'>>,
+  ): void {
+    if (!meeting) return;
+
+    // 关键词一旦变化，先前看到的发送内容确认立即失效。
+    setGenerationPrompt(null);
+
+    const current = activeKeywordEditor ?? {
+      meetingId: meeting.id,
+      values: [...meeting.keywords],
+      input: '',
+      message: null,
+    };
+
+    setKeywordEditor({ ...current, ...patch });
+  }
+
+  function handleAddKeyword(event: FormEvent): void {
+    event.preventDefault();
+    if (!meeting || !actions.keywords) return;
+
+    const value = keywordInput.trim();
+
+    if (!value) return;
+
+    if (value.length > 100) {
+      updateKeywordEditor({
+        message: {
+          tone: 'error',
+          text: '单个关键词不能超过 100 个字符。',
+        },
+      });
+      return;
+    }
+
+    if (keywordDraft.includes(value)) {
+      updateKeywordEditor({
+        message: {
+          tone: 'error',
+          text: `关键词“${value}”已经存在。`,
+        },
+      });
+      return;
+    }
+
+    if (keywordDraft.length >= 50) {
+      updateKeywordEditor({
+        message: {
+          tone: 'error',
+          text: '最多保存 50 个关键词。',
+        },
+      });
+      return;
+    }
+
+    updateKeywordEditor({
+      values: [...keywordDraft, value],
+      input: '',
+      message: {
+        tone: 'status',
+        text: `已添加“${value}”，请保存。`,
+      },
+    });
+  }
+
+  function handleRemoveKeyword(keyword: string): void {
+    updateKeywordEditor({
+      values: keywordDraft.filter((item) => item !== keyword),
+      message: {
+        tone: 'status',
+        text: `已移除“${keyword}”，请保存。`,
+      },
+    });
+  }
+
+  function handleKeywordInput(value: string): void {
+    updateKeywordEditor({
+      input: value,
+      message: null,
+    });
+  }
+
+  async function handleSaveKeywords(): Promise<void> {
+    if (!meeting || !actions.keywords || !keywordsDirty) return;
+
+    if (!(await session.saveKeywords(keywordDraft))) return;
+
+    const latest = session.getState().meeting;
+    if (latest?.id !== meeting.id) return;
+
+    setKeywordEditor({
+      meetingId: meeting.id,
+      values: [...latest.keywords],
+      input: '',
+      message: {
+        tone: 'status',
+        text: `已保存 ${latest.keywords.length} 个关键词。`,
+      },
+    });
+  }
+
   function openGenerationPrompt(): void {
     const current = state.meeting;
-    if (!current || !actions.generate) return;
+    if (!current || !actions.generate || keywordsDirty) return;
 
     setGenerationPrompt({
       meetingId: current.id,
@@ -236,20 +372,103 @@ export function MeetingWorkspace({
               </ol>
             )}
           </section>
+          <section className="meeting-keywords" aria-labelledby="keywords-heading">
+            <div className="meeting-keywords-heading">
+              <div>
+                <h3 id="keywords-heading">会议关键词</h3>
+                <p className="meeting-keywords-help">
+                  关键词会引导纪要重点。只有点击“保存关键词”后，下一次生成或重新生成才会使用它们。
+                </p>
+              </div>
+              <span className="keyword-count">{keywordDraft.length}/50</span>
+            </div>
+
+            {keywordDraft.length > 0 ? (
+              <ul className="keyword-list" aria-label="关键词草稿">
+                {keywordDraft.map((keyword) => (
+                  <li className="keyword-chip" key={keyword}>
+                    <span>{keyword}</span>
+                    <button
+                      type="button"
+                      className="keyword-remove"
+                      aria-label={`移除关键词 ${keyword}`}
+                      onClick={() => handleRemoveKeyword(keyword)}
+                      disabled={!actions.keywords}
+                    >
+                      移除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="keyword-empty">暂无关键词</p>
+            )}
+
+            <form className="keyword-add" onSubmit={handleAddKeyword}>
+              <label htmlFor="meeting-keyword">添加关键词</label>
+              <div className="keyword-add-controls">
+                <input
+                  id="meeting-keyword"
+                  value={keywordInput}
+                  maxLength={100}
+                  onChange={(event) => handleKeywordInput(event.target.value)}
+                  disabled={!actions.keywords}
+                  placeholder="例如：定价"
+                />
+                <button type="submit" disabled={!actions.keywords || !keywordInput.trim()}>
+                  添加关键词
+                </button>
+              </div>
+            </form>
+
+            {keywordMessage && (
+              <p
+                className={`keyword-message keyword-message-${keywordMessage.tone}`}
+                role={keywordMessage.tone === 'error' ? 'alert' : 'status'}
+              >
+                {keywordMessage.text}
+              </p>
+            )}
+
+            <div className="keyword-save-row">
+              <button
+                type="button"
+                onClick={() => void handleSaveKeywords()}
+                disabled={!actions.keywords || !keywordsDirty}
+              >
+                {state.pending === 'keywords' ? '保存中...' : '保存关键词'}
+              </button>
+              <p className="saved-keywords">
+                已保存：
+                {savedKeywords.length > 0 ? savedKeywords.join('、') : '暂无关键词'}
+              </p>
+            </div>
+          </section>
           <section className="note-generation" aria-labelledby="generation-heading">
             <div className="note-generation-heading">
               <div>
                 <h3 id="generation-heading">AI 会议纪要</h3>
                 <p className="note-generation-help">
-                  根据已保存的转写生成会议纪要，发送前会再次确认。
+                  根据已保存的转写{regenerate ? '重新生成' : '生成'}会议纪要， 发送前会再次确认。
+                  {regenerate && ' 当前纪要会保留，重新生成成功后新增版本。'}
                 </p>
               </div>
               {canShowGenerationAction(meeting) && (
-                <button type="button" onClick={openGenerationPrompt} disabled={!actions.generate}>
-                  {state.pending === 'generate' ? '正在生成...' : '生成会议纪要'}
+                <button
+                  type="button"
+                  onClick={openGenerationPrompt}
+                  disabled={!actions.generate || keywordsDirty}
+                >
+                  {generationActionLabel}
                 </button>
               )}
             </div>
+
+            {keywordsDirty && canShowGenerationAction(meeting) && (
+              <p className="generation-blocked" role="status">
+                关键词有未保存更改。请先保存关键词，或先恢复为已保存内容，再生成会议纪要。
+              </p>
+            )}
 
             {generationPromptOpen && (
               <div
@@ -267,14 +486,19 @@ export function MeetingWorkspace({
                 >
                   ×
                 </button>
-                <strong id="generation-consent-title">发送会议内容给 DeepSeek？</strong>
+                <strong id="generation-consent-title">
+                  {regenerate ? '重新生成会议内容并发送给 DeepSeek？' : '发送会议内容给 DeepSeek？'}
+                </strong>
                 <p id="generation-consent-description">
                   将向 DeepSeek
                   发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。
+                  {regenerate &&
+                    state.note &&
+                    ` 当前纪要版本 ${state.note.version} 会保留；重新生成成功后新增版本，失败时不会删除现有纪要。`}
                 </p>
                 <div className="meeting-actions">
                   <button type="button" onClick={() => void confirmGeneration()}>
-                    确认发送并生成
+                    {regenerate ? '确认发送并重新生成' : '确认发送并生成'}
                   </button>
                   <button type="button" className="secondary" onClick={closeGenerationPrompt}>
                     取消

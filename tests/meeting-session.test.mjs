@@ -105,6 +105,66 @@ test('create → start → stop: state follows Main snapshots and events through
   assert.equal(session.getState().error, null);
 });
 
+test('saving keywords trims, deduplicates, and exposes the Main snapshot', async () => {
+  const api = createMockApi({ seed: false, delayMs: 1 });
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  assert.equal(await session.create('Keyword session'), true);
+
+  const saving = session.saveKeywords(['  定价  ', '定价', '  预算  ']);
+  assert.equal(session.getState().pending, 'keywords');
+
+  assert.equal(await saving, true);
+  assert.equal(session.getState().pending, null);
+  assert.deepEqual(session.getState().meeting.keywords, ['定价', '预算']);
+  assert.equal(session.getState().error, null);
+
+  disconnect();
+});
+
+test('keyword save failure keeps the saved snapshot and allows retry', async () => {
+  const base = createMockApi({ seed: false, delayMs: 1 });
+  let rejectNextSave = true;
+
+  const api = {
+    ...base,
+    meetings: {
+      ...base.meetings,
+      setKeywords: async (id, keywords) => {
+        if (rejectNextSave) {
+          rejectNextSave = false;
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_STATE',
+              message: 'Keywords could not be saved.',
+            },
+          };
+        }
+
+        return base.meetings.setKeywords(id, keywords);
+      },
+    },
+  };
+
+  const session = createMeetingSession(api, createMockRecording(api));
+  const disconnect = session.connect();
+
+  assert.equal(await session.create('Keyword failure'), true);
+
+  assert.equal(await session.saveKeywords(['定价']), false);
+  assert.deepEqual(session.getState().meeting.keywords, []);
+  assert.equal(session.getState().error, 'Keywords could not be saved.');
+  assert.equal(session.getState().pending, null);
+
+  assert.equal(await session.saveKeywords([' 定价 ', '定价']), true);
+  assert.deepEqual(session.getState().meeting.keywords, ['定价']);
+  assert.equal(session.getState().error, null);
+
+  disconnect();
+});
+
 test('switching meetings clears segments immediately and ignores the previous request', async () => {
   let nextId = 1;
   const gates = new Map();
@@ -925,6 +985,7 @@ test('failed recording can be discarded and recorded again', async () => {
     start: false,
     stop: false,
     discard: true,
+    keywords: false,
     generate: false,
   });
   assert.equal(await session.discard(), true);
@@ -954,9 +1015,11 @@ test('available actions follow meeting status; processing states are never start
     start: false,
     stop: false,
     discard: false,
+    keywords: false,
     generate: false,
   });
   assert.equal(actions(meeting('created')).start, true);
+  assert.equal(actions(meeting('created')).keywords, true);
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).stop, true);
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).create, false);
   for (const status of ['captured', 'transcribing', 'transcribed', 'generating', 'ready']) {
@@ -966,12 +1029,14 @@ test('available actions follow meeting status; processing states are never start
     assert.equal(a.discard, false, status);
     // 已不在录音中，可以新建会议
     assert.equal(a.create, true, status);
+    assert.equal(a.keywords, ['captured', 'transcribed', 'ready'].includes(status), status);
   }
   assert.deepEqual(actions(meeting('created'), 'create'), {
     create: false,
     start: false,
     stop: false,
     discard: false,
+    keywords: false,
     generate: false,
   });
 });
