@@ -693,3 +693,30 @@ test('note loading failure stays local and retries after Result or rejection', a
   assert.deepEqual(await page.eval('__ui.alerts()'), []);
   assert.deepEqual(page.errors, []);
 });
+
+test('failed create invalidates an open generation confirmation', async () => {
+  const page = await browser.open();
+  await createTranscribedMeeting(page, 'Original meeting');
+  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  assert.equal(await page.eval(`!!document.querySelector('[role="alertdialog"]')`), true);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+
+  await page.eval(`
+    __ui.faults['meetings.create'] = {
+      type: 'result',
+      error: ${NOT_IMPLEMENTED}
+    }
+  `);
+  await page.eval(`__ui.type('#meeting-title', 'Create should fail')`);
+  await page.eval(`__ui.click('新建会议')`);
+  await page.waitFor(`__ui.alerts().some((message) => message.includes('Not available yet.'))`);
+
+  // 请求失败后 pending 已恢复，但旧确认状态不能重新生效。
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(await page.eval(`document.querySelector('[role="alertdialog"]')`), null);
+  assert.equal(await page.eval(`__ui.calls['notes.generate'] ?? 0`), 0);
+  assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'Original meeting');
+  assert.deepEqual(page.errors, []);
+});

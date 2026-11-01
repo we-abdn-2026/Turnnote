@@ -102,6 +102,9 @@ export function MeetingWorkspace({
 
   async function handleCreate(event: FormEvent): Promise<void> {
     event.preventDefault();
+
+    // 新会议操作开始后，旧发送确认必须彻底失效，即使请求随后失败。
+    setGenerationPrompt(null);
     if (await session.create(title)) setTitle('');
   }
 
