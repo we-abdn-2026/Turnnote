@@ -5,11 +5,15 @@ import type { MeetingStore } from '../storage/database';
 import { createStorageHandlers } from '../storage/handlers';
 import { createRecordingHandlers } from '../platform/recording';
 import { createTranscriptionService, type TranscriptionOptions } from './transcription';
+import { createGenerationService, type GenerationOptions } from './generation';
 
 /** The same Main composition is exercised in integration tests and Electron. */
 export function createSessionServices(
   store: MeetingStore,
-  options: TranscriptionOptions & { permissions: () => CapturePermissions },
+  options: TranscriptionOptions &
+    Omit<GenerationOptions, 'emitMeeting' | 'emitProgress'> & {
+      permissions: () => CapturePermissions;
+    },
 ) {
   let shutdown: Promise<void> | undefined;
   let closing = false;
@@ -21,6 +25,7 @@ export function createSessionServices(
     }
   };
   const transcription = createTranscriptionService(store, { ...options, emitMeeting });
+  const generation = createGenerationService(store, { ...options, emitMeeting });
   const recording = createRecordingHandlers(
     store,
     options.audioDirectory,
@@ -29,12 +34,17 @@ export function createSessionServices(
     transcription.schedule,
   );
   const storage = createStorageHandlers(store, options.audioDirectory, emitMeeting, async (id) => {
-    await Promise.all([recording.releaseMeeting(id), transcription.releaseMeeting(id)]);
+    await Promise.all([
+      recording.releaseMeeting(id),
+      transcription.releaseMeeting(id),
+      generation.releaseMeeting(id),
+    ]);
   });
   const handlers: InvokeHandlers = {
     ...storage,
     ...recording.handlers,
     transcription: transcription.handlers,
+    notes: { ...storage.notes, ...generation.handlers },
   };
   // Once quitting begins, no IPC call can create resources after shutdown's snapshot.
   for (const methods of Object.values(handlers)) {
@@ -53,9 +63,11 @@ export function createSessionServices(
     interruptRecording: recording.shutdown,
     shutdown(): Promise<void> {
       closing = true;
-      shutdown ??= Promise.allSettled([recording.shutdown(), transcription.shutdown()]).then(
-        () => {},
-      );
+      shutdown ??= Promise.allSettled([
+        recording.shutdown(),
+        transcription.shutdown(),
+        generation.shutdown(),
+      ]).then(() => {});
       return shutdown;
     },
   };

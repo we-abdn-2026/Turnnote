@@ -63,3 +63,21 @@ export {
   formatTranscript,
   parseNoteResponse,
 } from '../../apps/desktop/main/services/note-prompt';
+
+export {
+  DeepSeekError,
+  MAX_OUTPUT_TOKENS,
+  requestChatCompletion,
+} from '../../apps/desktop/main/services/deepseek';
+export {
+  CHUNK_CHAR_BUDGET,
+  MAX_CHUNKS,
+  alignSources,
+  chunkSegments,
+  dedupeNote,
+  generateNote,
+} from '../../apps/desktop/main/services/note-pipeline';
+export {
+  buildMergeMessages,
+  MERGE_SYSTEM_PROMPT,
+} from '../../apps/desktop/main/services/note-prompt';

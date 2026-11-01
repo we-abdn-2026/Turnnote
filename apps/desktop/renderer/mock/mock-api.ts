@@ -26,12 +26,41 @@ const SAMPLE_SEGMENTS: TranscriptSegment[] = [
   { startMs: 8000, endMs: 11000, text: 'Pricing for the team plan is still open.' },
 ];
 const SAMPLE_NOTE: MeetingNote = {
-  summary: 'The team reviewed the launch plan and agreed on a Friday beta release.',
-  keyTopics: ['Launch plan', 'Pricing'],
-  decisions: [{ text: 'Ship the beta on Friday.', timestampMs: 2400 }],
-  openQuestions: ['What is the team plan price?'],
+  summary:
+    'The team reviewed the launch plan and agreed on a Friday beta release.\n' +
+    'Customers asked for a clearer explanation of workspace limits, pricing changes and the rollback process. ' +
+    'This intentionally long summary verifies that bilingual meeting notes wrap cleanly without overflowing the card or hiding the source label. 团队还确认需要提前准备发布说明、客服话术和异常回滚方案。',
+  keyTopics: [
+    'Launch plan',
+    'Pricing',
+    'Cross-functional release readiness and customer communication for the Friday beta launch',
+  ],
+  decisions: [
+    { text: 'Ship the beta on Friday.', timestampMs: 2400 },
+    { text: 'Keep the team-plan price unchanged until customer interviews are complete.' },
+  ],
+  openQuestions: [
+    'What is the team plan price?',
+    'Should the beta announcement include a rollback plan, customer support script and a Chinese summary for regional teams?',
+  ],
   actionItems: [
-    { task: 'Prepare the release notes', owner: 'Alex', dueDate: 'unspecified', timestampMs: 5200 },
+    {
+      task: 'Prepare the release notes',
+      owner: 'Alex',
+      dueDate: 'unspecified',
+      timestampMs: 5200,
+    },
+    {
+      task: 'Collect pricing feedback from current team-plan customers and summarize the findings before the launch review.',
+      owner: 'unspecified',
+      dueDate: 'unspecified',
+    },
+    {
+      task: 'Publish the launch announcement',
+      owner: 'Jordan Lee',
+      dueDate: 'Friday, 2026-10-30',
+      timestampMs: 8000,
+    },
   ],
 };
 interface MockJob {
