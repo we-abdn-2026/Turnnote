@@ -73,7 +73,7 @@ test('captured, transcribing and generating are processing, never shown as recor
   await session.start();
   await session.stop();
   await until(session, 'transcribed');
-  await api.settings.setApiKey('test-key');
+  await api.settings.setApiKey('deepseek', 'test-key');
   await api.notes.generate(session.getState().meeting.id);
   await until(session, 'ready');
   for (const status of ['captured', 'transcribing', 'generating']) {

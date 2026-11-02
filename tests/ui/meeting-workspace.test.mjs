@@ -222,7 +222,7 @@ test('workspace shows transcription and generation progress through their termin
   assert.equal(await page.eval(`document.querySelector('.processing-progress')`), null);
 
   const generation = await page.eval(`(async () => {
-    await __ui.api.settings.setApiKey('test-only-key');
+    await __ui.api.settings.setApiKey('deepseek', 'test-only-key');
     return await __ui.api.notes.generate(${JSON.stringify(id)});
   })()`);
   assert.equal(generation.ok, true, JSON.stringify(generation));
@@ -380,7 +380,7 @@ test('create failure keeps the typed title and selects no meeting', async () => 
 test('generation sends only after explicit confirmation', async () => {
   const page = await browser.open();
   await createTranscribedMeeting(page, 'Confirm generation');
-  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'test-only-secret')`);
   await page.waitFor(`__ui.text().includes('生成会议纪要')`);
 
   await page.eval(`__ui.click('生成会议纪要')`);
@@ -447,7 +447,7 @@ test('generation sends only after explicit confirmation', async () => {
 test('generation failure is safe and retry requires confirmation', async () => {
   const page = await browser.open();
   await createTranscribedMeeting(page, 'Retry confirmed generation');
-  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'test-only-secret')`);
 
   await page.eval(`
     __ui.faults['notes.generate'] = {
@@ -890,7 +890,7 @@ test('note loading failure stays local and retries after Result or rejection', a
 test('failed create invalidates an open generation confirmation', async () => {
   const page = await browser.open();
   await createTranscribedMeeting(page, 'Original meeting');
-  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'test-only-secret')`);
 
   await page.eval(`__ui.click('生成会议纪要')`);
   assert.equal(await page.eval(`!!document.querySelector('[role="alertdialog"]')`), true);

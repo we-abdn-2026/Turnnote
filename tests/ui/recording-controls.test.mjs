@@ -111,7 +111,7 @@ test('generating is shown as processing, not recording', async () => {
   await page.eval(`__ui.click('停止录音')`);
   await page.waitFor(`__ui.status() === '转写完成'`, { timeout: 8000 });
   await page.eval(`(async () => {
-    await __ui.api.settings.setApiKey('test-key');
+    await __ui.api.settings.setApiKey('deepseek', 'test-key');
     await __ui.api.notes.generate(${JSON.stringify(id)});
   })()`);
   await page.waitFor(`__ui.status() === '正在生成纪要'`);

@@ -164,7 +164,7 @@ test('mock failure/retry obeys stage boundaries and preserves transcript and use
   value(await api.transcription.start(id));
   await until(api, id, 'transcribed');
   value(await api.notes.saveEdit(id, NOTE, 0));
-  value(await api.settings.setApiKey('test-key'));
+  value(await api.settings.setApiKey('deepseek', 'test-key'));
   value(await api.notes.generate(id));
   const failed = await until(api, id, 'failed');
   assert.equal(failed.lastError.kind, 'generating');
@@ -179,7 +179,7 @@ test('mock failure/retry obeys stage boundaries and preserves transcript and use
 test('mock edits use optimistic versions and generation cannot overwrite an edit made while processing', async () => {
   const api = createMockApi({ delayMs: 1 });
   const id = value(await api.meetings.list())[0].id;
-  value(await api.settings.setApiKey('test-key'));
+  value(await api.settings.setApiKey('deepseek', 'test-key'));
   value(await api.notes.generate(id));
   value(await api.notes.saveEdit(id, NOTE, 1));
   assert.equal(

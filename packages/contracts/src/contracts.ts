@@ -110,7 +110,10 @@ export interface AppSettings {
   includeSystemAudio: boolean;
   transcriptionModel: string;
   transcriptionLanguage: TranscriptionLanguage;
-  deepseekModel: string;
+  /** AI 纪要生成 provider，如 'deepseek'、'openai'、'ollama' */
+  noteProvider: string;
+  /** 对应 provider 的模型名，如 'deepseek-flash'、'gpt-4o' */
+  noteModel: string;
 }
 
 export type PermissionState = 'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown';
@@ -187,9 +190,12 @@ export interface TurnnoteInvokeApi {
   settings: {
     get(): Promise<Result<AppSettings>>;
     update(patch: Partial<AppSettings>): Promise<Result<AppSettings>>;
-    hasApiKey(): Promise<Result<boolean>>;
-    setApiKey(apiKey: string): Promise<Result<null>>;
-    clearApiKey(): Promise<Result<null>>;
+    /** 查询指定 provider 是否已存储 API Key */
+    hasApiKey(provider: string): Promise<Result<boolean>>;
+    /** 加密存储指定 provider 的 API Key */
+    setApiKey(provider: string, apiKey: string): Promise<Result<null>>;
+    /** 清除指定 provider 的 API Key */
+    clearApiKey(provider: string): Promise<Result<null>>;
   };
 }
 

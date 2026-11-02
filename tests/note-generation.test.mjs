@@ -32,7 +32,7 @@ async function until(condition) {
   assert.fail('generation did not reach its expected state within 5 seconds');
 }
 
-async function fixture(t, { apiKey = () => API_KEY, fetch: fetchOverride } = {}) {
+async function fixture(t, { apiKey = API_KEY, fetch: fetchOverride } = {}) {
   const server = startServer(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'turnnote-generation-')));
@@ -44,6 +44,20 @@ async function fixture(t, { apiKey = () => API_KEY, fetch: fetchOverride } = {})
   const progress = [];
   let mode = 'normal';
   const fetches = [];
+
+  // Mock CredentialStore: 按 provider 存取，不做加密
+  const keys = new Map();
+  if (apiKey !== null && apiKey !== undefined) keys.set('deepseek', apiKey);
+  const credentials = {
+    has: (provider) => keys.has(provider) && Boolean(keys.get(provider)?.trim()),
+    get: (provider) => {
+      const k = keys.get(provider);
+      return k?.trim() || null;
+    },
+    set: (provider, k) => keys.set(provider, k),
+    clear: (provider) => keys.delete(provider),
+  };
+
   const services = createSessionServices(store, {
     audioDirectory,
     modelsDirectory: join(root, 'models'),
@@ -51,8 +65,8 @@ async function fixture(t, { apiKey = () => API_KEY, fetch: fetchOverride } = {})
     permissions: () => ({ microphone: 'unknown', screen: 'unknown' }),
     emitMeeting: (meeting) => events.push(meeting),
     emitProgress: (event) => progress.push(event),
-    apiKey,
-    deepseek: {
+    credentials,
+    provider: {
       baseUrl: `http://127.0.0.1:${server.address().port}/v1`,
       fetch: (url, init) => {
         fetches.push(JSON.parse(init.body));
@@ -131,12 +145,8 @@ test('user-triggered generation sends the saved transcript and keywords and stor
 });
 
 test('generation is rejected before any request without a key, transcript or valid state', async (t) => {
-  let keyReads = 0;
   const env = await fixture(t, {
-    apiKey: () => {
-      keyReads += 1;
-      return '   ';
-    },
+    apiKey: '   ',
   });
   const id = env.transcribed();
   failure(await env.api.notes.generate(id), 'API_KEY_MISSING');
@@ -146,7 +156,6 @@ test('generation is rejected before any request without a key, transcript or val
   const empty = value(await env.api.meetings.create('No transcript'));
   failure(await env.api.notes.generate(empty.id), 'INVALID_STATE');
   failure(await env.api.notes.generate('missing'), 'NOT_FOUND');
-  assert.equal(keyReads, 1);
   assert.equal(env.fetches.length, 0);
 });
 
