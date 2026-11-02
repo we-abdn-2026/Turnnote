@@ -27,7 +27,7 @@ export interface MeetingRecording {
   disconnect(): void;
 }
 
-export type SessionAction = 'create' | 'start' | 'stop' | 'discard';
+export type SessionAction = 'create' | 'start' | 'stop' | 'discard' | 'generate';
 
 export interface SessionState {
   meeting: MeetingDetail | null;
@@ -70,6 +70,8 @@ export function availableActions(state: SessionState): Record<SessionAction, boo
     start: idle && !!meeting && canStartJob(meeting, 'recording', false),
     stop: idle && meeting?.status === 'recording' && !!meeting.activeJobId,
     discard: idle && !!meeting && canCancelRecording(meeting),
+    generate:
+      idle && !!meeting && canStartJob(meeting, 'generating', state.transcriptSegments.length > 0),
   };
 }
 
@@ -86,6 +88,8 @@ export interface MeetingSession {
   discard(): Promise<boolean>;
   /** 重新读取当前会议的已提交转写片段。 */
   reloadTranscript(): Promise<void>;
+  /** 用户确认发送内容后启动纪要生成；已有请求进行中时返回 false。 */
+  generate(): Promise<boolean>;
   /** 重新读取当前会议的最新纪要。 */
   reloadNote(): Promise<void>;
 }
@@ -311,6 +315,11 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
       };
     },
     create: (title) => run('create', () => api.meetings.create(title), { switchesMeeting: true }),
+    generate() {
+      const meeting = state.meeting;
+      if (!meeting) return Promise.resolve(false);
+      return run('generate', () => api.notes.generate(meeting.id));
+    },
     start() {
       const token = generation;
       return run('start', () => {
