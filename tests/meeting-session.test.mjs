@@ -304,7 +304,7 @@ test('meeting updates reload the latest generated and edited note version', asyn
   await until(session, (state) => state.meeting?.status === 'transcribed');
 
   const meetingId = session.getState().meeting.id;
-  await api.settings.setApiKey('test-only-key');
+  await api.settings.setApiKey('deepseek', 'test-only-key');
   assert.equal((await api.notes.generate(meetingId)).ok, true);
 
   await until(
@@ -521,7 +521,7 @@ test('supported recovery events move failed meetings to ready or deleted', async
   await session.stop();
   await until(session, (state) => state.meeting.status === 'transcribed');
   const generationId = session.getState().meeting.id;
-  await api.settings.setApiKey('test-only-key');
+  await api.settings.setApiKey('deepseek', 'test-only-key');
   assert.equal((await api.notes.generate(generationId)).ok, true);
   await until(session, (state) => state.meeting.status === 'failed');
   assert.equal(session.getState().meeting.lastError.kind, 'generating');
@@ -751,7 +751,7 @@ test('generation requires transcript and duplicate requests send once', async ()
     (state) => state.meeting.status === 'transcribed' && state.transcriptSegments.length === 4,
   );
 
-  await base.settings.setApiKey('test-only-key');
+  await base.settings.setApiKey('deepseek', 'test-only-key');
 
   const first = session.generate();
   const second = session.generate();
@@ -798,7 +798,7 @@ test('generation failure keeps the transcript and can be retried', async () => {
     session,
     (state) => state.meeting.status === 'transcribed' && state.transcriptSegments.length === 4,
   );
-  await base.settings.setApiKey('test-only-key');
+  await base.settings.setApiKey('deepseek', 'test-only-key');
 
   assert.equal(await session.generate(), false);
   assert.equal(attempts, 1);

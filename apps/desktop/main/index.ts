@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, safeStorage, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { eventChannels } from '@shared/contracts';
@@ -10,6 +10,7 @@ import { createSessionServices } from './services/session';
 import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 import { SafeLogger, safeLogPath } from './safe-logger';
+import { CredentialStore } from './platform/credentials';
 
 // The package probe does not initialize capture IPC or acquire media permissions.
 if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
@@ -87,13 +88,13 @@ void app
     services = createSessionServices(store, {
       audioDirectory,
       modelsDirectory: join(app.getPath('userData'), 'models'),
+      credentials: new CredentialStore(join(app.getPath('userData'), 'credentials.json'), safeStorage),
       sidecar: () =>
         resolveSidecarCommand({
           isPackaged: app.isPackaged,
           appPath: app.getAppPath(),
           resourcesPath: process.resourcesPath,
         }),
-      // TODO(#16): 接入 safeStorage 凭证服务；接入前 notes.generate 返回 API_KEY_MISSING
       emitMeeting: (meeting) => publish(eventChannels.meetingUpdated, meeting),
       emitProgress: (progress) => publish(eventChannels.jobProgress, progress),
       logger,

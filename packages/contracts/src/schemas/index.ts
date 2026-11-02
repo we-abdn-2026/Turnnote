@@ -63,7 +63,8 @@ export const settingsSchema = z.strictObject({
   includeSystemAudio: z.boolean(),
   transcriptionModel: modelSchema,
   transcriptionLanguage: z.enum(['en', 'zh', 'auto']),
-  deepseekModel: modelSchema,
+  noteProvider: z.string().min(1).max(64).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
+  noteModel: modelSchema,
 }) satisfies z.ZodType<AppSettings>;
 export const settingsPatchSchema = settingsSchema
   .partial()
@@ -73,9 +74,13 @@ export const defaultSettings: AppSettings = {
   includeSystemAudio: true,
   transcriptionModel: 'small',
   transcriptionLanguage: 'auto',
+  noteProvider: 'deepseek',
   // deepseek-chat 已于 2026-07-24 停用
-  deepseekModel: 'deepseek-flash',
+  noteModel: 'deepseek-flash',
 };
+
+const providerSchema = z.string().min(1).max(64).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
+const apiKeySchema = z.string().trim().min(1).max(4096);
 
 export const errorCodeSchema = z.enum(Object.keys(errorMessages) as [ErrorCode, ...ErrorCode[]]);
 export const captureErrorCodeSchema = z.enum([
@@ -129,9 +134,9 @@ export const invokeSchemas = {
   settings: {
     get: noArgs,
     update: z.tuple([settingsPatchSchema]),
-    hasApiKey: noArgs,
-    setApiKey: z.tuple([z.string().trim().min(1).max(4096)]),
-    clearApiKey: noArgs,
+    hasApiKey: z.tuple([providerSchema]),
+    setApiKey: z.tuple([providerSchema, apiKeySchema]),
+    clearApiKey: z.tuple([providerSchema]),
   },
 } satisfies { [N in keyof TurnnoteInvokeApi]: { [M in keyof TurnnoteInvokeApi[N]]: z.ZodType } };
 

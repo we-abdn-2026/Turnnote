@@ -4,12 +4,14 @@ import type { MeetingDetail } from '@shared/contracts';
 import type { InvokeHandlers } from '@shared/invoke';
 import { fail, ok, requireCondition } from '@shared/result';
 import type { MeetingStore } from './database';
+import type { CredentialStore } from '../platform/credentials';
 
 export function createStorageHandlers(
   store: MeetingStore,
   audioDirectory: string,
   emit: (meeting: MeetingDetail) => void,
   releaseMeeting?: (id: string) => Promise<void>,
+  credentials?: CredentialStore,
 ): InvokeHandlers {
   function updated(meeting: MeetingDetail) {
     emit(meeting);
@@ -62,6 +64,16 @@ export function createStorageHandlers(
     settings: {
       get: async () => ok(store.getSettings()),
       update: async (patch) => ok(store.updateSettings(patch)),
+      hasApiKey: async (provider) => ok(credentials?.has(provider) ?? false),
+      setApiKey: async (provider, apiKey) => {
+        requireCondition(credentials !== undefined, 'NOT_IMPLEMENTED');
+        credentials.set(provider, apiKey);
+        return ok(null);
+      },
+      clearApiKey: async (provider) => {
+        credentials?.clear(provider);
+        return ok(null);
+      },
     },
   };
 }

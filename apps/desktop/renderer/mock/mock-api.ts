@@ -90,7 +90,7 @@ export function createMockApi({
   const meetingListeners = new Set<(meeting: MeetingDetail) => void>();
   const progressListeners = new Set<(progress: JobProgress) => void>();
   let settings = structuredClone(defaultSettings);
-  let hasApiKey = false;
+  const apiKeys = new Map<string, string>();
   let nextId = 1;
   let nextJobId = 1;
   const now = () => new Date().toISOString();
@@ -218,7 +218,7 @@ export function createMockApi({
     return withMeeting(id, (meeting) => {
       if (!canStartJob(meeting, kind, (segments.get(id)?.length ?? 0) > 0))
         return fail('INVALID_STATE');
-      if (kind === 'generating' && !hasApiKey) return fail('API_KEY_MISSING');
+      if (kind === 'generating' && !apiKeys.has(settings.noteProvider)) return fail('API_KEY_MISSING');
       const { job, meeting: snapshot } = begin(id, kind);
       void runJob(id, job);
       return ok(snapshot);
@@ -372,13 +372,13 @@ export function createMockApi({
         settings = { ...settings, ...structuredClone(patch) };
         return ok(structuredClone(settings));
       },
-      hasApiKey: async () => ok(hasApiKey),
-      setApiKey: async () => {
-        hasApiKey = true;
+      hasApiKey: async (provider: string) => ok(apiKeys.has(provider)),
+      setApiKey: async (provider: string, apiKey: string) => {
+        apiKeys.set(provider, apiKey);
         return ok(null);
       },
-      clearApiKey: async () => {
-        hasApiKey = false;
+      clearApiKey: async (provider: string) => {
+        apiKeys.delete(provider);
         return ok(null);
       },
     },

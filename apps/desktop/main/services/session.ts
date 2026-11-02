@@ -6,6 +6,7 @@ import { createStorageHandlers } from '../storage/handlers';
 import { createRecordingHandlers } from '../platform/recording';
 import { createTranscriptionService, type TranscriptionOptions } from './transcription';
 import { createGenerationService, type GenerationOptions } from './generation';
+import type { CredentialStore } from '../platform/credentials';
 
 /** The same Main composition is exercised in integration tests and Electron. */
 export function createSessionServices(
@@ -13,6 +14,7 @@ export function createSessionServices(
   options: TranscriptionOptions &
     Omit<GenerationOptions, 'emitMeeting' | 'emitProgress'> & {
       permissions: () => CapturePermissions;
+      credentials?: CredentialStore;
     },
 ) {
   let shutdown: Promise<void> | undefined;
@@ -25,7 +27,11 @@ export function createSessionServices(
     }
   };
   const transcription = createTranscriptionService(store, { ...options, emitMeeting });
-  const generation = createGenerationService(store, { ...options, emitMeeting });
+  const generation = createGenerationService(store, {
+    ...options,
+    credentials: options.credentials,
+    emitMeeting,
+  });
   const recording = createRecordingHandlers(
     store,
     options.audioDirectory,
@@ -33,13 +39,19 @@ export function createSessionServices(
     options.permissions,
     transcription.schedule,
   );
-  const storage = createStorageHandlers(store, options.audioDirectory, emitMeeting, async (id) => {
-    await Promise.all([
-      recording.releaseMeeting(id),
-      transcription.releaseMeeting(id),
-      generation.releaseMeeting(id),
-    ]);
-  });
+  const storage = createStorageHandlers(
+    store,
+    options.audioDirectory,
+    emitMeeting,
+    async (id) => {
+      await Promise.all([
+        recording.releaseMeeting(id),
+        transcription.releaseMeeting(id),
+        generation.releaseMeeting(id),
+      ]);
+    },
+    options.credentials,
+  );
   const handlers: InvokeHandlers = {
     ...storage,
     ...recording.handlers,
