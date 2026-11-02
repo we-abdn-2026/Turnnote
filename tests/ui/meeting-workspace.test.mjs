@@ -485,6 +485,199 @@ test('generation failure is safe and retry requires confirmation', async () => {
   assert.deepEqual(page.errors, []);
 });
 
+test('keyword draft must be saved before regeneration and guides the new version', async () => {
+  const page = await browser.open();
+  const id = await createTranscribedMeeting(page, 'Keyword regeneration');
+
+  await page.eval(`__ui.type('#meeting-keyword', '  定价  ')`);
+  await page.eval(`__ui.click('添加关键词')`);
+  await page.waitFor(`document.querySelector('.keyword-chip > span')?.textContent === '定价'`);
+
+  assert.equal(await page.eval(`__ui.calls['meetings.setKeywords'] ?? 0`), 0);
+
+  await page.eval(`__ui.type('#meeting-keyword', '定价')`);
+  await page.eval(`__ui.click('添加关键词')`);
+  await page.waitFor(`__ui.alerts().some((message) => message.includes('已经存在'))`);
+
+  await page.eval(`__ui.type('#meeting-keyword', '预算')`);
+  await page.eval(`__ui.click('添加关键词')`);
+  await page.waitFor(`document.querySelectorAll('.keyword-chip').length === 2`);
+
+  await page.eval(`document.querySelector('[aria-label="移除关键词 预算"]')?.click()`);
+  await page.waitFor(
+    `document.querySelectorAll('.keyword-chip').length === 1 &&
+     document.querySelector('.keyword-chip > span')?.textContent === '定价'`,
+  );
+
+  const blocked = await page.eval(`(() => {
+    const button = __ui.buttons().find((item) => item.label === '生成会议纪要');
+    return {
+      disabled: button?.disabled ?? false,
+      warning: document.querySelector('.generation-blocked')?.textContent ?? '',
+    };
+  })()`);
+
+  assert.equal(blocked.disabled, true);
+  assert.match(blocked.warning, /关键词有未保存更改/);
+  assert.equal(await page.eval(`__ui.calls['meetings.setKeywords'] ?? 0`), 0);
+
+  await page.eval(`__ui.click('保存关键词')`);
+  await page.waitFor(`__ui.text().includes('已保存 1 个关键词')`);
+
+  assert.deepEqual(
+    await page.eval(`(async () => (
+      await __ui.api.meetings.get(${JSON.stringify(id)})
+    ).value.keywords)()`),
+    ['定价'],
+  );
+  assert.match(await page.eval(`document.querySelector('.saved-keywords').textContent`), /定价/);
+  assert.equal(
+    await page.eval(`__ui.buttons().find((item) => item.label === '生成会议纪要')?.disabled`),
+    false,
+  );
+
+  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.click('生成会议纪要')`);
+  await page.eval(`__ui.click('确认发送并生成')`);
+  await page.waitFor(
+    `document.querySelector('.note-meta span:last-child')?.textContent === '版本 1'`,
+    { timeout: 8000 },
+  );
+
+  const first = await page.eval(`(async () => (
+    await __ui.api.notes.getLatest(${JSON.stringify(id)})
+  ).value)()`);
+  assert.equal(first.version, 1);
+  assert.equal(first.note.keyTopics.includes('定价'), true);
+
+  await page.eval(`__ui.faults['notes.generate'] = { type: 'hold' }`);
+  await page.eval(`__ui.click('重新生成会议纪要')`);
+
+  const disclosure = await page.eval(`(() => {
+    const dialog = document.querySelector('[role="alertdialog"]');
+    return {
+      title: dialog?.querySelector('strong')?.textContent ?? null,
+      text: dialog?.innerText ?? '',
+      buttons: [...(dialog?.querySelectorAll('button') ?? [])].map(
+        (button) => button.textContent,
+      ),
+    };
+  })()`);
+
+  assert.equal(disclosure.title, '重新生成会议内容并发送给 DeepSeek？');
+  assert.match(disclosure.text, /当前纪要版本 1 会保留/);
+  assert.ok(disclosure.buttons.includes('确认发送并重新生成'));
+
+  await page.eval(`__ui.click('确认发送并重新生成')`);
+  await page.waitFor(`__ui.calls['notes.generate'] === 2`);
+
+  const pendingButton = await page.eval(`(() => {
+    const button = __ui.buttons().find(
+      (item) => item.label === '正在重新生成...',
+    );
+    return {
+      exists: !!button,
+      disabled: button?.disabled ?? false,
+      noteVersion:
+        document.querySelector('.note-meta span:last-child')?.textContent,
+    };
+  })()`);
+
+  assert.deepEqual(pendingButton, {
+    exists: true,
+    disabled: true,
+    noteVersion: '版本 1',
+  });
+
+  await page.eval(`
+    delete __ui.faults['notes.generate'];
+    __ui.release('notes.generate');
+  `);
+
+  await page.waitFor(`__ui.status() === '正在生成纪要'`);
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.processing-progress-heading')?.textContent.includes('纪要生成进度')`,
+    ),
+    true,
+  );
+  assert.equal(
+    await page.eval(`document.querySelector('.note-meta span:last-child')?.textContent`),
+    '版本 1',
+  );
+
+  await page.waitFor(
+    `document.querySelector('.note-meta span:last-child')?.textContent === '版本 2'`,
+    { timeout: 8000 },
+  );
+
+  const latest = await page.eval(`(async () => (
+    await __ui.api.notes.getLatest(${JSON.stringify(id)})
+  ).value)()`);
+
+  assert.equal(latest.version, 2);
+  assert.equal(latest.note.keyTopics.includes('定价'), true);
+  assert.equal(await page.eval(`__ui.text().includes('test-only-secret')`), false);
+  assert.deepEqual(page.errors, []);
+});
+
+test('failed regeneration keeps the existing note and requires confirmation to retry', async () => {
+  const page = await browser.open();
+  const id = await createTranscribedMeeting(page, 'Failed regeneration');
+  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+
+  await page.eval(`__ui.click('生成会议纪要')`);
+  await page.eval(`__ui.click('确认发送并生成')`);
+  await page.waitFor(
+    `document.querySelector('.note-meta span:last-child')?.textContent === '版本 1'`,
+    { timeout: 8000 },
+  );
+
+  const before = await page.eval(`(async () => (
+    await __ui.api.notes.getLatest(${JSON.stringify(id)})
+  ).value)()`);
+
+  await page.eval(`
+    __ui.faults['notes.generate'] = {
+      type: 'result',
+      once: true,
+      error: {
+        code: 'DEEPSEEK_UNAVAILABLE',
+        message: 'DeepSeek is currently unavailable.'
+      }
+    }
+  `);
+
+  await page.eval(`__ui.click('重新生成会议纪要')`);
+  await page.eval(`__ui.click('确认发送并重新生成')`);
+  await page.waitFor(
+    `__ui.alerts().some((message) => message.includes('DeepSeek is currently unavailable.'))`,
+  );
+
+  const after = await page.eval(`(async () => (
+    await __ui.api.notes.getLatest(${JSON.stringify(id)})
+  ).value)()`);
+
+  assert.deepEqual(after, before);
+  assert.equal(
+    await page.eval(`document.querySelector('.note-meta span:last-child')?.textContent`),
+    '版本 1',
+  );
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.note-summary p')?.textContent === ${JSON.stringify(before.note.summary)}`,
+    ),
+    true,
+  );
+  assert.equal(await page.eval(`!!document.querySelector('[role="alertdialog"]')`), false);
+  assert.equal(
+    await page.eval(`__ui.buttons().find((item) => item.label === '重新生成会议纪要')?.disabled`),
+    false,
+  );
+  assert.equal(await page.eval(`__ui.text().includes('test-only-secret')`), false);
+  assert.deepEqual(page.errors, []);
+});
+
 test('note display renders every section, optional times and unspecified values', async () => {
   const page = await browser.open();
   const version = {

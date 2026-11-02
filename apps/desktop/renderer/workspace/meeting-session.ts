@@ -27,7 +27,7 @@ export interface MeetingRecording {
   disconnect(): void;
 }
 
-export type SessionAction = 'create' | 'start' | 'stop' | 'discard' | 'generate';
+export type SessionAction = 'create' | 'start' | 'stop' | 'discard' | 'keywords' | 'generate';
 
 export interface SessionState {
   meeting: MeetingDetail | null;
@@ -70,6 +70,11 @@ export function availableActions(state: SessionState): Record<SessionAction, boo
     start: idle && !!meeting && canStartJob(meeting, 'recording', false),
     stop: idle && meeting?.status === 'recording' && !!meeting.activeJobId,
     discard: idle && !!meeting && canCancelRecording(meeting),
+    keywords:
+      idle &&
+      !!meeting &&
+      (['created', 'captured', 'transcribed', 'ready'].includes(meeting.status) ||
+        (meeting.status === 'failed' && meeting.lastError?.kind === 'generating')),
     generate:
       idle && !!meeting && canStartJob(meeting, 'generating', state.transcriptSegments.length > 0),
   };
@@ -86,6 +91,8 @@ export interface MeetingSession {
   stop(): Promise<boolean>;
   /** 丢弃录音中或失败的录音，回到 created 以便重新录音 */
   discard(): Promise<boolean>;
+  /** 保存会议关键词；成功结果以 Main 返回的会议快照为准。 */
+  saveKeywords(keywords: string[]): Promise<boolean>;
   /** 重新读取当前会议的已提交转写片段。 */
   reloadTranscript(): Promise<void>;
   /** 用户确认发送内容后启动纪要生成；已有请求进行中时返回 false。 */
@@ -319,6 +326,12 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
       const meeting = state.meeting;
       if (!meeting) return Promise.resolve(false);
       return run('generate', () => api.notes.generate(meeting.id));
+    },
+    saveKeywords(keywords) {
+      const current = state.meeting;
+      if (!current) return Promise.resolve(false);
+
+      return run('keywords', () => api.meetings.setKeywords(current.id, keywords));
     },
     start() {
       const token = generation;
