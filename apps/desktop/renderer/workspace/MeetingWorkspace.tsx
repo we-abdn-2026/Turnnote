@@ -290,7 +290,7 @@ export function MeetingWorkspace({
                     <button
                       type="button"
                       className="key key-icon key-quiet"
-                      title="重命名会议"
+                      data-tip="重命名会议"
                       disabled={!manage.rename}
                       onClick={() => {
                         setDraftTitle(meeting.title);
@@ -436,7 +436,8 @@ export function MeetingWorkspace({
                         className="key key-quiet"
                         onClick={() => void session.exportMarkdown()}
                         disabled={!manage.export || editorOpen}
-                        title={editorOpen ? '保存或取消编辑后再导出' : '导出当前显示的纪要版本'}
+                        data-tip={editorOpen ? '保存或取消编辑后再导出' : '导出当前显示的纪要版本'}
+                        data-tip-align="end"
                       >
                         <Icon name="export" />
                         <span>{state.pending === 'export' ? '正在导出...' : '导出 Markdown'}</span>
@@ -449,7 +450,8 @@ export function MeetingWorkspace({
                             setPrompt({ revision: state.revision, attempt: state.attempt })
                           }
                           disabled={!actions.generate || keywordsDirty}
-                          title="用当前转写与关注词新增一个纪要版本"
+                          data-tip="用当前转写与关注词新增一个纪要版本"
+                          data-tip-align="end"
                         >
                           <Icon name="send" />
                           <span>{generationLabel}</span>
@@ -519,11 +521,13 @@ export function MeetingWorkspace({
                     />
                     <span className="switch-track" aria-hidden="true" />
                     <span>转写后保留音频</span>
+                    <span className="switch-state" aria-hidden="true" />
                   </label>
                   <button
                     type="button"
                     className="key key-icon key-quiet key-danger"
-                    title={meeting.status === 'recording' ? '停止录音后才能删除' : '删除会议'}
+                    data-tip={meeting.status === 'recording' ? '停止录音后才能删除' : '删除会议'}
+                    data-tip-align="end"
                     disabled={!manage.delete}
                     onClick={() => setConfirmDelete(true)}
                   >

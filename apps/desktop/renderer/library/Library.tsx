@@ -121,7 +121,8 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
           type="submit"
           className="key key-primary key-icon"
           disabled={!actions.create || !title.trim()}
-          title={
+          data-tip-align="end"
+          data-tip={
             blocked
               ? savePending
                 ? '录音已结束，保存完成后才能新建会议。'
@@ -153,15 +154,16 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
             className="field field-bare"
             aria-label="搜索会议"
             placeholder="搜索"
-            title={`搜索（${shortcutLabel('k')}）`}
             value={view.query}
             onChange={(e) => library.search(e.target.value)}
           />
+          <kbd aria-hidden="true">{shortcutLabel('k')}</kbd>
         </label>
         <button
           type="button"
           className="key key-icon key-quiet"
-          title="导入音频文件"
+          data-tip="导入音频文件"
+          data-tip-align="end"
           disabled={!manage.import}
           onClick={() => void handleImport()}
         >

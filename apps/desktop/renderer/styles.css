@@ -2,6 +2,7 @@
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/controls.css';
+@import './styles/tooltip.css';
 @import './styles/fields.css';
 @import './styles/shell.css';
 @import './styles/workspace.css';

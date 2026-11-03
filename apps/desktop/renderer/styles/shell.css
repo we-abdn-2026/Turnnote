@@ -77,14 +77,39 @@
   gap: var(--s-2);
   min-width: 0;
   padding: 0 var(--s-3);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-s);
-  background: var(--selected);
+  background: var(--sheet);
+  box-shadow: 0 1px 2px oklch(0.26 0.01 85 / 0.08) inset;
   color: var(--ink-3);
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+
+.library-search:hover {
+  border-color: var(--ink-3);
 }
 
 .library-search:focus-within {
-  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
   color: var(--ink-2);
+}
+
+.library-search kbd {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--ink-3);
+  font: 500 var(--t-micro) / 1.4 var(--font-ui);
+}
+
+.library-search:focus-within kbd,
+.library-search:has(input:not(:placeholder-shown)) kbd {
+  display: none;
 }
 
 .library-search .field:focus-visible {
@@ -165,9 +190,27 @@
   background: var(--hover);
 }
 
+.reel {
+  position: relative;
+}
+
 .reel[aria-current='true'] {
-  background: var(--selected);
+  background: var(--sheet);
+  box-shadow:
+    0 0 0 1px var(--rule),
+    0 1px 2px oklch(0.26 0.01 85 / 0.08);
   font-weight: 500;
+}
+
+.reel[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -2px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
 
 .reel:disabled:not([aria-current='true']) {

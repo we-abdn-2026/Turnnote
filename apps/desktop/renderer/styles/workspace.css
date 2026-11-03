@@ -6,9 +6,27 @@
   transition: grid-template-columns var(--t-slow) var(--ease-out);
   min-height: 0;
   overflow: hidden;
+  position: relative;
   background: var(--sheet);
   border-top-left-radius: var(--r-m);
-  box-shadow: -1px 0 0 var(--rule);
+  box-shadow: var(--shadow-page);
+}
+
+/* 纸纹：极淡的噪点盖在整页上，不挡交互、不参与文字对比度（透明度只有几个百分点） */
+.workspace::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--paper-grain);
+  opacity: var(--grain-opacity);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.workspace > * {
+  position: relative;
+  z-index: 1;
 }
 
 .workspace[data-drawer='open'] {
