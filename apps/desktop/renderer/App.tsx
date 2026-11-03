@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactElement,
+} from 'react';
 import type { AppSettings, TurnnoteApi } from '@shared/contracts';
 import { createCaptureRecording } from './audio/meeting-recording';
 import { Library } from './library/Library';
 import { createMeetingLibrary } from './library/meeting-library';
+import { SidebarResizer, useSidebarWidth } from './shell/SidebarResizer';
 import { TopBar } from './shell/TopBar';
 import { SettingsSheet } from './settings/SettingsSheet';
 import { providerInfo } from './ui/providers';
+import { useShortcuts } from './ui/shortcuts';
 import { createMeetingSession, type MeetingRecording } from './workspace/meeting-session';
 import { MeetingWorkspace } from './workspace/MeetingWorkspace';
 import { createRecordingClock } from './workspace/recording-clock';
@@ -33,6 +43,7 @@ export function App({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const [noteSettings, setNoteSettings] = useState<Pick<
     AppSettings,
     'noteProvider' | 'noteModel'
@@ -68,11 +79,29 @@ export function App({
     : { label: 'AI 服务', model: '' };
   const hasMeeting = !!state.meeting && state.meeting.status !== 'deleted';
 
+  const focusLibrary = useCallback((id: string) => {
+    setLibraryOpen(true);
+    // 抽屉模式下元素在展开前不可聚焦，等一帧再聚焦
+    window.requestAnimationFrame(() => document.getElementById(id)?.focus());
+  }, []);
+  const shortcuts = useMemo(
+    () => ({
+      n: () => focusLibrary('meeting-title'),
+      k: () => focusLibrary('library-search'),
+      '\\': () => setLibraryOpen((open) => !open),
+      j: () => (hasMeeting ? setDrawerOpen((open) => !open) : undefined),
+      ',': () => setSettingsOpen(true),
+    }),
+    [focusLibrary, hasMeeting],
+  );
+  useShortcuts(shortcuts);
+
   return (
     <div
       className="shell"
       data-chrome={chrome}
       data-library={libraryOpen ? 'open' : 'closed'}
+      style={{ '--sidebar-w': `${sidebarWidth}px` } as CSSProperties}
       data-recording={state.meeting?.status === 'recording' ? 'true' : undefined}
     >
       <TopBar
@@ -90,6 +119,7 @@ export function App({
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
       />
+      <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} />
       <div className="scrim" aria-hidden="true" onClick={() => setLibraryOpen(false)} />
       <MeetingWorkspace
         session={session}

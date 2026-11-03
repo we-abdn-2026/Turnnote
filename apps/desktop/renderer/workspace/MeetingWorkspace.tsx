@@ -553,6 +553,7 @@ export function MeetingWorkspace({
                       type="button"
                       className="key key-primary"
                       data-autofocus
+                      data-primary
                       onClick={() => void confirmGeneration()}
                     >
                       {regenerate ? '确认发送并重新生成' : '确认发送并生成'}
@@ -563,6 +564,15 @@ export function MeetingWorkspace({
                   </>
                 }
               >
+                <ul className="consent-summary" aria-label="发送摘要">
+                  <li>
+                    {provider.label}
+                    {provider.model ? ` · ${provider.model}` : ''}
+                  </li>
+                  <li>{state.transcriptSegments.length} 个转写片段</li>
+                  {savedKeywords.length > 0 && <li>{savedKeywords.length} 个关键词</li>}
+                  <li className="consent-local">不含音频</li>
+                </ul>
                 <p>
                   {`将向 ${provider.label}${provider.model ? `（${provider.model}）` : ''}发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。`}
                 </p>

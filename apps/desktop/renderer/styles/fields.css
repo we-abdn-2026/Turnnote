@@ -71,6 +71,84 @@
   cursor: pointer;
 }
 
+/* 可定制 select：仍是原生 <select>（键盘、读屏、表单语义不变），只有收起态和弹层换成纸面样式。
+   不支持的环境保持上面的基础样式。 */
+@supports (appearance: base-select) {
+  .field-select,
+  .field-select::picker(select) {
+    appearance: base-select;
+  }
+
+  .field-select {
+    background-image: none;
+    padding-right: var(--s-3);
+  }
+
+  .field-select::picker-icon {
+    color: var(--ink-3);
+    transition: transform var(--t-base) var(--ease-out);
+  }
+
+  .field-select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  .field-select::picker(select) {
+    margin-block: var(--s-1);
+    padding: var(--s-1);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-m);
+    background: var(--sheet);
+    box-shadow: var(--shadow-float);
+    transition:
+      opacity var(--t-fast) var(--ease-out),
+      transform var(--t-fast) var(--ease-out),
+      display var(--t-fast) allow-discrete,
+      overlay var(--t-fast) allow-discrete;
+  }
+
+  .field-select::picker(select):popover-open {
+    opacity: 1;
+    transform: none;
+  }
+
+  @starting-style {
+    .field-select::picker(select):popover-open {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  .field-select option {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: 32px;
+    padding: 0 var(--s-3);
+    border-radius: var(--r-s);
+    background: transparent;
+    color: var(--ink);
+    font-size: var(--t-ui);
+  }
+
+  .field-select option:hover,
+  .field-select option:focus-visible {
+    background: var(--hover);
+    outline: none;
+  }
+
+  .field-select option:checked {
+    background: var(--selected);
+    font-weight: 500;
+  }
+
+  .field-select option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: var(--accent);
+  }
+}
+
 input[type='search']::-webkit-search-cancel-button {
   appearance: none;
 }

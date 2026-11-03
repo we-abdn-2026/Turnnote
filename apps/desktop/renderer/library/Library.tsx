@@ -9,6 +9,7 @@ import {
   type ReactElement,
 } from 'react';
 import { Icon } from '../ui/icons';
+import { shortcutLabel } from '../ui/shortcuts';
 import { SHORT_STATUS, STATUS_DOT } from '../ui/timecode';
 import {
   availableActions,
@@ -125,7 +126,7 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
               ? savePending
                 ? '录音已结束，保存完成后才能新建会议。'
                 : '正在录音，停止录音后才能新建会议。'
-              : '新建会议'
+              : `新建会议（${shortcutLabel('n')} 聚焦标题）`
           }
         >
           <Icon name="plus" />
@@ -147,10 +148,12 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
           <Icon name="search" />
           <input
             ref={searchRef}
+            id="library-search"
             type="search"
             className="field field-bare"
             aria-label="搜索会议"
             placeholder="搜索"
+            title={`搜索（${shortcutLabel('k')}）`}
             value={view.query}
             onChange={(e) => library.search(e.target.value)}
           />

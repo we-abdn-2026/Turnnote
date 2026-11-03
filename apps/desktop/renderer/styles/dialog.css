@@ -55,6 +55,26 @@
   line-height: 1.7;
 }
 
+.consent-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.consent-summary li {
+  padding: 2px var(--s-3);
+  border-radius: var(--r-s);
+  background: var(--sidebar);
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.consent-summary .consent-local {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
+  color: var(--ink-2);
+}
+
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;

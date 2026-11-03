@@ -322,3 +322,90 @@ test('export confirmation is a toast that disappears by itself', async () => {
   await page.waitFor(`!document.querySelector('.toast')`, { timeout: 6000 });
   assert.deepEqual(page.errors, []);
 });
+
+const keyCombo = async (page, key, code, keyCode, modifiers = 4) => {
+  // modifiers: 2 = Ctrl, 4 = Meta。应用按平台择一，这里两种都发
+  for (const mod of [2, 4]) {
+    for (const type of ['keyDown', 'keyUp']) {
+      await page.send('Input.dispatchKeyEvent', {
+        type,
+        key,
+        code,
+        windowsVirtualKeyCode: keyCode,
+        modifiers: mod,
+      });
+    }
+  }
+  void modifiers;
+};
+
+test('global shortcuts focus the new-meeting field and search, and toggle the drawer', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await keyCombo(page, 'n', 'KeyN', 78);
+  await page.waitFor(`document.activeElement?.id === 'meeting-title'`);
+  await keyCombo(page, 'k', 'KeyK', 75);
+  await page.waitFor(`document.activeElement?.id === 'library-search'`);
+  await keyCombo(page, 'j', 'KeyJ', 74);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
+  await keyCombo(page, 'j', 'KeyJ', 74);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'closed'`);
+  await keyCombo(page, ',', 'Comma', 188);
+  await page.waitFor(`!!document.querySelector('.settings-sheet[open]')`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('Cmd/Ctrl+Enter confirms the send dialog but never a destructive one', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'k')`);
+  await page.eval(`__ui.click('删除会议')`);
+  await page.waitFor(`!!document.querySelector('dialog[open]')`);
+  await keyCombo(page, 'Enter', 'Enter', 13);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(await page.eval(`__ui.calls['meetings.delete'] ?? 0`), 0);
+  await page.eval(`__ui.click('取消')`);
+
+  await page.eval(`__ui.click('重新生成会议纪要')`);
+  await page.waitFor(`!!document.querySelector('.generation-consent[open]')`);
+  assert.match(
+    await page.eval(`document.querySelector('.consent-summary').textContent`),
+    /DeepSeek.*4 个转写片段.*不含音频/,
+  );
+  await keyCombo(page, 'Enter', 'Enter', 13);
+  await page.waitFor(`__ui.calls['notes.generate'] >= 1`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('sidebar width: keyboard resize, persisted, double-click resets', async () => {
+  const page = await browser.open();
+  const width = `Math.round(document.querySelector('.library').getBoundingClientRect().width)`;
+  assert.equal(await page.eval(width), 264);
+  await page.eval(`document.querySelector('.sidebar-resizer').focus()`);
+  for (let i = 0; i < 3; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
+  await page.waitFor(`${width} === 312`);
+  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '312');
+  assert.equal(
+    await page.eval(`document.querySelector('.sidebar-resizer').getAttribute('aria-valuenow')`),
+    '312',
+  );
+  for (let i = 0; i < 20; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
+  await page.waitFor(`${width} === 420`);
+  await page.eval(
+    `document.querySelector('.sidebar-resizer').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
+  );
+  await page.waitFor(`${width} === 264`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('dark colour scheme swaps the paper tokens without changing the DOM', async () => {
+  const page = await browser.open();
+  const paper = `getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()`;
+  const light = await page.eval(paper);
+  await page.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-color-scheme', value: 'dark' }],
+  });
+  await page.waitFor(`${paper} !== ${JSON.stringify(light)}`);
+  assert.equal(await page.eval(`matchMedia('(prefers-color-scheme: dark)').matches`), true);
+  assert.deepEqual(page.errors, []);
+});
