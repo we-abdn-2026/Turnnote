@@ -3,7 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/icons';
-import { formatTimecode } from '../ui/timecode';
+import { formatTimecode } from '@shared/timecode';
 import type { MeetingSession, SessionState } from './meeting-session';
 import {
   activeConfirmation,

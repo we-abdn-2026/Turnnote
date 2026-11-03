@@ -26,7 +26,10 @@
 | `transcription.cancel` | `captured` | 杀死进程、结束当前 job，不保存部分片段；音频保留 |
 | `notes.generate` | `generating` | 只允许 transcribed、ready 或 failed/generating，且有非空转写；须具备凭证，由用户显式请求 |
 | `notes.saveEdit` | 新 `NoteVersion` | 校验 schema 和 `expectedVersion`；旧版本返回 `CONFLICT`，不覆盖新编辑 |
+| `exports.markdown` | `{ saved: true }`；用户取消为 `{ saved: false }` | Main 打开保存对话框，写入**写入时刻**已保存的最新纪要版本（含用户编辑）。无纪要返回 `INVALID_STATE` 且不弹对话框；会议不存在 `NOT_FOUND`；写入失败 `WRITE_FAILED`。任何失败都不改变会议记录，先写同目录临时文件再 rename，不截断已有文件 |
 | `meetings.delete` | `null` | 先提交 deleted 墓碑并取消任务，再清文件，最后级联删库；清理失败保留墓碑，列表和 get 不可见，允许重试 |
+
+Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:mm`），然后依次为摘要、关键主题、决策、未决问题、行动项，小节名与界面一致；决策和行动项带 `（来源 HH:MM:SS）`，空小节写“未指定”。用户文本一律按数据转义，不会被解释为 Markdown 或 HTML。输出样例见 [`tests/fixtures/exported-meeting.md`](../tests/fixtures/exported-meeting.md)，`tests/markdown-export.test.mjs` 逐字比对。
 
 `lastError` 只在 failed 状态非空，包含失败 jobId 和 recording/transcribing/generating 的失败阶段。取消任务记为 cancelled，不能伪装成失败，也不自动发起重试。
 

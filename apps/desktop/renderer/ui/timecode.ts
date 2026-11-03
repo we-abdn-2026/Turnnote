@@ -1,14 +1,4 @@
-// 场记单使用固定宽度时间码 HH:MM:SS，列宽不随会议长度跳动。
-// 转写只有毫秒精度的片段起止，不伪造帧号。
 import type { MeetingStatus, TranscriptSegment } from '@shared/contracts';
-
-export function formatTimecode(milliseconds: number): string {
-  const total = Math.max(0, Math.floor(milliseconds / 1000));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
-}
 
 /** 片段时长，供场记行的标题提示和朗读使用 */
 export function formatDuration(milliseconds: number): string {

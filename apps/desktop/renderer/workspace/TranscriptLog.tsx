@@ -2,7 +2,8 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import type { TranscriptSegment } from '@shared/contracts';
 import { Icon } from '../ui/icons';
-import { formatDuration, formatTimecode } from '../ui/timecode';
+import { formatTimecode } from '@shared/timecode';
+import { formatDuration } from '../ui/timecode';
 import {
   TRANSCRIPT_LOAD_FAILED_MESSAGE,
   meetingActions,

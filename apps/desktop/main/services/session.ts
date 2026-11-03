@@ -7,6 +7,7 @@ import { createRecordingHandlers } from '../platform/recording';
 import { createTranscriptionService, type TranscriptionOptions } from './transcription';
 import { createGenerationService, type GenerationOptions } from './generation';
 import { createAudioRetention } from './audio-retention';
+import { createExportHandlers, type ExportOptions } from './export';
 import type { CredentialStore } from '../platform/credentials';
 
 /** The same Main composition is exercised in integration tests and Electron. */
@@ -16,6 +17,8 @@ export function createSessionServices(
     Omit<GenerationOptions, 'emitMeeting' | 'emitProgress'> & {
       permissions: () => CapturePermissions;
       credentials?: CredentialStore;
+      /** 未提供时 exports.markdown 返回 NOT_IMPLEMENTED（例如无窗口的测试环境） */
+      exports?: ExportOptions;
     },
 ) {
   let shutdown: Promise<void> | undefined;
@@ -74,6 +77,7 @@ export function createSessionServices(
         return ok(meeting);
       },
     },
+    ...(options.exports && { exports: createExportHandlers(store, options.exports) }),
   };
   // Once quitting begins, no IPC call can create resources after shutdown's snapshot.
   for (const methods of Object.values(handlers)) {

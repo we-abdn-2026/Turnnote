@@ -6,6 +6,11 @@ export { resolveSidecarCommand } from '../../apps/desktop/main/services/sidecar-
 export { createSessionServices } from '../../apps/desktop/main/services/session';
 export { createAudioRetention } from '../../apps/desktop/main/services/audio-retention';
 export { removeManagedFile } from '../../apps/desktop/main/storage/managed-file';
+export { createExportHandlers } from '../../apps/desktop/main/services/export';
+export {
+  markdownFileName,
+  renderMeetingMarkdown,
+} from '../../apps/desktop/main/services/markdown-export';
 export { SafeLogger, safeLogPath } from '../../apps/desktop/main/safe-logger';
 export { createMockApi } from '../../apps/desktop/renderer/mock/mock-api';
 export { AudioDeviceSelector } from '../../apps/desktop/renderer/components/AudioDeviceSelector';
@@ -31,11 +36,8 @@ export {
 export { createMeetingLibrary } from '../../apps/desktop/renderer/library/meeting-library';
 export { createRecordingClock } from '../../apps/desktop/renderer/workspace/recording-clock';
 export { describeCode, describeError } from '../../apps/desktop/renderer/ui/errors';
-export {
-  formatTimecode,
-  segmentIndexAt,
-  transcriptLength,
-} from '../../apps/desktop/renderer/ui/timecode';
+export { segmentIndexAt, transcriptLength } from '../../apps/desktop/renderer/ui/timecode';
+export { formatTimecode } from '../../packages/contracts/src/timecode';
 export {
   activeConfirmation,
   deriveRecordingControls,
