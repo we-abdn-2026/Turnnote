@@ -1,4 +1,12 @@
-import { app, BrowserWindow, dialog, safeStorage, systemPreferences } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  safeStorage,
+  systemPreferences,
+  type OpenDialogOptions,
+  type SaveDialogOptions,
+} from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { eventChannels } from '@shared/contracts';
@@ -26,6 +34,18 @@ app.on('second-instance', () => {
   if (window?.isMinimized()) window.restore();
   window?.focus();
 });
+
+// 有可用窗口时作为模态对话框，否则独立弹出
+function showSaveDialog(options: SaveDialogOptions) {
+  return window && !window.isDestroyed()
+    ? dialog.showSaveDialog(window, options)
+    : dialog.showSaveDialog(options);
+}
+function showOpenDialog(options: OpenDialogOptions) {
+  return window && !window.isDestroyed()
+    ? dialog.showOpenDialog(window, options)
+    : dialog.showOpenDialog(options);
+}
 
 function interruptRecording(): void {
   void services?.interruptRecording().catch((error) => {
@@ -99,16 +119,22 @@ void app
       modelsDirectory: join(app.getPath('userData'), 'models'),
       exports: {
         chooseSavePath: async (defaultFileName) => {
-          const options = {
+          const result = await showSaveDialog({
             title: '导出 Markdown',
             defaultPath: defaultFileName,
             filters: [{ name: 'Markdown', extensions: ['md'] }],
-          };
-          const result =
-            window && !window.isDestroyed()
-              ? await dialog.showSaveDialog(window, options)
-              : await dialog.showSaveDialog(options);
+          });
           return result.canceled || !result.filePath ? null : result.filePath;
+        },
+      },
+      importAudio: {
+        chooseFile: async () => {
+          const result = await showOpenDialog({
+            title: '导入音频文件',
+            properties: ['openFile'],
+            filters: [{ name: '音频', extensions: ['wav', 'mp3', 'm4a'] }],
+          });
+          return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
         },
       },
       credentials: new CredentialStore(

@@ -8,6 +8,7 @@ import { createTranscriptionService, type TranscriptionOptions } from './transcr
 import { createGenerationService, type GenerationOptions } from './generation';
 import { createAudioRetention } from './audio-retention';
 import { createExportHandlers, type ExportOptions } from './export';
+import { createImportHandlers, type ImportOptions } from './import-audio';
 import type { CredentialStore } from '../platform/credentials';
 
 /** The same Main composition is exercised in integration tests and Electron. */
@@ -19,6 +20,8 @@ export function createSessionServices(
       credentials?: CredentialStore;
       /** 未提供时 exports.markdown 返回 NOT_IMPLEMENTED（例如无窗口的测试环境） */
       exports?: ExportOptions;
+      /** 未提供时 meetings.importAudio 返回 NOT_IMPLEMENTED（例如无窗口的测试环境） */
+      importAudio?: Pick<ImportOptions, 'chooseFile'>;
     },
 ) {
   let shutdown: Promise<void> | undefined;
@@ -68,6 +71,13 @@ export function createSessionServices(
     notes: { ...storage.notes, ...generation.handlers },
     meetings: {
       ...storage.meetings,
+      ...(options.importAudio &&
+        createImportHandlers(store, {
+          audioDirectory: options.audioDirectory,
+          chooseFile: options.importAudio.chooseFile,
+          emit: emitMeeting,
+          schedule: transcription.schedule,
+        })),
       // 取消保留时，已转写会议的音频立即按策略清理；开启保留不会恢复已删除的音频。
       setRetainAudio: async (id, retain) => {
         const result = await storage.meetings!.setRetainAudio!(id, retain);
