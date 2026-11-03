@@ -83,6 +83,7 @@ export function RecordingControls({
                 type="button"
                 className="key key-record"
                 data-autofocus
+                data-primary
                 onClick={() => void confirmStart()}
               >
                 已告知，开始录音

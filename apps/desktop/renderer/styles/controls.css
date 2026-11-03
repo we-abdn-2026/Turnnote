@@ -112,7 +112,13 @@
 }
 
 .dot-done {
-  background: var(--ink-3);
+  background: var(--ink);
+}
+
+/* 空闲：空心圈，和“已完成”的实心点区分开 */
+.dot-idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--rule-strong);
 }
 
 .dot-warn {

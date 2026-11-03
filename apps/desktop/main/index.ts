@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  nativeTheme,
   safeStorage,
   systemPreferences,
   type OpenDialogOptions,
@@ -54,25 +55,43 @@ function interruptRecording(): void {
   });
 }
 
+// 与 Renderer 的 --paper / --ink 一致；窗口底色先于页面绘制，避免启动闪白或闪黑
+const WINDOW_THEME = {
+  light: { paper: '#f9f6f2', ink: '#26241f' },
+  dark: { paper: '#171613', ink: '#eae8e3' },
+};
+
+function windowTheme(): { paper: string; ink: string } {
+  return nativeTheme.shouldUseDarkColors ? WINDOW_THEME.dark : WINDOW_THEME.light;
+}
+
 function createWindow(): void {
+  const theme = windowTheme();
   window = new BrowserWindow({
     width: 1280,
     height: 800,
     // 380px 是开会时贴在视频会议旁的监看窗口宽度；背景色与 Renderer 底色一致，避免启动白屏。
     minWidth: 380,
     minHeight: 560,
-    backgroundColor: '#131518',
+    backgroundColor: theme.paper,
     // Renderer 自绘标题栏：macOS 内嵌交通灯，Windows/Linux 使用系统窗口按钮覆盖层。
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin'
       ? { trafficLightPosition: { x: 16, y: 16 } }
-      : { titleBarOverlay: { color: '#131518', symbolColor: '#c9ced6', height: 48 } }),
+      : { titleBarOverlay: { color: theme.paper, symbolColor: theme.ink, height: 48 } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
     },
+  });
+  nativeTheme.on('updated', () => {
+    const next = windowTheme();
+    window?.setBackgroundColor(next.paper);
+    if (process.platform !== 'darwin') {
+      window?.setTitleBarOverlay({ color: next.paper, symbolColor: next.ink, height: 48 });
+    }
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());

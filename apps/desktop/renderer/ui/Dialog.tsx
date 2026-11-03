@@ -63,6 +63,14 @@ export function Dialog({
     // 原生 cancel 只在真实 Escape 按键时触发；窗口级监听同时覆盖合成事件和非模态回退
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close();
+      // ⌘/Ctrl+Enter 只确认标为主操作的肯定动作；删除、丢弃的默认焦点在取消上，不响应
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        const primary = ref.current?.querySelector<HTMLButtonElement>('[data-primary]');
+        if (primary && !primary.disabled) {
+          event.preventDefault();
+          primary.click();
+        }
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

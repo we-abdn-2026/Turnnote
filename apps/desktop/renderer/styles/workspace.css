@@ -2,7 +2,8 @@
 .workspace {
   grid-area: workspace;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 0;
+  transition: grid-template-columns var(--t-slow) var(--ease-out);
   min-height: 0;
   overflow: hidden;
   background: var(--sheet);
@@ -43,6 +44,31 @@
 .bulletin-warn {
   background: var(--warn-wash);
   color: var(--warn);
+}
+
+.toast {
+  position: fixed;
+  z-index: 30;
+  bottom: var(--s-16);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--t-ui);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  animation: toast-in var(--t-base) var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
 }
 
 .bulletin strong {
@@ -122,9 +148,20 @@
 .doc-meta {
   display: flex;
   gap: var(--s-3);
-  margin-left: auto;
   color: var(--ink-3);
   font-size: var(--t-small);
+}
+
+.doc-meta {
+  order: 1;
+}
+
+.doc-line .dot {
+  order: 2;
+}
+
+.meeting-status {
+  order: 3;
 }
 
 .doc-meta time,
@@ -146,6 +183,11 @@
   align-items: center;
   gap: var(--s-3) var(--s-4);
   margin-bottom: var(--s-8);
+}
+
+/* 已有纪要时，生成区降级为纪要条下方的一行 */
+.generate-quiet {
+  margin: var(--s-3) 0 var(--s-6);
 }
 
 .generate > .keywords {
@@ -170,13 +212,33 @@
 }
 
 .keyword-add form {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 28px;
+  padding: 0 var(--s-3);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-s);
+  color: var(--ink-3);
+  transition: border-color var(--t-fast) var(--ease-out);
+}
+
+.keyword-add form:hover {
+  border-color: var(--ink-3);
+}
+
+.keyword-add form:focus-within {
+  border: 1px solid var(--accent);
+  color: var(--accent-ink);
+}
+
+.keyword-add-label {
+  display: inline-flex;
 }
 
 .keyword-add .field {
-  width: 10em;
-  min-height: 28px;
-  padding-left: var(--s-1);
+  width: 7em;
+  min-height: 26px;
 }
 
 .keyword-add .field::placeholder {
@@ -204,13 +266,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: var(--s-1) var(--s-3);
   margin-bottom: var(--s-4);
-}
-
-.note-bar .note-meta {
-  order: 2;
 }
 
 .note-meta {
@@ -285,8 +343,15 @@
 .empty-stage {
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: var(--s-5);
   min-height: 60vh;
   padding: var(--s-12);
+}
+
+.empty-stage .key {
+  width: auto;
+  min-width: 132px;
 }
 
 .empty-stage-title {
@@ -413,44 +478,37 @@
   display: none;
 }
 
-/* 转写抽屉 */
-/* 收起时仍留在 DOM 中，只做视觉隐藏：转写内容始终可被读取和搜索 */
+/* 转写抽屉：始终在栅格里，列宽 0 ↔ 抽屉宽度过渡；收起时 inert，焦点和读屏都不会进入 */
 .drawer {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  display: flex;
+  min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--rule);
   background: var(--paper);
   overflow: hidden;
 }
 
-.workspace[data-drawer='open'] .drawer {
-  position: static;
-  width: auto;
-  height: auto;
-  overflow: hidden;
-  clip: auto;
-  display: flex;
-  animation: drawer-in var(--t-base) var(--ease-out);
-}
-
-@keyframes drawer-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
+.drawer .log {
+  width: var(--drawer-w);
+  border-left: 1px solid var(--rule);
 }
 
 @media (max-width: 899px) {
+  .workspace,
   .workspace[data-drawer='open'] {
     grid-template-columns: minmax(0, 1fr);
+    transition: none;
   }
 
   .workspace[data-drawer='open'] .canvas {
     display: none;
+  }
+
+  .workspace:not([data-drawer='open']) .drawer {
+    display: none;
+  }
+
+  .drawer .log {
+    width: 100%;
   }
 
   .doc {
@@ -463,5 +521,57 @@
 
   .bulletin {
     padding-inline: var(--s-5);
+  }
+}
+
+/* 切换会议：文档轻轻淡入；纪要章节依次淡入，总时长不超过 400ms */
+.doc {
+  animation: fade-in var(--t-base) var(--ease-out);
+}
+
+.note-content > section {
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.note-content > section:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.note-content > section:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.note-content > section:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.note-content > section:nth-child(5) {
+  animation-delay: 200ms;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* 录音条：圆点和时间码出现时轻弹一下，之后只有圆点呼吸 */
+.dock .recording-indicator,
+.dock .dock-time,
+.dock .dock-saving {
+  animation: dock-in var(--t-base) var(--ease-out);
+}
+
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
   }
 }

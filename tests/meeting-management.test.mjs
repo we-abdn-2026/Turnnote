@@ -379,3 +379,38 @@ test('recording clock counts one job, freezes when media stops and resets for th
   assert.equal(clock.getSnapshot(), 0);
   stop();
 });
+
+test('search shows the matching transcript passage only for meetings whose title did not match', async () => {
+  const api = createMockApi({ seed: true, delayMs: 1 });
+  const library = createMeetingLibrary(api);
+  const stop = library.connect(() => () => {});
+  const settled = (predicate) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('timed out')), 2000);
+      const check = () => {
+        if (predicate(library.getState())) {
+          clearTimeout(timer);
+          off();
+          resolve(library.getState());
+        }
+      };
+      const off = library.subscribe(check);
+      check();
+    });
+  await settled((state) => state.loadState === 'ready');
+
+  library.search('release notes');
+  const found = await settled((state) => state.items[0]?.snippet !== undefined);
+  assert.equal(found.items[0].snippet.match, 'release notes');
+  assert.match(found.items[0].snippet.before, /prepare the $/);
+
+  // 标题已命中时不再显示片段
+  library.search('weekly');
+  // 切换查询的瞬间旧片段就被清掉，之后刷新出的标题命中项也没有片段
+  assert.equal(library.getState().items[0].snippet, undefined);
+  const byTitle = await settled((state) => state.query === 'weekly' && state.items.length === 1);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(library.getState().items[0].snippet, undefined);
+  assert.equal(byTitle.items[0].title, 'Weekly sync');
+  stop();
+});

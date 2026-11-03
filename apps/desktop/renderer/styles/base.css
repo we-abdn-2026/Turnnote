@@ -10,6 +10,9 @@ body,
 
 body {
   margin: 0;
+  text-autospace: normal;
+  line-break: strict;
+  hanging-punctuation: first last;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);

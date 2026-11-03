@@ -1,16 +1,16 @@
 // 会议文档画布：一份纪要文档 + 右侧可开关的转写抽屉。
 // 业务状态只来自 Main 的快照；provider 名称取自设置，不写死任何服务商。
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import type { MeetingDetail } from '@shared/contracts';
 import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 import { Dialog } from '../ui/Dialog';
 import { describeError } from '../ui/errors';
-import { formatTimecode } from '@shared/timecode';
 import { Icon } from '../ui/icons';
 import {
   STATUS_DOT,
   STATUS_LABELS,
   formatDateTime,
+  formatDuration,
   segmentIndexAt,
   transcriptLength,
 } from '../ui/timecode';
@@ -85,6 +85,16 @@ export function MeetingWorkspace({
   const length = transcriptLength(state.transcriptSegments);
 
   const [cue, setCue] = useState<(Cue & { meetingId: string }) | null>(null);
+  const [linkedMs, setLinkedMs] = useState<number | null>(null);
+  // 成功确认只停留几秒；以操作序号标记已关闭的那一条，下一次操作产生的新确认会重新出现
+  const [dismissedNotice, setDismissedNotice] = useState(-1);
+  const noticeVisible = !!state.notice && dismissedNotice !== state.attempt;
+  useEffect(() => {
+    if (!noticeVisible) return;
+    const attempt = state.attempt;
+    const timer = window.setTimeout(() => setDismissedNotice(attempt), 3200);
+    return () => window.clearTimeout(timer);
+  }, [noticeVisible, state.attempt]);
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -217,12 +227,13 @@ export function MeetingWorkspace({
               {state.warning}
             </p>
           )}
-          {state.notice && (
-            <p className="workspace-notice bulletin" role="status">
-              {state.notice}
-            </p>
-          )}
         </div>
+        {noticeVisible && (
+          <p className="workspace-notice toast" role="status">
+            <Icon name="check" />
+            {state.notice}
+          </p>
+        )}
 
         {!meeting && <EmptyStage />}
 
@@ -265,7 +276,16 @@ export function MeetingWorkspace({
                 </form>
               ) : (
                 <div className="doc-title">
-                  <h2>{meeting.title}</h2>
+                  <h2
+                    title={gone || !manage.rename ? undefined : '双击重命名'}
+                    onDoubleClick={() => {
+                      if (gone || !manage.rename) return;
+                      setDraftTitle(meeting.title);
+                      setRenaming(true);
+                    }}
+                  >
+                    {meeting.title}
+                  </h2>
                   {!gone && (
                     <button
                       type="button"
@@ -285,6 +305,12 @@ export function MeetingWorkspace({
               )}
 
               <div className="doc-line">
+                {!gone && (
+                  <p className="doc-meta">
+                    <time dateTime={meeting.createdAt}>{formatDateTime(meeting.createdAt)}</time>
+                    {length !== null && <span>{formatDuration(length)}</span>}
+                  </p>
+                )}
                 {meeting.status !== 'ready' && (
                   <span className={`dot dot-${dot}`} aria-hidden="true" />
                 )}
@@ -295,12 +321,6 @@ export function MeetingWorkspace({
                 >
                   {statusText(state)}
                 </p>
-                {!gone && (
-                  <p className="doc-meta">
-                    <time dateTime={meeting.createdAt}>{formatDateTime(meeting.createdAt)}</time>
-                    {length !== null && <time>{formatTimecode(length)}</time>}
-                  </p>
-                )}
               </div>
             </header>
 
@@ -315,7 +335,7 @@ export function MeetingWorkspace({
               <>
                 {meeting.status === 'generating' && <ProcessingProgress state={state} />}
 
-                {canShowGenerationAction(meeting) && (
+                {canShowGenerationAction(meeting) && !regenerate && (
                   <div className="generate">
                     <KeywordEditor
                       draft={keywordDraft}
@@ -335,7 +355,7 @@ export function MeetingWorkspace({
                     />
                     <button
                       type="button"
-                      className={regenerate ? 'key' : 'key key-primary'}
+                      className="key key-primary"
                       onClick={() =>
                         setPrompt({ revision: state.revision, attempt: state.attempt })
                       }
@@ -421,7 +441,47 @@ export function MeetingWorkspace({
                         <Icon name="export" />
                         <span>{state.pending === 'export' ? '正在导出...' : '导出 Markdown'}</span>
                       </button>
+                      {canShowGenerationAction(meeting) && (
+                        <button
+                          type="button"
+                          className="key key-quiet"
+                          onClick={() =>
+                            setPrompt({ revision: state.revision, attempt: state.attempt })
+                          }
+                          disabled={!actions.generate || keywordsDirty}
+                          title="用当前转写与关注词新增一个纪要版本"
+                        >
+                          <Icon name="send" />
+                          <span>{generationLabel}</span>
+                        </button>
+                      )}
                     </div>
+                  </div>
+                )}
+
+                {note && canShowGenerationAction(meeting) && (
+                  <div className="generate generate-quiet">
+                    <KeywordEditor
+                      draft={keywordDraft}
+                      saved={savedKeywords}
+                      disabled={!actions.keywords}
+                      saving={state.pending === 'keywords'}
+                      dirty={keywordsDirty}
+                      onInput={(input) => updateKeywords({ input, message: null })}
+                      onAdd={addKeyword}
+                      onRemove={(keyword) =>
+                        updateKeywords({
+                          values: keywordDraft.values.filter((item) => item !== keyword),
+                          message: { tone: 'status', text: `已移除“${keyword}”，请保存。` },
+                        })
+                      }
+                      onSave={() => void saveKeywords()}
+                    />
+                    {keywordsDirty && (
+                      <p className="generation-blocked" role="status">
+                        关键词有未保存更改。请先保存关键词，或先恢复为已保存内容，再生成会议纪要。
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -440,6 +500,7 @@ export function MeetingWorkspace({
                         note={note.note}
                         segments={state.transcriptSegments}
                         onCue={jumpTo}
+                        linkedMs={linkedMs}
                       />
                       <p className="note-review-notice" role="note">
                         纪要是根据转写整理的内容，可能不准确。请核对决策、行动项、负责人和截止日期是否与会议实际讨论一致。
@@ -492,6 +553,7 @@ export function MeetingWorkspace({
                       type="button"
                       className="key key-primary"
                       data-autofocus
+                      data-primary
                       onClick={() => void confirmGeneration()}
                     >
                       {regenerate ? '确认发送并重新生成' : '确认发送并生成'}
@@ -502,6 +564,15 @@ export function MeetingWorkspace({
                   </>
                 }
               >
+                <ul className="consent-summary" aria-label="发送摘要">
+                  <li>
+                    {provider.label}
+                    {provider.model ? ` · ${provider.model}` : ''}
+                  </li>
+                  <li>{state.transcriptSegments.length} 个转写片段</li>
+                  {savedKeywords.length > 0 && <li>{savedKeywords.length} 个关键词</li>}
+                  <li className="consent-local">不含音频</li>
+                </ul>
                 <p>
                   {`将向 ${provider.label}${provider.model ? `（${provider.model}）` : ''}发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。`}
                 </p>
@@ -555,12 +626,13 @@ export function MeetingWorkspace({
       </div>
 
       {meeting && !gone && (
-        <aside id="transcript-drawer" className="drawer" aria-label="转写">
+        <aside id="transcript-drawer" className="drawer" aria-label="转写" inert={!drawerOpen}>
           <TranscriptLog
             session={session}
             state={state}
             cue={cue?.meetingId === meeting.id ? cue : null}
             onClose={() => onDrawer(false)}
+            onHover={setLinkedMs}
           />
         </aside>
       )}
