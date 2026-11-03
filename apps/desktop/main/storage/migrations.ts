@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import initialSql from './migrations/001_initial.sql?raw';
 import lifecycleSql from './migrations/002_job_lifecycle.sql?raw';
+import noteProviderSql from './migrations/003_note_provider_settings.sql?raw';
 
 export interface Migration {
   version: number;
@@ -9,6 +10,7 @@ export interface Migration {
 export const migrations: readonly Migration[] = [
   { version: 1, sql: initialSql },
   { version: 2, sql: lifecycleSql },
+  { version: 3, sql: noteProviderSql },
 ];
 
 export function migrate(db: Database.Database, steps: readonly Migration[] = migrations): void {

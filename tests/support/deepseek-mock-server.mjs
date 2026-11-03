@@ -157,6 +157,9 @@ function createRequestHandler(requestLog) {
           requestLog.push({
             timestamp: Date.now(),
             mode,
+            model: requestData.model ?? null,
+            // 只记录是否带了 Authorization，绝不记录 Key 本身
+            hasAuthorization: Boolean(req.headers.authorization),
             messages: requestData.messages || [],
           });
         }
@@ -176,12 +179,23 @@ function createRequestHandler(requestLog) {
             handleRateLimitMode(res);
             break;
 
-          case 'timeout':
-            handleTimeoutMode(res, transcriptText);
+          case 'timeout': {
+            const delayHeader = req.headers['x-mock-timeout-ms'];
+            const delayMs = delayHeader ? Number(delayHeader) : TIMEOUT_DELAY_MS;
+            handleTimeoutMode(
+              res,
+              transcriptText,
+              Number.isFinite(delayMs) ? delayMs : TIMEOUT_DELAY_MS,
+            );
             break;
+          }
 
           case 'invalid-json':
             handleInvalidJsonMode(res);
+            break;
+
+          case 'server-error':
+            handleServerErrorMode(res);
             break;
 
           case 'normal':
@@ -259,10 +273,10 @@ function handleRateLimitMode(res) {
 /**
  * Timeout mode: Delay response by 30 seconds
  */
-function handleTimeoutMode(res, transcriptText) {
+function handleTimeoutMode(res, transcriptText, delayMs = TIMEOUT_DELAY_MS) {
   const timerId = setTimeout(() => {
     handleNormalMode(res, transcriptText);
-  }, TIMEOUT_DELAY_MS);
+  }, delayMs);
 
   // Clear timeout if client disconnects
   res.on('close', () => {
@@ -280,6 +294,18 @@ function handleInvalidJsonMode(res) {
 }
 
 /**
+ * Server error mode: Return 503 so the client maps DEEPSEEK_UNAVAILABLE
+ */
+function handleServerErrorMode(res) {
+  res.writeHead(503, { 'Content-Type': 'application/json' });
+  res.end(
+    JSON.stringify({
+      error: { message: 'Service unavailable', type: 'server_error', code: 'service_unavailable' },
+    }),
+  );
+}
+
+/**
  * Start the server
  */
 function startServer(port = DEFAULT_PORT) {
@@ -289,7 +315,7 @@ function startServer(port = DEFAULT_PORT) {
   server.listen(port, () => {
     console.log(`DeepSeek mock server running on http://localhost:${server.address().port}`);
     console.log(`Endpoint: POST /v1/chat/completions`);
-    console.log(`Modes: normal (default), rate-limit, timeout, invalid-json`);
+    console.log(`Modes: normal (default), rate-limit, timeout, invalid-json, server-error`);
     console.log(`Control via header: X-Mock-Mode: <mode>`);
   });
 

@@ -98,7 +98,7 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 | key | TEXT | PRIMARY KEY |
 | value | TEXT | NOT NULL |
 
-key 白名单：microphoneDeviceId、includeSystemAudio、transcriptionModel、transcriptionLanguage、deepseekModel。value 为 JSON；未知字段（包括 API Key）在共享 schema 和 SQL CHECK 两层拒绝。API Key 的系统凭证实现属于 #16。
+key 白名单：microphoneDeviceId、includeSystemAudio、transcriptionModel、transcriptionLanguage、noteProvider、noteModel。value 为 JSON；未知字段（包括 API Key）在共享 schema 和 SQL CHECK 两层拒绝。API Key 按 provider 分存于 `CredentialStore`（#16），不进此表。v3 迁移将历史 `deepseekModel` 重命名为 `noteModel`，并补默认 `noteProvider=deepseek`。
 
 ## 迁移
 
