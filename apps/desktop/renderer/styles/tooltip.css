@@ -1,0 +1,59 @@
+/* 自绘提示：代替浏览器原生 title（延迟长、样式不一致、键盘聚焦时不出现）。
+   用法：给控件加 data-tip="文字"；靠右的控件再加 data-tip-align="end"。控件本身的可访问名称不变。 */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 50%;
+  padding: 4px var(--s-2);
+  border-radius: var(--r-s);
+  background: var(--ink);
+  box-shadow: var(--shadow-float);
+  color: var(--paper);
+  font: 500 var(--t-micro) / 1.4 var(--font-ui);
+  width: max-content;
+  max-width: 240px;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -2px);
+  transition:
+    opacity var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out);
+}
+
+[data-tip][data-tip-align='end']::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, -2px);
+}
+
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition-delay: 450ms;
+}
+
+[data-tip][data-tip-align='end']:hover::after {
+  transform: none;
+}
+
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+[data-tip][data-tip-align='end']:focus-visible::after {
+  transform: none;
+}
+
+@media (hover: none) {
+  [data-tip]::after {
+    display: none;
+  }
+}

@@ -409,3 +409,60 @@ test('dark colour scheme swaps the paper tokens without changing the DOM', async
   assert.equal(await page.eval(`matchMedia('(prefers-color-scheme: dark)').matches`), true);
   assert.deepEqual(page.errors, []);
 });
+
+test('every interactive control has a visible affordance; tooltips are custom, not native title', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('定位到转写 00:00:05')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
+  const bare = await page.eval(`(() => {
+    // 无框输入包在带边框的外层里；拖拽手柄和关键词 × 是有意的轻量控件
+    const allowed = ['field-bare', 'sidebar-resizer', 'chip-remove'];
+    const out = [];
+    for (const el of document.querySelectorAll('button, select, input, textarea')) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2 || el.matches('.visually-hidden, [type=checkbox]')) continue;
+      if (allowed.some((c) => el.classList.contains(c))) continue;
+      const cs = getComputedStyle(el);
+      const border = cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px';
+      const fill = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent';
+      if (!border && !fill && cs.boxShadow === 'none')
+        out.push((el.getAttribute('aria-label') || el.textContent || el.id).trim().slice(0, 24));
+    }
+    return out;
+  })()`);
+  assert.deepEqual(bare, [], `controls without a visible affordance: ${bare.join(', ')}`);
+
+  // 图标按钮用 data-tip；原生 title 只允许出现在非交互的说明文字上
+  assert.deepEqual(
+    await page.eval(
+      `[...document.querySelectorAll('button[title]:not(.reel)')].map((b) => b.title)`,
+    ),
+    [],
+  );
+  assert.ok(await page.eval(`document.querySelectorAll('button[data-tip]').length >= 4`));
+  assert.deepEqual(page.errors, []);
+});
+
+test('both switches are styled and show an explicit on/off word', async () => {
+  const page = await browser.open();
+  await page.eval(`__ui.type('#meeting-title', 'Switches')`);
+  await page.eval(`__ui.click('新建会议')`);
+  await page.waitFor(`__ui.status() === '已创建，未开始录音'`);
+  assert.equal(await page.eval(`document.querySelectorAll('.switch .switch-track').length`), 2);
+  assert.equal(await page.eval(`document.querySelectorAll('.switch-lamp').length`), 0);
+  const words = await page.eval(
+    `[...document.querySelectorAll('.switch-state')].map((e) => getComputedStyle(e, '::after').content)`,
+  );
+  assert.equal(words.length, 2);
+  for (const word of words) assert.match(word, /["']?[开关]["']?/);
+  // 切换一个开关后，状态词同步翻转
+  const before = await page.eval(
+    `getComputedStyle(document.querySelector('.doc-foot .switch-state'), '::after').content`,
+  );
+  await page.eval(`document.querySelector('.doc-foot .switch input').click()`);
+  await page.waitFor(
+    `getComputedStyle(document.querySelector('.doc-foot .switch-state'), '::after').content !== ${JSON.stringify(before)}`,
+  );
+  assert.deepEqual(page.errors, []);
+});

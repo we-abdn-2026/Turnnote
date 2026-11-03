@@ -172,7 +172,8 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
               onClick={() => setScanKey((key) => key + 1)}
               className="key key-icon refresh-button"
               aria-label="刷新设备列表"
-              title="刷新设备列表"
+              data-tip="刷新设备列表"
+              data-tip-align="end"
               disabled={locked}
             >
               <Icon name="refresh" />
@@ -206,9 +207,10 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
             onChange={(e) => void saveSettings({ includeSystemAudio: e.target.checked })}
             disabled={saving || locked}
           />
-          <span className="switch-lamp" aria-hidden="true" />
+          <span className="switch-track" aria-hidden="true" />
           <Icon name="speaker" />
           <span>同时录制系统音频</span>
+          <span className="switch-state" aria-hidden="true" />
         </label>
       </div>
     </div>

@@ -208,6 +208,25 @@ input[type='search']::-webkit-search-cancel-button {
   outline-offset: 2px;
 }
 
+.switch-state {
+  min-width: 1.5em;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  font-weight: 500;
+}
+
+.switch-state::after {
+  content: '关';
+}
+
+.switch input:checked ~ .switch-state {
+  color: var(--accent-ink);
+}
+
+.switch input:checked ~ .switch-state::after {
+  content: '开';
+}
+
 .switch:has(input:disabled) {
   color: var(--ink-3);
   cursor: not-allowed;

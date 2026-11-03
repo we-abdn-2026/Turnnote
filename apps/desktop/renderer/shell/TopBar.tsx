@@ -29,7 +29,7 @@ export function TopBar({
         aria-expanded={libraryOpen}
         aria-controls="meeting-library"
         aria-keyshortcuts={shortcutAria('\\')}
-        title={`会议库（${shortcutLabel('\\')}）`}
+        data-tip={`会议库（${shortcutLabel('\\')}）`}
         onClick={onToggleLibrary}
       >
         <Icon name="sidebar" />
@@ -43,7 +43,8 @@ export function TopBar({
             aria-pressed={drawerOpen}
             aria-controls="transcript-drawer"
             aria-keyshortcuts={shortcutAria('j')}
-            title={`转写（${shortcutLabel('j')}）`}
+            data-tip={`转写（${shortcutLabel('j')}）`}
+            data-tip-align="end"
             onClick={onToggleDrawer}
           >
             <Icon name="transcript" />
@@ -54,7 +55,8 @@ export function TopBar({
           className="key key-icon key-quiet"
           aria-label="设置"
           aria-keyshortcuts={shortcutAria(',')}
-          title={`设置（${shortcutLabel(',')}）`}
+          data-tip={`设置（${shortcutLabel(',')}）`}
+          data-tip-align="end"
           onClick={onOpenSettings}
         >
           <Icon name="settings" />

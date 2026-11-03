@@ -37,7 +37,7 @@ function SourceCue({
       type="button"
       className="cue"
       aria-label={`定位到转写 ${code}`}
-      title={found ? '定位到转写中的来源' : '转写中没有这个时间点'}
+      data-tip={found ? '定位到转写中的来源' : '转写中没有这个时间点'}
       disabled={!found}
       onClick={() => onCue(timestampMs)}
     >
