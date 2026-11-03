@@ -4,6 +4,11 @@ export { migrate, migrations } from '../../apps/desktop/main/storage/migrations'
 export { SidecarError, transcribe, withFakeFlag } from '../../apps/desktop/main/services/sidecar';
 export { resolveSidecarCommand } from '../../apps/desktop/main/services/sidecar-command';
 export { createSessionServices } from '../../apps/desktop/main/services/session';
+export {
+  createImportHandlers,
+  IMPORT_EXTENSIONS,
+  MAX_IMPORT_BYTES,
+} from '../../apps/desktop/main/services/import-audio';
 export { createAudioRetention } from '../../apps/desktop/main/services/audio-retention';
 export { removeManagedFile } from '../../apps/desktop/main/storage/managed-file';
 export { createExportHandlers } from '../../apps/desktop/main/services/export';

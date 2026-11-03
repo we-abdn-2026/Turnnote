@@ -21,7 +21,7 @@
 | `recording.stop` | 固定返回已提交的 `captured` 快照 | WAV finalize 完成后提交；随后 Main 自动启动转写，用事件报告 `transcribing`，不在响应中混用两种状态 |
 | `recording.cancel` | 文件清理完成后返回 `created` | 允许录音中或失败阶段为 recording；丢弃当前音频，清理失败保留引用和可恢复数据 |
 | `recording.fail` | `failed`，`lastError.kind=recording` | 仅接受采集四种错误码，由 Main 生成安全信息；保留音频，重录前显式 cancel |
-| `meetings.importAudio` | 取消为 `null`；成功为 `captured` | Main 复制文件到管理目录，随后自动转写；Renderer 不提交路径 |
+| `meetings.importAudio` | 取消为 `null`；成功为 `captured` | Main 打开文件选择并复制到管理目录（随机文件名，原文件只读），随后自动转写；Renderer 不提交路径。仅接受 `.wav`/`.mp3`/`.m4a`（大小写不敏感，与 sidecar 一致），空文件和不支持的格式返回 `AUDIO_DECODE_FAILED`，文件缺失/非普通文件 `AUDIO_NOT_FOUND`，超过 2 GiB `INVALID_INPUT`，复制失败 `WRITE_FAILED`；任何失败都回收副本、不创建会议。无法解码的文件在转写阶段以 `AUDIO_DECODE_FAILED` 失败并保留副本供重试 |
 | `transcription.start` | `transcribing` | 只允许 captured 或 failed/transcribing，且音频引用存在；Main 启动前检查实际文件 |
 | `transcription.cancel` | `captured` | 杀死进程、结束当前 job，不保存部分片段；音频保留 |
 | `notes.generate` | `generating` | 只允许 transcribed、ready 或 failed/generating，且有非空转写；须具备凭证，由用户显式请求 |
@@ -56,7 +56,7 @@ Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:m
 
 | 环境 | 已实现 | 尚未实现 |
 |---|---|---|
-| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、录音生命周期、AudioWriter、loopback、自动/手动转写和取消、任务错误持久化、转写读取、纪要读取/编辑、DeepSeek 纪要生成（[note-generation.md](note-generation.md)）、非敏感设置持久化 | 音频导入、真实模型引擎（#8）、凭证（#16，接入前 `notes.generate` 返回 `API_KEY_MISSING`）、导出 |
+| Electron Main | 应用信息、会议元数据 CRUD/搜索/删除、录音生命周期、AudioWriter、loopback、自动/手动转写和取消、任务错误持久化、转写读取、纪要读取/编辑、DeepSeek 纪要生成（[note-generation.md](note-generation.md)）、非敏感设置持久化、音频导入 | 真实模型引擎（#8）、导出 |
 | 浏览器 mock | 全部业务接口的内存模拟、状态/失败/取消/进度/编辑冲突 | 真实录音、文件、数据库、外部 API |
 
 `createSessionServices` 是 Electron 与集成测试共用的 Main 编排入口。recording.stop 在 WAV finalize 和 captured 提交后登记自动转写，再发布 captured；响应始终是该快照。手动启动、取消、删除和退出使待启动任务失效，旧任务的结果与进度按 jobId 丢弃。转写失败可通过 meetings.get 的 lastError 查询，音频不删除。
