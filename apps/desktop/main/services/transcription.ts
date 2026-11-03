@@ -14,6 +14,8 @@ export interface TranscriptionOptions {
   emitProgress: (progress: JobProgress) => void;
   pingTimeoutMs?: number;
   idleTimeoutMs?: number;
+  /** 转写提交后调用（#27 音频清理）；实现不得抛出 */
+  afterTranscribed?: (meetingId: string) => void;
   logger?: SafeLogger;
 }
 
@@ -82,6 +84,8 @@ export function createTranscriptionService(store: MeetingStore, options: Transcr
         },
       });
       if (!signal.aborted && store.completeTranscription(job.id, result.segments)) {
+        // 转写已提交；清理失败只记录，不改变任务结果。事件在清理后发布，hasAudio 才是最终值。
+        options.afterTranscribed?.(job.meetingId);
         emit(store.get(job.meetingId));
       }
     } catch (error) {

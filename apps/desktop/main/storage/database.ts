@@ -77,6 +77,8 @@ interface NoteRow {
   created_at: string;
 }
 
+const RELEASABLE_STATUSES: readonly MeetingStatus[] = ['transcribed', 'generating', 'ready'];
+
 /** 同步事务只拥有数据库；文件写入/删除和事件发布由 Main 服务在事务外协调。 */
 export class MeetingStore {
   private readonly db: Database.Database;
@@ -477,12 +479,23 @@ export class MeetingStore {
     });
   }
 
+  /**
+   * 转写已可靠入库且用户未选择保留时可以清理的音频，否则为 null。
+   * failed / captured 等状态的音频是重试输入，永远不可清理。
+   */
+  getReleasableAudio(id: string): AudioAsset | null {
+    const meeting = this.get(id);
+    return !meeting.retainAudio && RELEASABLE_STATUSES.includes(meeting.status)
+      ? this.getAudio(id)
+      : null;
+  }
+
   /** 文件先删除，再清理引用；并发修改保留标志后不再允许删除。由 Main 串行协调文件操作。 */
   removeAudioReference(id: string, assetId: string): void {
     this.atomic(() => {
       const meeting = this.get(id);
       requireCondition(
-        !meeting.retainAudio && ['transcribed', 'generating', 'ready'].includes(meeting.status),
+        !meeting.retainAudio && RELEASABLE_STATUSES.includes(meeting.status),
         'INVALID_STATE',
       );
       requireCondition(this.getAudio(id)?.id === assetId, 'CONFLICT');

@@ -1,9 +1,8 @@
-import { realpathSync, unlinkSync } from 'node:fs';
-import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { MeetingDetail } from '@shared/contracts';
 import type { InvokeHandlers } from '@shared/invoke';
 import { fail, ok, requireCondition } from '@shared/result';
 import type { MeetingStore } from './database';
+import { removeManagedFile } from './managed-file';
 import type { CredentialStore } from '../platform/credentials';
 
 export function createStorageHandlers(
@@ -26,16 +25,9 @@ export function createStorageHandlers(
     const audio = store.getAudio(id);
     if (audio) {
       try {
-        const root = realpathSync(audioDirectory);
-        const parent = realpathSync(dirname(audio.filePath));
-        const child = relative(root, resolve(parent, basename(audio.filePath)));
-        requireCondition(
-          child && child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child),
-          'WRITE_FAILED',
-        );
-        unlinkSync(audio.filePath);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return fail('WRITE_FAILED');
+        removeManagedFile(audioDirectory, audio.filePath);
+      } catch {
+        return fail('WRITE_FAILED');
       }
     }
     store.purgeDeleted(id);

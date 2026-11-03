@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   createStorageHandlers,
   MeetingStore,
@@ -552,4 +552,105 @@ test('audio retention guards reference cleanup and Main exposes real storage met
     (await dispatch('settings:set-api-key', ['deepseek', 'secret'])).error.code,
     'NOT_IMPLEMENTED',
   );
+});
+
+test('note versions append with generated/user sources and never overwrite history (#28)', (t) => {
+  const { store, audioPath } = fixture(t);
+  const id = ready(store, audioPath);
+  assert.equal(store.getLatestNote(id).source, 'generated');
+  const first = store.saveEdit(id, { ...NOTE, summary: 'Edit one' }, 1);
+  const second = store.saveEdit(id, { ...NOTE, summary: 'Edit two' }, 2);
+  assert.deepEqual([first.version, first.source], [2, 'user']);
+  assert.deepEqual([second.version, second.source], [3, 'user']);
+  assert.equal(store.getLatestNote(id).note.summary, 'Edit two');
+
+  const job = store.beginGeneration(id);
+  store.completeGeneration(job.id, { ...NOTE, summary: 'Regenerated' });
+  const latest = store.getLatestNote(id);
+  assert.deepEqual(
+    [latest.version, latest.source, latest.note.summary],
+    [4, 'generated', 'Regenerated'],
+  );
+});
+
+test('first edit of a transcribed meeting without any generated note starts at expectedVersion 0 (#28)', (t) => {
+  const { store, audioPath } = fixture(t);
+  const id = transcribed(store, audioPath);
+  assert.equal(store.getLatestNote(id), null);
+  assert.throws(() => store.saveEdit(id, NOTE, 1), errorCode('CONFLICT'));
+  const saved = store.saveEdit(id, NOTE, 0);
+  assert.deepEqual([saved.version, saved.source], [1, 'user']);
+  assert.equal(store.get(id).status, 'ready');
+});
+
+test('malformed notes and states that cannot be edited are rejected without touching saved versions (#28)', (t) => {
+  const { store, audioPath } = fixture(t);
+  const id = ready(store, audioPath);
+  const invalid = [
+    { ...NOTE, summary: undefined },
+    { ...NOTE, extra: 'field' },
+    { ...NOTE, keyTopics: [''] },
+    { ...NOTE, decisions: [{ text: 'x', timestampMs: -1 }] },
+    { ...NOTE, actionItems: [{ task: 'x', owner: '', dueDate: 'unspecified' }] },
+    'not an object',
+  ];
+  for (const note of invalid) {
+    assert.throws(() => store.saveEdit(id, note, 1), errorCode('INVALID_INPUT'));
+  }
+  for (const version of [-1, 1.5, '1', Number.NaN]) {
+    assert.throws(() => store.saveEdit(id, NOTE, version), errorCode('INVALID_INPUT'));
+  }
+  assert.equal(store.getLatestNote(id).version, 1);
+
+  const captured = store.createCaptured('Captured only', join(dirname(audioPath), 'other.wav'));
+  assert.throws(() => store.saveEdit(captured.id, NOTE, 0), errorCode('INVALID_STATE'));
+  assert.equal(store.getLatestNote(captured.id), null);
+});
+
+test('a database failure while saving an edit keeps the previous version and the meeting state (#28)', (t) => {
+  const { store, audioPath, databasePath } = fixture(t);
+  const id = ready(store, audioPath);
+  const db = using(t, new Database(databasePath));
+  db.exec(
+    "CREATE TRIGGER reject_edit BEFORE INSERT ON note_versions WHEN NEW.source = 'user' BEGIN SELECT RAISE(ABORT,'edit failure'); END;",
+  );
+  assert.throws(() => store.saveEdit(id, { ...NOTE, summary: 'Lost' }, 1), /edit failure/);
+  assert.equal(store.getLatestNote(id).version, 1);
+  assert.equal(store.get(id).status, 'ready');
+  db.exec('DROP TRIGGER reject_edit');
+  assert.equal(store.saveEdit(id, { ...NOTE, summary: 'Kept' }, 1).version, 2);
+});
+
+test('the latest saved edit survives a restart and is what regeneration is based on (#28)', (t) => {
+  const f = fixture(t);
+  const id = ready(f.store, f.audioPath);
+  f.store.saveEdit(id, { ...NOTE, summary: 'Saved before restart' }, 1);
+  f.close();
+  const reopened = using(t, new MeetingStore(f.databasePath, f.audioDirectory));
+  const latest = reopened.getLatestNote(id);
+  assert.deepEqual(
+    [latest.version, latest.source, latest.note.summary],
+    [2, 'user', 'Saved before restart'],
+  );
+  const job = reopened.beginGeneration(id);
+  assert.equal(job.baseNoteVersion, 2);
+});
+
+test('IPC saveEdit validates structure, reports stale writers as CONFLICT and publishes the updated meeting (#28)', async (t) => {
+  const { store, audioPath, audioDirectory } = fixture(t);
+  const id = ready(store, audioPath);
+  const events = [];
+  const dispatch = createDispatcher(
+    createStorageHandlers(store, audioDirectory, (m) => events.push(m)),
+  );
+  const saved = await dispatch('notes:save-edit', [id, { ...NOTE, summary: 'Via IPC' }, 1]);
+  assert.equal(saved.ok, true);
+  assert.equal(saved.value.version, 2);
+  assert.equal(events.at(-1).id, id);
+  assert.equal((await dispatch('notes:save-edit', [id, NOTE, 1])).error.code, 'CONFLICT');
+  assert.equal(
+    (await dispatch('notes:save-edit', [id, { summary: 'x' }, 2])).error.code,
+    'INVALID_INPUT',
+  );
+  assert.equal((await dispatch('notes:get-latest', [id])).value.note.summary, 'Via IPC');
 });
