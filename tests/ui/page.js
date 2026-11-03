@@ -84,24 +84,26 @@
   };
 
   const workspace = () => document.querySelector('[aria-label="录音工作区"]');
+  // 新建表单和会议库在工作区之外；按钮和输入在整个应用内查找，文字和状态仍只看工作区
+  const app = () => document.querySelector('.shell') ?? document;
   ui.text = () => workspace()?.innerText ?? '';
   ui.status = () => workspace()?.querySelector('.meeting-status')?.textContent ?? null;
   ui.alerts = () =>
     [...(workspace()?.querySelectorAll('[role="alert"]') ?? [])].map((el) => el.innerText);
   ui.buttons = () =>
-    [...(workspace()?.querySelectorAll('button') ?? [])].map((b) => ({
+    [...app().querySelectorAll('button')].map((b) => ({
       label: b.textContent,
       disabled: b.disabled,
     }));
   ui.click = (label) => {
-    const button = [...(workspace()?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent === label,
+    const button = [...app().querySelectorAll('button')].find(
+      (b) => b.textContent === label || b.getAttribute('aria-label') === label,
     );
     if (!button) throw new Error(`No button "${label}"`);
     button.click();
   };
   ui.type = (selector, value) => {
-    const input = workspace().querySelector(selector);
+    const input = app().querySelector(selector);
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));

@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Icon } from '../ui/icons';
 import type { AppError, AppSettings, CapturePermissions } from '@shared/contracts';
 import {
   LOAD_FAILED_MESSAGE,
@@ -10,7 +11,8 @@ import {
 
 type LoadingState = 'loading' | 'loaded' | 'error';
 
-export function AudioDeviceSelector(): ReactElement {
+/** locked：录音进行中，设备选择只影响下一次录音，暂时锁定避免误解 */
+export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): ReactElement {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [permissions, setPermissions] = useState<CapturePermissions | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[] | null>(null);
@@ -21,6 +23,8 @@ export function AudioDeviceSelector(): ReactElement {
   const [saving, setSaving] = useState(false);
   const [loadKey, setLoadKey] = useState(0);
   const [scanKey, setScanKey] = useState(0);
+  // 枚举可能乱序完成（#72）：只接受最后一次发起的扫描结果
+  const scanRequest = useRef(0);
 
   // 加载设置和权限；loadKey 变化即重试
   useEffect(() => {
@@ -47,8 +51,9 @@ export function AudioDeviceSelector(): ReactElement {
     if (permissions?.microphone !== 'granted') return;
     let active = true;
     const scan = (): void => {
+      const request = ++scanRequest.current;
       void scanAudioInputs(navigator.mediaDevices).then((outcome) => {
-        if (!active) return;
+        if (!active || request !== scanRequest.current) return;
         setDevices(outcome.devices);
         setDeviceError(outcome.error);
       });
@@ -77,20 +82,26 @@ export function AudioDeviceSelector(): ReactElement {
   }
 
   if (loadingState === 'loading') {
-    return <div className="device-selector loading">加载设备设置...</div>;
+    return (
+      <div className="device-selector loading" aria-busy="true">
+        <h3>音频输入</h3>
+        <p className="hint">加载设备设置...</p>
+      </div>
+    );
   }
 
   if (loadingState === 'error' || !settings || !permissions) {
     return (
       <div className="device-selector error-state">
-        <h3>音频设备</h3>
+        <h3>音频输入</h3>
         <div className="error-notice" role="alert">
           <strong>加载失败</strong>
           <p>{loadError?.message ?? LOAD_FAILED_MESSAGE}</p>
           {loadError?.code === 'NOT_IMPLEMENTED' && (
             <p>当前版本尚未提供该功能，暂时无法选择录音设备。</p>
           )}
-          <button type="button" onClick={handleRetry} className="retry-button">
+          <button type="button" onClick={handleRetry} className="key key-quiet retry-button">
+            <Icon name="refresh" />
             重试
           </button>
         </div>
@@ -102,8 +113,8 @@ export function AudioDeviceSelector(): ReactElement {
   const view = deriveDeviceView(settings, permissions, devices, deviceError);
 
   return (
-    <div className="device-selector">
-      <h3>音频设备</h3>
+    <div className="device-selector" data-locked={locked ? 'true' : undefined}>
+      <h3>音频输入</h3>
 
       {saveError && (
         <div className="error-notice" role="alert">
@@ -137,7 +148,8 @@ export function AudioDeviceSelector(): ReactElement {
 
       <div className="device-option">
         <label htmlFor="microphone-select">
-          麦克风设备
+          <Icon name="mic" />
+          <span className="visually-hidden">麦克风设备</span>
           {!view.canSelectDevice && <span className="disabled-hint"> (需要权限)</span>}
         </label>
         <div className="device-select-wrapper">
@@ -145,7 +157,8 @@ export function AudioDeviceSelector(): ReactElement {
             id="microphone-select"
             value={settings.microphoneDeviceId ?? ''}
             onChange={(e) => void saveSettings({ microphoneDeviceId: e.target.value || null })}
-            disabled={!view.canSelectDevice || saving}
+            className="field field-select"
+            disabled={!view.canSelectDevice || saving || locked}
           >
             {view.options.map((option) => (
               <option key={option.value} value={option.value} disabled={option.disabled}>
@@ -157,11 +170,12 @@ export function AudioDeviceSelector(): ReactElement {
             <button
               type="button"
               onClick={() => setScanKey((key) => key + 1)}
-              className="refresh-button"
+              className="key key-icon refresh-button"
               aria-label="刷新设备列表"
               title="刷新设备列表"
+              disabled={locked}
             >
-              ↻
+              <Icon name="refresh" />
             </button>
           )}
         </div>
@@ -184,21 +198,18 @@ export function AudioDeviceSelector(): ReactElement {
       </div>
 
       <div className="device-option">
-        <label htmlFor="system-audio-toggle">
+        <label className="switch" htmlFor="system-audio-toggle">
           <input
             type="checkbox"
             id="system-audio-toggle"
             checked={settings.includeSystemAudio}
             onChange={(e) => void saveSettings({ includeSystemAudio: e.target.checked })}
-            disabled={saving}
+            disabled={saving || locked}
           />
+          <span className="switch-lamp" aria-hidden="true" />
+          <Icon name="speaker" />
           <span>同时录制系统音频</span>
         </label>
-        <p className="hint">
-          {settings.includeSystemAudio
-            ? '将混录系统播放的声音（如远程会议中其他人的声音）。'
-            : '只录制麦克风，不包含系统播放的声音。'}
-        </p>
       </div>
     </div>
   );

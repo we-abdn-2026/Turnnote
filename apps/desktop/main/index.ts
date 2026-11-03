@@ -38,6 +38,15 @@ function createWindow(): void {
   window = new BrowserWindow({
     width: 1280,
     height: 800,
+    // 380px 是开会时贴在视频会议旁的监看窗口宽度；背景色与 Renderer 底色一致，避免启动白屏。
+    minWidth: 380,
+    minHeight: 560,
+    backgroundColor: '#131518',
+    // Renderer 自绘标题栏：macOS 内嵌交通灯，Windows/Linux 使用系统窗口按钮覆盖层。
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 16, y: 16 } }
+      : { titleBarOverlay: { color: '#131518', symbolColor: '#c9ced6', height: 48 } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -88,7 +97,10 @@ void app
     services = createSessionServices(store, {
       audioDirectory,
       modelsDirectory: join(app.getPath('userData'), 'models'),
-      credentials: new CredentialStore(join(app.getPath('userData'), 'credentials.json'), safeStorage),
+      credentials: new CredentialStore(
+        join(app.getPath('userData'), 'credentials.json'),
+        safeStorage,
+      ),
       sidecar: () =>
         resolveSidecarCommand({
           isPackaged: app.isPackaged,

@@ -1,43 +1,37 @@
+// 会议文档画布：一份纪要文档 + 右侧可开关的转写抽屉。
+// 业务状态只来自 Main 的快照；provider 名称取自设置，不写死任何服务商。
+import { useState, type FormEvent, type ReactElement } from 'react';
+import type { MeetingDetail } from '@shared/contracts';
+import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
+import { Dialog } from '../ui/Dialog';
+import { describeError } from '../ui/errors';
+import { Icon } from '../ui/icons';
 import {
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  type FormEvent,
-  type ReactElement,
-} from 'react';
-import type { MeetingDetail, MeetingStatus, TurnnoteApi } from '@shared/contracts';
-import { createCaptureRecording } from '../audio/meeting-recording';
-import type { MeetingRecording } from './meeting-session';
+  STATUS_DOT,
+  STATUS_LABELS,
+  formatDateTime,
+  formatTimecode,
+  segmentIndexAt,
+  transcriptLength,
+} from '../ui/timecode';
+import { EmptyStage } from './EmptyStage';
+import { KeywordEditor, type KeywordDraft } from './KeywordEditor';
 import {
-  TRANSCRIPT_LOAD_FAILED_MESSAGE,
   NOTE_LOAD_FAILED_MESSAGE,
   availableActions,
-  createMeetingSession,
+  canEditMeetingNote,
+  meetingActions,
   isRecording,
+  type MeetingSession,
+  type SessionState,
 } from './meeting-session';
+import { NoteEditor } from './NoteEditor';
+import { NoteView } from './NoteView';
+import { ProcessingProgress } from './ProcessingProgress';
 import { RecordingControls } from './RecordingControls';
+import { TranscriptLog, type Cue } from './TranscriptLog';
 
-export const STATUS_LABELS: Record<MeetingStatus, string> = {
-  created: '已创建，未开始录音',
-  recording: '录音中',
-  captured: '录音已保存',
-  transcribing: '正在转写',
-  transcribed: '转写完成',
-  generating: '正在生成纪要',
-  ready: '纪要已生成',
-  failed: '处理失败',
-  deleted: '已删除',
-};
-
-export function formatTranscriptTime(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const seconds = totalSeconds % 60;
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  const minutes = totalMinutes % 60;
-  const hours = Math.floor(totalMinutes / 60);
-  const parts = [minutes, seconds].map((part) => String(part).padStart(2, '0'));
-  return hours > 0 ? `${String(hours).padStart(2, '0')}:${parts.join(':')}` : parts.join(':');
-}
+export { STATUS_LABELS, formatTimecode } from '../ui/timecode';
 
 function canShowGenerationAction(meeting: MeetingDetail): boolean {
   return (
@@ -48,84 +42,155 @@ function canShowGenerationAction(meeting: MeetingDetail): boolean {
   );
 }
 
-function displayNoteValue(value: string): string {
-  const normalized = value.trim();
-  return normalized === '' || normalized.toLowerCase() === 'unspecified' ? '未指定' : normalized;
-}
-
-type KeywordMessage = {
-  tone: 'status' | 'error';
-  text: string;
-};
-
-interface KeywordEditorState {
-  meetingId: string;
-  values: string[];
-  input: string;
-  message: KeywordMessage | null;
-}
-
 function sameKeywords(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((keyword, index) => keyword === right[index]);
 }
 
+function statusText(state: SessionState): string {
+  const meeting = state.meeting!;
+  if (meeting.status === 'recording' && state.captureStopped) return '录音已结束，等待保存';
+  if (state.cancelledKind === 'transcribing' && meeting.status === 'captured')
+    return '转写已取消，录音已保存';
+  const label = STATUS_LABELS[meeting.status];
+  return meeting.status === 'failed' && meeting.lastError
+    ? `${label}：${describeError(meeting.lastError)}`
+    : label;
+}
+
+interface WorkspaceProps {
+  session: MeetingSession;
+  state: SessionState;
+  elapsedMs: number | null;
+  /** 当前纪要 provider 的展示名和模型，来自 settings.noteProvider / noteModel */
+  provider: { label: string; model: string };
+  drawerOpen: boolean;
+  onDrawer(open: boolean): void;
+}
+
+interface KeywordState extends KeywordDraft {
+  meetingId: string;
+}
+
 export function MeetingWorkspace({
-  recordingFactory = createCaptureRecording,
-}: {
-  recordingFactory?: (api: TurnnoteApi) => MeetingRecording;
-}): ReactElement {
-  const [session] = useState(() =>
-    createMeetingSession(window.turnnote, recordingFactory(window.turnnote)),
-  );
-  const state = useSyncExternalStore(session.subscribe, session.getState);
-  const [title, setTitle] = useState('');
-  const [keywordEditor, setKeywordEditor] = useState<KeywordEditorState | null>(null);
-  const [generationPrompt, setGenerationPrompt] = useState<{
-    meetingId: string;
-    revision: number;
-  } | null>(null);
-
-  useEffect(() => session.connect(), [session]);
-
-  const actions = availableActions(state);
-  const recording = isRecording(state);
+  session,
+  state,
+  elapsedMs,
+  provider,
+  drawerOpen,
+  onDrawer,
+}: WorkspaceProps): ReactElement {
   const { meeting } = state;
-  const activeKeywordEditor =
-    meeting && keywordEditor?.meetingId === meeting.id ? keywordEditor : null;
+  const actions = availableActions(state);
+  const manage = meetingActions(state);
+  const editable = canEditMeetingNote(state);
+  const note = state.note;
+  const length = transcriptLength(state.transcriptSegments);
 
+  const [cue, setCue] = useState<(Cue & { meetingId: string }) | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState<{ base: SessionState['note'] } | null>(null);
+  const [prompt, setPrompt] = useState<{ revision: number; attempt: number } | null>(null);
+  const [keywordState, setKeywordState] = useState<KeywordState | null>(null);
+
+  const activeKeywords = meeting && keywordState?.meetingId === meeting.id ? keywordState : null;
   const savedKeywords = meeting?.keywords ?? [];
-  const keywordDraft = activeKeywordEditor?.values ?? savedKeywords;
-  const keywordInput = activeKeywordEditor?.input ?? '';
-  const keywordMessage = activeKeywordEditor?.message ?? null;
-  const keywordsDirty = !sameKeywords(keywordDraft, savedKeywords);
-  const generationPromptOpen =
-    !!meeting &&
-    generationPrompt?.meetingId === meeting.id &&
-    generationPrompt.revision === state.revision &&
-    actions.generate;
+  const keywordDraft: KeywordDraft = activeKeywords ?? {
+    values: savedKeywords,
+    input: '',
+    message: null,
+  };
+  const keywordsDirty = !sameKeywords(keywordDraft.values, savedKeywords);
+  const regenerate = note !== null;
 
-  useEffect(() => {
-    if (!generationPromptOpen) return;
+  // 确认绑定打开时的会议快照和操作序号；会议更新、关键词变化或其他操作开始后自动失效
+  const promptOpen =
+    !!prompt &&
+    prompt.revision === state.revision &&
+    prompt.attempt === state.attempt &&
+    actions.generate &&
+    !keywordsDirty;
+  const editorOpen = editing !== null && editable;
 
-    const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setGenerationPrompt(null);
-    };
+  function updateKeywords(patch: Partial<KeywordDraft>): void {
+    if (!meeting) return;
+    // 关键词一旦变化，先前看到的发送确认立即失效
+    setPrompt(null);
+    setKeywordState({ meetingId: meeting.id, ...keywordDraft, ...patch });
+  }
 
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [generationPromptOpen]);
+  function addKeyword(): void {
+    if (!meeting || !actions.keywords) return;
+    const value = keywordDraft.input.trim();
+    if (!value) return;
+    if (value.length > 100)
+      return updateKeywords({
+        message: { tone: 'error', text: '单个关键词不能超过 100 个字符。' },
+      });
+    if (keywordDraft.values.includes(value))
+      return updateKeywords({ message: { tone: 'error', text: `关键词“${value}”已经存在。` } });
+    if (keywordDraft.values.length >= 50)
+      return updateKeywords({ message: { tone: 'error', text: '最多保存 50 个关键词。' } });
+    updateKeywords({
+      values: [...keywordDraft.values, value],
+      input: '',
+      message: { tone: 'status', text: `已添加“${value}”，请保存。` },
+    });
+  }
 
+  async function saveKeywords(): Promise<void> {
+    if (!meeting || !actions.keywords || !keywordsDirty) return;
+    if (!(await session.saveKeywords(keywordDraft.values))) return;
+    const latest = session.getState().meeting;
+    if (latest?.id !== meeting.id) return;
+    setKeywordState({
+      meetingId: meeting.id,
+      values: [...latest.keywords],
+      input: '',
+      message: { tone: 'status', text: `已保存 ${latest.keywords.length} 个关键词。` },
+    });
+  }
+
+  async function confirmGeneration(): Promise<void> {
+    if (!promptOpen) return;
+    // 先关闭确认框；会话层仍会拒绝重复请求
+    setPrompt(null);
+    await session.generate();
+  }
+
+  function jumpTo(timestampMs: number): void {
+    if (!meeting) return;
+    const index = segmentIndexAt(state.transcriptSegments, timestampMs);
+    if (index === -1) return;
+    onDrawer(true);
+    setCue((previous) => ({ meetingId: meeting.id, index, nonce: (previous?.nonce ?? 0) + 1 }));
+  }
+
+  async function submitRename(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const next = draftTitle.trim();
+    if (!next || next === meeting?.title) return setRenaming(false);
+    if (await session.rename(next)) setRenaming(false);
+  }
+
+  async function confirmDeletion(): Promise<void> {
+    setConfirmDelete(false);
+    await session.delete();
+  }
+
+  const gone = meeting?.status === 'deleted';
+  // 输入设备只在录音前和录音中有意义；其余阶段收起，始终只有一个实例
+  const showInput =
+    !meeting ||
+    meeting.status === 'created' ||
+    meeting.status === 'recording' ||
+    (meeting.status === 'failed' && meeting.lastError?.kind === 'recording');
+  // 没有会议时不露出设备选择，空状态只有一句话
+  const inputVisible = !!meeting && showInput && !isRecording(state);
   const savePending = meeting?.status === 'recording' && state.captureStopped;
-  const processingKind =
-    meeting?.status === 'transcribing' || meeting?.status === 'generating' ? meeting.status : null;
-  const processingLabel =
-    processingKind === 'transcribing'
-      ? '转写进度'
-      : processingKind === 'generating'
-        ? '纪要生成进度'
-        : null;
-  const regenerate = state.note !== null;
-  const generationActionLabel =
+  const dot = savePending ? 'busy' : meeting ? STATUS_DOT[meeting.status] : 'idle';
+  const generationLabel =
     state.pending === 'generate'
       ? regenerate
         ? '正在重新生成...'
@@ -134,513 +199,372 @@ export function MeetingWorkspace({
         ? '重新生成会议纪要'
         : '生成会议纪要';
 
-  async function handleCreate(event: FormEvent): Promise<void> {
-    event.preventDefault();
-
-    // 新会议操作开始后，旧发送确认必须彻底失效，即使请求随后失败。
-    setGenerationPrompt(null);
-    if (await session.create(title)) setTitle('');
-  }
-
-  function updateKeywordEditor(
-    patch: Partial<Pick<KeywordEditorState, 'values' | 'input' | 'message'>>,
-  ): void {
-    if (!meeting) return;
-
-    // 关键词一旦变化，先前看到的发送内容确认立即失效。
-    setGenerationPrompt(null);
-
-    const current = activeKeywordEditor ?? {
-      meetingId: meeting.id,
-      values: [...meeting.keywords],
-      input: '',
-      message: null,
-    };
-
-    setKeywordEditor({ ...current, ...patch });
-  }
-
-  function handleAddKeyword(event: FormEvent): void {
-    event.preventDefault();
-    if (!meeting || !actions.keywords) return;
-
-    const value = keywordInput.trim();
-
-    if (!value) return;
-
-    if (value.length > 100) {
-      updateKeywordEditor({
-        message: {
-          tone: 'error',
-          text: '单个关键词不能超过 100 个字符。',
-        },
-      });
-      return;
-    }
-
-    if (keywordDraft.includes(value)) {
-      updateKeywordEditor({
-        message: {
-          tone: 'error',
-          text: `关键词“${value}”已经存在。`,
-        },
-      });
-      return;
-    }
-
-    if (keywordDraft.length >= 50) {
-      updateKeywordEditor({
-        message: {
-          tone: 'error',
-          text: '最多保存 50 个关键词。',
-        },
-      });
-      return;
-    }
-
-    updateKeywordEditor({
-      values: [...keywordDraft, value],
-      input: '',
-      message: {
-        tone: 'status',
-        text: `已添加“${value}”，请保存。`,
-      },
-    });
-  }
-
-  function handleRemoveKeyword(keyword: string): void {
-    updateKeywordEditor({
-      values: keywordDraft.filter((item) => item !== keyword),
-      message: {
-        tone: 'status',
-        text: `已移除“${keyword}”，请保存。`,
-      },
-    });
-  }
-
-  function handleKeywordInput(value: string): void {
-    updateKeywordEditor({
-      input: value,
-      message: null,
-    });
-  }
-
-  async function handleSaveKeywords(): Promise<void> {
-    if (!meeting || !actions.keywords || !keywordsDirty) return;
-
-    if (!(await session.saveKeywords(keywordDraft))) return;
-
-    const latest = session.getState().meeting;
-    if (latest?.id !== meeting.id) return;
-
-    setKeywordEditor({
-      meetingId: meeting.id,
-      values: [...latest.keywords],
-      input: '',
-      message: {
-        tone: 'status',
-        text: `已保存 ${latest.keywords.length} 个关键词。`,
-      },
-    });
-  }
-
-  function openGenerationPrompt(): void {
-    const current = state.meeting;
-    if (!current || !actions.generate || keywordsDirty) return;
-
-    setGenerationPrompt({
-      meetingId: current.id,
-      revision: state.revision,
-    });
-  }
-
-  function closeGenerationPrompt(): void {
-    setGenerationPrompt(null);
-  }
-
-  async function confirmGeneration(): Promise<void> {
-    if (!generationPromptOpen) return;
-
-    // 先关闭确认框；会话层仍会拒绝重复请求。
-    setGenerationPrompt(null);
-    await session.generate();
-  }
-
   return (
-    <section className="workspace" aria-label="录音工作区">
-      <form className="create-meeting" onSubmit={(e) => void handleCreate(e)}>
-        <label htmlFor="meeting-title">会议标题</label>
-        <input
-          id="meeting-title"
-          value={title}
-          maxLength={200}
-          onChange={(e) => setTitle(e.target.value)}
-          disabled={!actions.create}
-          aria-describedby={recording || savePending ? 'create-blocked' : undefined}
-        />
-        <button type="submit" disabled={!actions.create || !title.trim()}>
-          {state.pending === 'create' ? '创建中...' : '新建会议'}
-        </button>
-      </form>
-      {(recording || savePending) && (
-        <p id="create-blocked" className="create-blocked">
-          {savePending
-            ? '录音已结束，保存完成后才能新建会议。'
-            : '正在录音，停止录音后才能新建会议。'}
-        </p>
-      )}
-
-      {state.error && (
-        <div className="workspace-error" role="alert">
-          <strong>操作失败</strong>
-          <p>{state.error}</p>
-        </div>
-      )}
-
-      {state.warning && <p role="status">{state.warning}</p>}
-
-      {meeting && (
-        <div className="meeting-panel">
-          <h2>{meeting.title}</h2>
-          <p className="meeting-status" role="status" aria-live="polite">
-            {savePending
-              ? '录音已结束，等待保存'
-              : state.cancelledKind === 'transcribing' && meeting.status === 'captured'
-                ? '转写已取消，录音已保存'
-                : STATUS_LABELS[meeting.status]}
-            {meeting.status === 'failed' && meeting.lastError && `：${meeting.lastError.message}`}
-          </p>
-          {processingKind && processingLabel && (
-            <div className="processing-progress" aria-live="polite">
-              <div className="processing-progress-heading">
-                <span>{processingLabel}</span>
-                <span>{state.jobProgress ? `${state.jobProgress.percent}%` : '等待进度上报'}</span>
-              </div>
-              <progress
-                aria-label={processingLabel}
-                max={100}
-                {...(state.jobProgress ? { value: state.jobProgress.percent } : {})}
-              />
+    <section
+      className="workspace"
+      aria-label="录音工作区"
+      data-drawer={drawerOpen && meeting && !gone ? 'open' : 'closed'}
+      data-empty={meeting ? undefined : 'true'}
+    >
+      <div className="canvas">
+        <div className="bulletins">
+          {state.error && (
+            <div className="workspace-error bulletin bulletin-warn" role="alert">
+              <strong>操作失败</strong>
+              <p>{state.error}</p>
             </div>
           )}
-          <RecordingControls session={session} state={state} />
-          <section className="transcript" aria-labelledby="transcript-heading">
-            <div className="transcript-heading">
-              <h3 id="transcript-heading">转写内容</h3>
-              {state.transcriptState === 'ready' && state.transcriptSegments.length > 0 && (
-                <span>{state.transcriptSegments.length} 个片段</span>
-              )}
-            </div>
-            {state.transcriptState === 'loading' && state.transcriptSegments.length === 0 && (
-              <p className="transcript-message" role="status">
-                正在加载转写内容...
-              </p>
-            )}
-            {state.transcriptState === 'error' && (
-              <div className="transcript-error" role="alert">
-                <p>{TRANSCRIPT_LOAD_FAILED_MESSAGE}</p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void session.reloadTranscript()}
-                >
-                  重新加载
-                </button>
-              </div>
-            )}
-            {state.transcriptState === 'ready' && state.transcriptSegments.length === 0 && (
-              <p className="transcript-message">暂无转写内容</p>
-            )}
-            {state.transcriptSegments.length > 0 && (
-              <ol className="transcript-list" aria-label="转写片段">
-                {state.transcriptSegments.map((segment, index) => (
-                  <li
-                    className="transcript-segment"
-                    id={`transcript-segment-${index}`}
-                    data-segment-index={index}
-                    data-start-ms={segment.startMs}
-                    data-end-ms={segment.endMs}
-                    tabIndex={-1}
-                    key={`${index}-${segment.startMs}-${segment.endMs}`}
-                  >
-                    <time className="transcript-time">
-                      {formatTranscriptTime(segment.startMs)}–{formatTranscriptTime(segment.endMs)}
-                    </time>
-                    <span className="transcript-text">{segment.text}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-          <section className="meeting-keywords" aria-labelledby="keywords-heading">
-            <div className="meeting-keywords-heading">
-              <div>
-                <h3 id="keywords-heading">会议关键词</h3>
-                <p className="meeting-keywords-help">
-                  关键词会引导纪要重点。只有点击“保存关键词”后，下一次生成或重新生成才会使用它们。
-                </p>
-              </div>
-              <span className="keyword-count">{keywordDraft.length}/50</span>
-            </div>
+          {state.warning && (
+            <p className="workspace-warning bulletin bulletin-warn" role="status">
+              {state.warning}
+            </p>
+          )}
+          {state.notice && (
+            <p className="workspace-notice bulletin" role="status">
+              {state.notice}
+            </p>
+          )}
+        </div>
 
-            {keywordDraft.length > 0 ? (
-              <ul className="keyword-list" aria-label="关键词草稿">
-                {keywordDraft.map((keyword) => (
-                  <li className="keyword-chip" key={keyword}>
-                    <span>{keyword}</span>
+        {!meeting && <EmptyStage />}
+
+        {meeting && (
+          <article className="doc" key={meeting.id}>
+            <header className="doc-head">
+              {renaming ? (
+                <form className="rename" onSubmit={(e) => void submitRename(e)}>
+                  <label className="visually-hidden" htmlFor="rename-title">
+                    会议标题
+                  </label>
+                  <input
+                    id="rename-title"
+                    className="field field-title"
+                    value={draftTitle}
+                    maxLength={200}
+                    autoFocus
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        setRenaming(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    className="key key-primary"
+                    disabled={!manage.rename || !draftTitle.trim()}
+                  >
+                    {state.pending === 'rename' ? '保存中...' : '保存标题'}
+                  </button>
+                  <button
+                    type="button"
+                    className="key key-quiet"
+                    onClick={() => setRenaming(false)}
+                  >
+                    放弃修改
+                  </button>
+                </form>
+              ) : (
+                <div className="doc-title">
+                  <h2>{meeting.title}</h2>
+                  {!gone && (
                     <button
                       type="button"
-                      className="keyword-remove"
-                      aria-label={`移除关键词 ${keyword}`}
-                      onClick={() => handleRemoveKeyword(keyword)}
-                      disabled={!actions.keywords}
+                      className="key key-icon key-quiet"
+                      title="重命名会议"
+                      disabled={!manage.rename}
+                      onClick={() => {
+                        setDraftTitle(meeting.title);
+                        setRenaming(true);
+                      }}
                     >
-                      移除
+                      <Icon name="edit" />
+                      <span className="visually-hidden">重命名会议</span>
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  )}
+                </div>
+              )}
+
+              <div className="doc-line">
+                {meeting.status !== 'ready' && (
+                  <span className={`dot dot-${dot}`} aria-hidden="true" />
+                )}
+                <p
+                  className={`meeting-status${meeting.status === 'ready' ? ' visually-hidden' : ''}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {statusText(state)}
+                </p>
+                {!gone && (
+                  <p className="doc-meta">
+                    <time dateTime={meeting.createdAt}>{formatDateTime(meeting.createdAt)}</time>
+                    {length !== null && <time>{formatTimecode(length)}</time>}
+                  </p>
+                )}
+              </div>
+            </header>
+
+            {gone ? (
+              <div className="doc-gone">
+                <p>这场会议已被删除，本机记录和保留的音频都已清除。</p>
+                <button type="button" className="key" onClick={() => session.close()}>
+                  关闭
+                </button>
+              </div>
             ) : (
-              <p className="keyword-empty">暂无关键词</p>
-            )}
+              <>
+                {meeting.status === 'generating' && <ProcessingProgress state={state} />}
 
-            <form className="keyword-add" onSubmit={handleAddKeyword}>
-              <label htmlFor="meeting-keyword">添加关键词</label>
-              <div className="keyword-add-controls">
-                <input
-                  id="meeting-keyword"
-                  value={keywordInput}
-                  maxLength={100}
-                  onChange={(event) => handleKeywordInput(event.target.value)}
-                  disabled={!actions.keywords}
-                  placeholder="例如：定价"
-                />
-                <button type="submit" disabled={!actions.keywords || !keywordInput.trim()}>
-                  添加关键词
-                </button>
-              </div>
-            </form>
+                {canShowGenerationAction(meeting) && (
+                  <div className="generate">
+                    <KeywordEditor
+                      draft={keywordDraft}
+                      saved={savedKeywords}
+                      disabled={!actions.keywords}
+                      saving={state.pending === 'keywords'}
+                      dirty={keywordsDirty}
+                      onInput={(input) => updateKeywords({ input, message: null })}
+                      onAdd={addKeyword}
+                      onRemove={(keyword) =>
+                        updateKeywords({
+                          values: keywordDraft.values.filter((item) => item !== keyword),
+                          message: { tone: 'status', text: `已移除“${keyword}”，请保存。` },
+                        })
+                      }
+                      onSave={() => void saveKeywords()}
+                    />
+                    <button
+                      type="button"
+                      className={regenerate ? 'key' : 'key key-primary'}
+                      onClick={() =>
+                        setPrompt({ revision: state.revision, attempt: state.attempt })
+                      }
+                      disabled={!actions.generate || keywordsDirty}
+                    >
+                      <Icon name="send" />
+                      {generationLabel}
+                    </button>
+                    {keywordsDirty && (
+                      <p className="generation-blocked" role="status">
+                        关键词有未保存更改。请先保存关键词，或先恢复为已保存内容，再生成会议纪要。
+                      </p>
+                    )}
+                  </div>
+                )}
 
-            {keywordMessage && (
-              <p
-                className={`keyword-message keyword-message-${keywordMessage.tone}`}
-                role={keywordMessage.tone === 'error' ? 'alert' : 'status'}
-              >
-                {keywordMessage.text}
-              </p>
-            )}
+                {state.noteState === 'loading' && !note && (
+                  <>
+                    <div className="skeleton" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <p className="note-message visually-hidden" role="status">
+                      正在加载纪要...
+                    </p>
+                  </>
+                )}
 
-            <div className="keyword-save-row">
-              <button
-                type="button"
-                onClick={() => void handleSaveKeywords()}
-                disabled={!actions.keywords || !keywordsDirty}
-              >
-                {state.pending === 'keywords' ? '保存中...' : '保存关键词'}
-              </button>
-              <p className="saved-keywords">
-                已保存：
-                {savedKeywords.length > 0 ? savedKeywords.join('、') : '暂无关键词'}
-              </p>
-            </div>
-          </section>
-          <section className="note-generation" aria-labelledby="generation-heading">
-            <div className="note-generation-heading">
-              <div>
-                <h3 id="generation-heading">AI 会议纪要</h3>
-                <p className="note-generation-help">
-                  根据已保存的转写{regenerate ? '重新生成' : '生成'}会议纪要， 发送前会再次确认。
-                  {regenerate && ' 当前纪要会保留，重新生成成功后新增版本。'}
-                </p>
-              </div>
-              {canShowGenerationAction(meeting) && (
-                <button
-                  type="button"
-                  onClick={openGenerationPrompt}
-                  disabled={!actions.generate || keywordsDirty}
-                >
-                  {generationActionLabel}
-                </button>
-              )}
-            </div>
+                {state.noteState === 'error' && (
+                  <div className="note-error callout" role="alert">
+                    <p>{NOTE_LOAD_FAILED_MESSAGE}</p>
+                    <button type="button" className="key" onClick={() => void session.reloadNote()}>
+                      <Icon name="refresh" />
+                      重新加载纪要
+                    </button>
+                  </div>
+                )}
 
-            {keywordsDirty && canShowGenerationAction(meeting) && (
-              <p className="generation-blocked" role="status">
-                关键词有未保存更改。请先保存关键词，或先恢复为已保存内容，再生成会议纪要。
-              </p>
-            )}
+                {state.noteState === 'ready' && !note && !editorOpen && (
+                  <div className={`note-blank${editable ? '' : ' visually-hidden'}`}>
+                    <p className="note-message">暂无纪要内容</p>
+                    {editable && (
+                      <button
+                        type="button"
+                        className="key key-quiet"
+                        onClick={() => setEditing({ base: null })}
+                      >
+                        <Icon name="edit" />
+                        手动撰写纪要
+                      </button>
+                    )}
+                  </div>
+                )}
 
-            {generationPromptOpen && (
-              <div
-                className="generation-consent"
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="generation-consent-title"
-                aria-describedby="generation-consent-description"
-              >
-                <button
-                  type="button"
-                  className="generation-consent-close"
-                  aria-label="关闭发送确认"
-                  onClick={closeGenerationPrompt}
-                >
-                  ×
-                </button>
-                <strong id="generation-consent-title">
-                  {regenerate ? '重新生成会议内容并发送给 DeepSeek？' : '发送会议内容给 DeepSeek？'}
-                </strong>
-                <p id="generation-consent-description">
-                  将向 DeepSeek
-                  发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。
-                  {regenerate &&
-                    state.note &&
-                    ` 当前纪要版本 ${state.note.version} 会保留；重新生成成功后新增版本，失败时不会删除现有纪要。`}
-                </p>
-                <div className="meeting-actions">
-                  <button type="button" onClick={() => void confirmGeneration()}>
-                    {regenerate ? '确认发送并重新生成' : '确认发送并生成'}
-                  </button>
-                  <button type="button" className="secondary" onClick={closeGenerationPrompt}>
-                    取消
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-          <section className="meeting-note" aria-labelledby="note-heading">
-            <div className="note-heading">
-              <h3 id="note-heading">会议纪要</h3>
-              {state.note && (
-                <div className="note-meta">
-                  <span className={`note-source note-source-${state.note.source}`}>
-                    {state.note.source === 'generated' ? 'AI 生成' : '用户编辑'}
-                  </span>
-                  <span>版本 {state.note.version}</span>
-                </div>
-              )}
-            </div>
-
-            {state.noteState === 'loading' && !state.note && (
-              <p className="note-message" role="status">
-                正在加载纪要...
-              </p>
-            )}
-
-            {state.noteState === 'error' && (
-              <div className="note-error" role="alert">
-                <p>{NOTE_LOAD_FAILED_MESSAGE}</p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void session.reloadNote()}
-                >
-                  重新加载纪要
-                </button>
-              </div>
-            )}
-
-            {state.noteState === 'ready' && !state.note && (
-              <p className="note-message">暂无纪要内容</p>
-            )}
-
-            {state.note && (
-              <p className="note-review-notice" role="note">
-                纪要是根据转写整理的内容，可能不准确。请核对决策、行动项、负责人和截止日期是否与会议实际讨论一致。
-              </p>
-            )}
-
-            {state.note && (
-              <article className="note-content">
-                <section className="note-summary" aria-labelledby="note-summary-heading">
-                  <h4 id="note-summary-heading">摘要</h4>
-                  <p>{state.note.note.summary.trim() || '未填写'}</p>
-                </section>
-                <section className="note-section" aria-labelledby="note-topics-heading">
-                  <h4 id="note-topics-heading">关键主题</h4>
-                  {state.note.note.keyTopics.length > 0 ? (
-                    <ul className="note-topics" aria-label="关键主题">
-                      {state.note.note.keyTopics.map((topic, index) => (
-                        <li key={`${index}-${topic}`}>{topic.trim() || '未指定'}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="note-empty">未指定</p>
-                  )}
-                </section>
-
-                <section className="note-section" aria-labelledby="note-decisions-heading">
-                  <h4 id="note-decisions-heading">决策</h4>
-                  {state.note.note.decisions.length > 0 ? (
-                    <ol className="note-list" aria-label="决策">
-                      {state.note.note.decisions.map((decision, index) => (
-                        <li key={`${index}-${decision.timestampMs ?? 'no-time'}`}>
-                          <span className="note-item-text">{decision.text.trim() || '未指定'}</span>
-                          {decision.timestampMs !== undefined && (
-                            <time className="note-time">
-                              {formatTranscriptTime(decision.timestampMs)}
-                            </time>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="note-empty">未指定</p>
-                  )}
-                </section>
-
-                <section className="note-section" aria-labelledby="note-questions-heading">
-                  <h4 id="note-questions-heading">未决问题</h4>
-                  {state.note.note.openQuestions.length > 0 ? (
-                    <ol className="note-list" aria-label="未决问题">
-                      {state.note.note.openQuestions.map((question, index) => (
-                        <li key={`${index}-${question}`}>
-                          <span className="note-item-text">{question.trim() || '未指定'}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="note-empty">未指定</p>
-                  )}
-                </section>
-
-                <section className="note-section" aria-labelledby="note-actions-heading">
-                  <h4 id="note-actions-heading">行动项</h4>
-                  {state.note.note.actionItems.length > 0 ? (
-                    <ol className="note-list note-action-list" aria-label="行动项">
-                      {state.note.note.actionItems.map((item, index) => (
-                        <li
-                          className="note-action"
-                          key={`${index}-${item.timestampMs ?? 'no-time'}`}
+                {note && (
+                  <div className="note-bar">
+                    <div className="note-meta">
+                      <span className={`note-source note-source-${note.source}`}>
+                        {note.source === 'generated' ? 'AI 生成' : '用户编辑'}
+                      </span>
+                      <span className="numeric">版本 {note.version}</span>
+                    </div>
+                    <div className="note-actions">
+                      {editable && !editorOpen && (
+                        <button
+                          type="button"
+                          className="key key-quiet"
+                          onClick={() => setEditing({ base: note })}
+                          disabled={state.pending !== null}
                         >
-                          <div className="note-action-main">
-                            <span className="note-item-text">{item.task.trim() || '未指定'}</span>
-                            {item.timestampMs !== undefined && (
-                              <time className="note-time">
-                                {formatTranscriptTime(item.timestampMs)}
-                              </time>
-                            )}
-                          </div>
-                          <dl className="note-action-meta">
-                            <div>
-                              <dt>负责人</dt>
-                              <dd>{displayNoteValue(item.owner)}</dd>
-                            </div>
-                            <div>
-                              <dt>截止时间</dt>
-                              <dd>{displayNoteValue(item.dueDate)}</dd>
-                            </div>
-                          </dl>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p className="note-empty">未指定</p>
-                  )}
-                </section>
-              </article>
+                          <Icon name="edit" />
+                          <span>编辑纪要</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="key key-quiet"
+                        onClick={() => void session.exportMarkdown()}
+                        disabled={!manage.export || editorOpen}
+                        title={editorOpen ? '保存或取消编辑后再导出' : '导出当前显示的纪要版本'}
+                      >
+                        <Icon name="export" />
+                        <span>{state.pending === 'export' ? '正在导出...' : '导出 Markdown'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {editorOpen ? (
+                  <NoteEditor
+                    key={editing.base?.version ?? 'new'}
+                    session={session}
+                    base={editing.base}
+                    latest={note}
+                    onDone={() => setEditing(null)}
+                  />
+                ) : (
+                  note && (
+                    <>
+                      <NoteView
+                        note={note.note}
+                        segments={state.transcriptSegments}
+                        onCue={jumpTo}
+                      />
+                      <p className="note-review-notice" role="note">
+                        纪要是根据转写整理的内容，可能不准确。请核对决策、行动项、负责人和截止日期是否与会议实际讨论一致。
+                      </p>
+                    </>
+                  )
+                )}
+
+                <footer className="doc-foot">
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={meeting.retainAudio}
+                      disabled={!manage.retainAudio}
+                      onChange={(e) => void session.setRetainAudio(e.target.checked)}
+                    />
+                    <span className="switch-track" aria-hidden="true" />
+                    <span>转写后保留音频</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="key key-icon key-quiet key-danger"
+                    title={meeting.status === 'recording' ? '停止录音后才能删除' : '删除会议'}
+                    disabled={!manage.delete}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Icon name="trash" />
+                    <span className="visually-hidden">删除会议</span>
+                  </button>
+                </footer>
+              </>
             )}
-          </section>
+
+            {promptOpen && (
+              <Dialog
+                className="generation-consent"
+                titleId="generation-consent-title"
+                descriptionId="generation-consent-description"
+                title={
+                  regenerate
+                    ? `重新生成会议内容并发送给 ${provider.label}？`
+                    : `发送会议内容给 ${provider.label}？`
+                }
+                tone="consent"
+                closeLabel="关闭发送确认"
+                onClose={() => setPrompt(null)}
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      className="key key-primary"
+                      data-autofocus
+                      onClick={() => void confirmGeneration()}
+                    >
+                      {regenerate ? '确认发送并重新生成' : '确认发送并生成'}
+                    </button>
+                    <button type="button" className="key" onClick={() => setPrompt(null)}>
+                      取消
+                    </button>
+                  </>
+                }
+              >
+                <p>
+                  {`将向 ${provider.label}${provider.model ? `（${provider.model}）` : ''}发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。`}
+                </p>
+                {regenerate && note && (
+                  <p>{`当前纪要版本 ${note.version} 会保留；重新生成成功后新增版本，失败时不会删除现有纪要。`}</p>
+                )}
+              </Dialog>
+            )}
+
+            {confirmDelete && manage.delete && (
+              <Dialog
+                titleId="delete-title"
+                descriptionId="delete-description"
+                title="删除这场会议？"
+                tone="caution"
+                onClose={() => setConfirmDelete(false)}
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      className="key key-caution"
+                      onClick={() => void confirmDeletion()}
+                    >
+                      删除会议记录
+                    </button>
+                    <button
+                      type="button"
+                      className="key"
+                      data-autofocus
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      取消
+                    </button>
+                  </>
+                }
+              >
+                <p>「{meeting.title}」的转写、纪要和本机保留的音频将被删除，且无法恢复。</p>
+                <p>已发送给 {provider.label} 的转写文本不会因为本机删除而被删除。</p>
+              </Dialog>
+            )}
+          </article>
+        )}
+
+        <div className="input-module" hidden={!inputVisible}>
+          <AudioDeviceSelector locked={isRecording(state)} />
         </div>
+
+        {meeting && !gone && (
+          <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
+        )}
+      </div>
+
+      {meeting && !gone && (
+        <aside id="transcript-drawer" className="drawer" aria-label="转写">
+          <TranscriptLog
+            session={session}
+            state={state}
+            cue={cue?.meetingId === meeting.id ? cue : null}
+            onClose={() => onDrawer(false)}
+          />
+        </aside>
       )}
     </section>
   );

@@ -1,0 +1,87 @@
+/*
+ * 暖纸面：界面退后，文档说话。
+ * 层级靠位置、间距和字号，不靠颜色和粗体；字重只用 400 / 500 / 600。
+ * 只有一个强调色（--accent），用于焦点、时间码和当前选中；红色只属于“正在录音”。
+ */
+:root {
+  /* 纸：画布、侧栏、抬起的面、凹下的槽 */
+  --paper: oklch(0.975 0.006 85);
+  --sidebar: oklch(0.953 0.008 85);
+  --sheet: oklch(0.992 0.003 85);
+  --hover: oklch(0.935 0.009 85);
+  --selected: oklch(0.915 0.011 85);
+
+  /* 发丝线 */
+  --rule: oklch(0.9 0.01 85);
+  --rule-strong: oklch(0.82 0.012 85);
+
+  /* 墨：正文 ≥ 14:1，次要 ≥ 6:1，弱化 ≥ 4.6:1（相对 --paper） */
+  --ink: oklch(0.26 0.01 85);
+  --ink-2: oklch(0.45 0.012 85);
+  --ink-3: oklch(0.52 0.012 85);
+
+  /* 强调：矿物蓝。焦点、时间码、当前定位 */
+  --accent: oklch(0.45 0.09 255);
+  --accent-wash: oklch(0.935 0.025 255);
+  --accent-ink: oklch(0.38 0.1 255);
+  --accent-wash-faded: oklch(0.935 0.025 255 / 0.45);
+
+  /* 状态：录音红只用于正在录音；故障用褐橙 */
+  --rec: oklch(0.58 0.21 28);
+  --warn: oklch(0.5 0.1 62);
+  --warn-wash: oklch(0.95 0.035 80);
+
+  /* 字体：文档用衬线，界面用无衬线，时间码用等宽 */
+  --font-serif:
+    'Iowan Old Style', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'STSong',
+    'Palatino Linotype', Georgia, 'Times New Roman', serif;
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
+    'Microsoft YaHei', 'Noto Sans CJK SC', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
+
+  /* 字号：固定刻度 */
+  --t-micro: 12px;
+  --t-small: 13px;
+  --t-ui: 14px;
+  --t-read: 16px;
+  --t-lede: 18px;
+  --t-title: 32px;
+
+  /* 4px 模数 */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-pill: 999px;
+
+  --topbar: 52px;
+  --sidebar-w: 264px;
+  --drawer-w: 380px;
+  --measure: 44rem;
+
+  /* 墨色实心按钮的悬停 / 按下、按钮上的反白字、遮罩 */
+  --ink-hover: oklch(0.34 0.012 85);
+  --ink-active: oklch(0.2 0.01 85);
+  --on-ink: var(--paper);
+  --on-warn: oklch(0.99 0.005 80);
+  --scrim: oklch(0.26 0.01 85 / 0.32);
+
+  --shadow-float: 0 1px 2px oklch(0.26 0.01 85 / 0.06), 0 10px 30px oklch(0.26 0.01 85 / 0.12);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms;
+  --t-base: 200ms;
+
+  color-scheme: light;
+}

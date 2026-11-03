@@ -548,5 +548,8 @@ test('audio retention guards reference cleanup and Main exposes real storage met
   assert.deepEqual((await dispatch('transcription:get-segments', [id])).value, SEGMENTS);
   assert.equal((await dispatch('notes:generate', [id])).error.code, 'NOT_IMPLEMENTED');
   assert.equal((await dispatch('recording:start', [id])).error.code, 'NOT_IMPLEMENTED');
-  assert.equal((await dispatch('settings:set-api-key', ['deepseek', 'secret'])).error.code, 'NOT_IMPLEMENTED');
+  assert.equal(
+    (await dispatch('settings:set-api-key', ['deepseek', 'secret'])).error.code,
+    'NOT_IMPLEMENTED',
+  );
 });

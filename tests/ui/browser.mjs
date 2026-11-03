@@ -163,6 +163,13 @@ export async function startBrowser() {
       pages.push(page);
       await page.send('Runtime.enable');
       await page.send('Page.enable');
+      // 与 Electron 默认窗口一致；窄窗口布局由专门的响应式测试覆盖
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width: 1280,
+        height: 800,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
       await page.send('Page.addScriptToEvaluateOnNewDocument', { source: PAGE_SCRIPT });
       await page.send('Page.navigate', { url });
       await page.waitFor(

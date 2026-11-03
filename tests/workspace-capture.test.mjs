@@ -200,7 +200,7 @@ test('default microphone setting is captured; system denial remains a visible wa
   await api.settings.update({ microphoneDeviceId: null, includeSystemAudio: true });
   assert.equal(await session.start(), true);
   assert.equal(env.mediaCalls[1][1].audio.deviceId.exact, 'default');
-  assert.match(session.getState().warning, /microphone only/);
+  assert.match(session.getState().warning, /只录制麦克风/);
   assert.equal(await session.stop(), true);
 });
 
@@ -221,7 +221,8 @@ test('settings failure prevents Main start and media access, and rejection stays
   t.after(session.connect());
   await session.create('Settings failure');
   assert.equal(await session.start(), false);
-  assert.equal(session.getState().error, 'Settings unavailable.');
+  // 界面按错误码显示中文文案，不透出 Main 的原文
+  assert.equal(session.getState().error, '出现了意外错误，请重试。');
   reject = true;
   assert.equal(await session.start(), false);
   assert.equal(session.getState().error, '操作失败，请重试。');
@@ -247,7 +248,7 @@ test('microphone permission failure keeps a discardable Main job and safe error'
   const { session } = await connected(t, { micDenied: true });
   assert.equal(await session.start(), false);
   assert.equal(session.getState().meeting.status, 'failed');
-  assert.equal(session.getState().error, 'Audio capture permission was denied.');
+  assert.equal(session.getState().error, '录音权限被拒绝。请在系统设置中允许 Turnnote 录音。');
   assert.equal(await session.discard(), true);
   assert.equal(session.getState().meeting.status, 'created');
 });

@@ -218,7 +218,8 @@ export function createMockApi({
     return withMeeting(id, (meeting) => {
       if (!canStartJob(meeting, kind, (segments.get(id)?.length ?? 0) > 0))
         return fail('INVALID_STATE');
-      if (kind === 'generating' && !apiKeys.has(settings.noteProvider)) return fail('API_KEY_MISSING');
+      if (kind === 'generating' && !apiKeys.has(settings.noteProvider))
+        return fail('API_KEY_MISSING');
       const { job, meeting: snapshot } = begin(id, kind);
       void runJob(id, job);
       return ok(snapshot);

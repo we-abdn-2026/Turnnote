@@ -25,14 +25,24 @@ export interface OpenedConfirmation {
   action: Exclude<Confirming, null>;
   /** 打开时会话的 revision */
   revision: number;
+  /** 打开时会话的 attempt */
+  attempt: number;
 }
 
-/** 确认步骤绑定打开时的会议快照；会议有任何更新后失效，不会在之后自行弹出 */
+/**
+ * 确认步骤绑定打开时的会议快照和操作序号：会议有任何更新、或任何其他操作开始（即使随后失败）
+ * 都会使它失效，不会在之后自行弹出
+ */
 export function activeConfirmation(
   opened: OpenedConfirmation | null,
   state: SessionState,
 ): Confirming {
-  return opened && state.meeting && opened.revision === state.revision ? opened.action : null;
+  return opened &&
+    state.meeting &&
+    opened.revision === state.revision &&
+    opened.attempt === state.attempt
+    ? opened.action
+    : null;
 }
 
 export interface RecordingControlsView {

@@ -17,12 +17,23 @@ export {
   scanAudioInputs,
 } from '../../apps/desktop/renderer/components/audio-device-state';
 export {
+  EXPORTED_MESSAGE,
   REQUEST_FAILED_MESSAGE,
   TRANSCRIPT_LOAD_FAILED_MESSAGE,
   availableActions,
+  canEditMeetingNote,
   createMeetingSession,
   isRecording,
+  meetingActions,
 } from '../../apps/desktop/renderer/workspace/meeting-session';
+export { createMeetingLibrary } from '../../apps/desktop/renderer/library/meeting-library';
+export { createRecordingClock } from '../../apps/desktop/renderer/workspace/recording-clock';
+export { describeCode, describeError } from '../../apps/desktop/renderer/ui/errors';
+export {
+  formatTimecode,
+  segmentIndexAt,
+  transcriptLength,
+} from '../../apps/desktop/renderer/ui/timecode';
 export {
   activeConfirmation,
   deriveRecordingControls,

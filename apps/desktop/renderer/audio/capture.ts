@@ -148,7 +148,7 @@ export async function startCapture(
             endedListeners.delete(track);
           }
         }
-        options.onWarning?.('System audio is unavailable. Recording microphone only.');
+        options.onWarning?.('系统音频不可用，本次只录制麦克风。');
       }
     }
     if (options.microphoneDeviceId !== null) {

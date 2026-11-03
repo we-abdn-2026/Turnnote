@@ -155,7 +155,8 @@ test('keyword save failure keeps the saved snapshot and allows retry', async () 
 
   assert.equal(await session.saveKeywords(['定价']), false);
   assert.deepEqual(session.getState().meeting.keywords, []);
-  assert.equal(session.getState().error, 'Keywords could not be saved.');
+  // 界面按错误码显示中文文案，不透出 Main 的原文
+  assert.equal(session.getState().error, '当前状态下不能执行这个操作。');
   assert.equal(session.getState().pending, null);
 
   assert.equal(await session.saveKeywords([' 定价 ', '定价']), true);
@@ -864,7 +865,7 @@ test('generation failure keeps the transcript and can be retried', async () => {
   assert.equal(attempts, 1);
   assert.equal(session.getState().meeting.status, 'transcribed');
   assert.equal(session.getState().transcriptSegments.length, 4);
-  assert.equal(session.getState().error, 'DeepSeek is currently unavailable.');
+  assert.equal(session.getState().error, '所选 AI 服务暂时不可用。');
 
   assert.equal(await session.generate(), true);
   await until(session, (state) => state.meeting.status === 'ready');
@@ -943,7 +944,9 @@ test('failed Result and rejection report a safe error and keep the last confirme
   assert.deepEqual(session.getState(), {
     meeting: created,
     pending: null,
-    error: 'Not available yet.',
+    error: '当前版本尚未提供这个功能。',
+    notice: null,
+    attempt: 2,
     warning: null,
     captureStopped: false,
     transcriptSegments: [],

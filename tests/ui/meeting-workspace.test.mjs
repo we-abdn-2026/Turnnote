@@ -76,7 +76,7 @@ test('create → start → stop shows Main-driven recording, captured and transc
     {
       id: 'transcript-segment-0',
       start: '0',
-      time: '00:00–00:02',
+      time: '00:00:00',
       text: "Let's review the launch plan for this week.",
     },
   );
@@ -98,6 +98,9 @@ test('transcript shows a long bilingual, multiline list with stable segment anch
   );
   await createMeeting(page, 'Long transcript');
   await page.waitFor(`document.querySelectorAll('.transcript-segment').length === 120`);
+  // 转写在右侧抽屉里：打开后才有可量的版面
+  await page.eval(`__ui.click('转写')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
 
   assert.deepEqual(
     await page.eval(`({
@@ -119,7 +122,7 @@ test('transcript shows a long bilingual, multiline list with stable segment anch
       firstIndex: '0',
       firstText: '第一行中文\nSecond line in English.',
       lastId: 'transcript-segment-119',
-      lastTime: '01:00:01–01:00:02',
+      lastTime: '01:00:01',
       hourGapIsVisible: true,
       scrolls: true,
     },
@@ -343,7 +346,7 @@ test('start failure Result and rejection show a safe error and keep the meeting'
   await createMeeting(page, 'Errors');
   await page.eval(`__ui.faults['recording.start'] = { type: 'result', error: ${NOT_IMPLEMENTED} }`);
   await startRecording(page);
-  await page.waitFor(`__ui.alerts().some((a) => a.includes('Not available yet.'))`);
+  await page.waitFor(`__ui.alerts().some((a) => a.includes('当前版本尚未提供这个功能。'))`);
   assert.equal(await page.eval('__ui.status()'), '已创建，未开始录音');
 
   await page.eval(`__ui.faults['recording.start'] = { type: 'reject' }`);
@@ -465,7 +468,7 @@ test('generation failure is safe and retry requires confirmation', async () => {
   await page.eval(`__ui.click('确认发送并生成')`);
 
   await page.waitFor(
-    `__ui.alerts().some((message) => message.includes('DeepSeek is currently unavailable.'))`,
+    `__ui.alerts().some((message) => message.includes('所选 AI 服务暂时不可用。'))`,
   );
   assert.equal(await page.eval(`__ui.calls['notes.generate']`), 1);
   assert.equal(await page.eval(`__ui.status()`), '转写完成');
@@ -536,7 +539,7 @@ test('keyword draft must be saved before regeneration and guides the new version
     false,
   );
 
-  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'test-only-secret')`);
   await page.eval(`__ui.click('生成会议纪要')`);
   await page.eval(`__ui.click('确认发送并生成')`);
   await page.waitFor(
@@ -624,7 +627,7 @@ test('keyword draft must be saved before regeneration and guides the new version
 test('failed regeneration keeps the existing note and requires confirmation to retry', async () => {
   const page = await browser.open();
   const id = await createTranscribedMeeting(page, 'Failed regeneration');
-  await page.eval(`__ui.api.settings.setApiKey('test-only-secret')`);
+  await page.eval(`__ui.api.settings.setApiKey('deepseek', 'test-only-secret')`);
 
   await page.eval(`__ui.click('生成会议纪要')`);
   await page.eval(`__ui.click('确认发送并生成')`);
@@ -651,7 +654,7 @@ test('failed regeneration keeps the existing note and requires confirmation to r
   await page.eval(`__ui.click('重新生成会议纪要')`);
   await page.eval(`__ui.click('确认发送并重新生成')`);
   await page.waitFor(
-    `__ui.alerts().some((message) => message.includes('DeepSeek is currently unavailable.'))`,
+    `__ui.alerts().some((message) => message.includes('所选 AI 服务暂时不可用。'))`,
   );
 
   const after = await page.eval(`(async () => (
@@ -759,14 +762,14 @@ test('note display renders every section, optional times and unspecified values'
     'Ship the beta on Friday.',
     'Keep the current price until customer interviews finish.',
   ]);
-  assert.deepEqual(displayed.decisionTimes, ['00:02']);
+  assert.deepEqual(displayed.decisionTimes, ['00:00:02']);
   assert.deepEqual(displayed.questions, ['What is the team plan price?']);
   assert.deepEqual(displayed.actionMeta, [
     ['Alex', '未指定'],
     ['未指定', '未指定'],
     ['Jordan Lee', 'Friday'],
   ]);
-  assert.deepEqual(displayed.actionTimes, ['00:05']);
+  assert.deepEqual(displayed.actionTimes, ['00:00:05']);
 
   const reviewNotice = await page.eval(`(() => {
     const notice = document.querySelector('.note-review-notice');
@@ -904,7 +907,9 @@ test('failed create invalidates an open generation confirmation', async () => {
   `);
   await page.eval(`__ui.type('#meeting-title', 'Create should fail')`);
   await page.eval(`__ui.click('新建会议')`);
-  await page.waitFor(`__ui.alerts().some((message) => message.includes('Not available yet.'))`);
+  await page.waitFor(
+    `__ui.alerts().some((message) => message.includes('当前版本尚未提供这个功能。'))`,
+  );
 
   // 请求失败后 pending 已恢复，但旧确认状态不能重新生效。
   await new Promise((resolve) => setTimeout(resolve, 100));

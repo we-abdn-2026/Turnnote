@@ -2,6 +2,7 @@ import type { MeetingDetail, Result, TurnnoteApi } from '@shared/contracts';
 import { fail, TurnnoteError } from '@shared/result';
 import type { MeetingRecording } from '../workspace/meeting-session';
 import { startCapture, type CaptureSession } from './capture';
+import { describeCode } from '../ui/errors';
 
 /** Owns the media session; meeting snapshots still come exclusively from Main. */
 export function createCaptureRecording(api: TurnnoteApi): MeetingRecording {
@@ -32,7 +33,7 @@ export function createCaptureRecording(api: TurnnoteApi): MeetingRecording {
             includeSystemAudio: settings.value.includeSystemAudio,
             onWarning: notify.warning,
             onStopped: notify.stopped,
-            onError: (error) => notify.error(error.message),
+            onError: (error) => notify.error(describeCode(error.code)),
           },
           api,
         );

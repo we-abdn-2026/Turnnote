@@ -149,9 +149,7 @@ test('start failure keeps start available; stop failure keeps recording and stop
   );
   await page.eval(`__ui.click('开始录音')`);
   await page.eval(`__ui.click('已告知，开始录音')`);
-  await page.waitFor(
-    `__ui.alerts().some((a) => a.includes('Audio capture permission was denied.'))`,
-  );
+  await page.waitFor(`__ui.alerts().some((a) => a.includes('录音权限被拒绝'))`);
   assert.deepEqual((await page.eval(controls)).buttons, ['开始录音']);
 
   await startRecording(page);

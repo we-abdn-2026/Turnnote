@@ -163,11 +163,9 @@ test('granted: lists only audio inputs and persists microphone and system audio 
   assert.equal((await persisted()).microphoneDeviceId, 'mic-a');
 
   assert.equal(view.checkbox().checked, true);
-  assert.match(view.text(), /将混录系统播放的声音/);
   await click(view.checkbox());
   assert.deepEqual(writes.at(-1), { includeSystemAudio: false });
   assert.equal(view.checkbox().checked, false);
-  assert.match(view.text(), /只录制麦克风，不包含系统播放的声音/);
   assert.equal((await persisted()).includeSystemAudio, false);
 
   await choose(view, '');
@@ -357,7 +355,6 @@ for (const [name, failUpdate, message] of [
     assert.match(alert.textContent, /保存失败/);
     assert.equal(view.checkbox().checked, true);
     assert.equal(view.checkbox().disabled, false);
-    assert.match(view.text(), /将混录系统播放的声音/);
 
     assert.deepEqual(writes, [{ microphoneDeviceId: 'mic-a' }, { includeSystemAudio: false }]);
     assert.equal((await persisted()).microphoneDeviceId, null);
