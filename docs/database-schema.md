@@ -164,10 +164,18 @@ get 同样排除 deleted。文件删除失败返回 WRITE_FAILED 并保留墓碑
 
 音频登记要求绝对路径位于管理目录内，父目录已存在。登记时将父目录和管理根目录按 realpath 规范化，并再次检查实际路径边界；目录内部的符号链接别名保存为同一个规范路径，由唯一索引阻止跨会议共享。文件本身不得为符号链接；文件可以尚未创建，以支持录音开始前预留所有权。调用方须使用 `getAudio().filePath` 返回的规范路径读写文件。
 
-hasAudio 表示音频引用存在，实际文件存在性由 Main 在启动任务前验证。`removeAudioReference` 仅清数据库引用，调用方须在检查保留标志后同步清文件并立即提交；真实自动清理策略将在音频编排中实现。
+hasAudio 表示音频引用存在，实际文件存在性由 Main 在启动任务前验证；`retain_audio` 是用户策略，二者独立：开启保留不会恢复已清理的音频。
+
+自动清理由 `services/audio-retention.ts` 执行，仅针对 `transcribed` / `generating` / `ready` 且 `retain_audio=0` 的会议（`MeetingStore.getReleasableAudio`）；`captured` 与 `failed` 的音频是重试输入，永不清理。触发点：
+
+- 转写提交之后（`afterTranscribed`），事件在清理后发布，因此事件中的 `hasAudio` 即最终值；
+- `setRetainAudio(false)` 作用于已转写会议时立即清理；
+- 启动恢复（`recover`）末尾的 `sweep`，收敛上次中断或失败的清理以及策略上线前遗留的音频。
+
+顺序固定为「转写已提交 → 删除文件 → 清除引用」，全程同步，保留标志的检查与删除之间不会被其他 IPC 打断。文件已删而引用残留时，`ENOENT` 视为成功，下一次触发即收敛；文件删除失败时保留引用并以 `audio_cleanup_failed` 记录稳定错误码，不改变转写结果。文件删除只作用于管理目录内（`storage/managed-file.ts`，会议删除共用同一实现），目录外路径一律拒绝。
 
 ## 数据库入口与验证
 
-`MeetingStore` 提供会议 CRUD、音频引用、任务启动/取消/失败/完成、转写/纪要版本和设置存取。`createSessionServices` 合成 storage、recording 和 transcription handlers，接入真实 PCM 录音和 sidecar 转写；数据库仍不拥有文件和外部进程。音频导入、生成和凭证操作尚未接入。
+`MeetingStore` 提供会议 CRUD、音频引用、任务启动/取消/失败/完成、转写/纪要版本和设置存取。`createSessionServices` 合成 storage、recording 和 transcription handlers，接入真实 PCM 录音和 sidecar 转写；数据库仍不拥有文件和外部进程。音频导入尚未接入。
 
 运行 `npm test -- tests/storage.test.mjs` 验证新库、v1 升级、失败迁移回滚、重启持久化、非法状态、SQL 注入输入、真实 SQL 故障事务回滚、任务令牌、编辑冲突、删除和设置白名单。

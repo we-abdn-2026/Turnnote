@@ -148,6 +148,8 @@ test('workspace capture retries a rolled-back save and launches exactly one auto
   value(await api.settings.update({ microphoneDeviceId: 'usb-mic', includeSystemAudio: false }));
   assert.equal(await session.create('Capture to ASR'), true);
   const id = session.getState().meeting.id;
+  // 本测试检查保存的 WAV 内容，需要在转写成功后仍保留音频。
+  value(await api.meetings.setRetainAudio(id, true));
   assert.equal(await session.start(), true);
   assert.equal(env.mediaCalls[0][1].audio.deviceId.exact, 'usb-mic');
   const db = new Database(f.databasePath);
@@ -194,6 +196,7 @@ test('workspace capture retries a rolled-back save and launches exactly one auto
 test('production Main composition: PCM IPC → finalized WAV → real fake worker → persistent timestamp segments', async (t) => {
   const f = fixture(t);
   const id = value(await f.api.meetings.create('Controlled recording')).id;
+  f.store.setRetainAudio(id, true);
   const recording = value(await f.api.recording.start(id));
   const samples = new Int16Array([123, -456, 789]);
   value(await f.api.recording.appendChunk(id, recording.activeJobId, samples));
@@ -400,7 +403,9 @@ test('cancel releases the real process; immediate retry and stale cancel cannot 
   assert.equal(f.store.getJob(first.activeJobId).status, 'cancelled');
   assert.equal(f.store.getJob(retry.activeJobId).status, 'completed');
   assert.deepEqual(f.store.getSegments(id), SEGMENTS);
-  assert.ok(existsSync(path));
+  // 取消期间音频保持不变；重试成功后按默认策略清理。
+  assert.equal(existsSync(path), false);
+  assert.equal(f.store.get(id).hasAudio, false);
 });
 
 test('deletion invalidates job, kills process before removing audio and prevents late completion', async (t) => {

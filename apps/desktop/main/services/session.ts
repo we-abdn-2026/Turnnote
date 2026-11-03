@@ -1,11 +1,12 @@
 import type { CapturePermissions } from '@shared/contracts';
 import type { InvokeHandlers } from '@shared/invoke';
-import { requireCondition } from '@shared/result';
+import { ok, requireCondition } from '@shared/result';
 import type { MeetingStore } from '../storage/database';
 import { createStorageHandlers } from '../storage/handlers';
 import { createRecordingHandlers } from '../platform/recording';
 import { createTranscriptionService, type TranscriptionOptions } from './transcription';
 import { createGenerationService, type GenerationOptions } from './generation';
+import { createAudioRetention } from './audio-retention';
 import type { CredentialStore } from '../platform/credentials';
 
 /** The same Main composition is exercised in integration tests and Electron. */
@@ -26,7 +27,12 @@ export function createSessionServices(
       /* Window delivery cannot change storage or resource cleanup. */
     }
   };
-  const transcription = createTranscriptionService(store, { ...options, emitMeeting });
+  const retention = createAudioRetention(store, options.audioDirectory, options.logger);
+  const transcription = createTranscriptionService(store, {
+    ...options,
+    emitMeeting,
+    afterTranscribed: retention.tryRelease,
+  });
   const generation = createGenerationService(store, {
     ...options,
     credentials: options.credentials,
@@ -57,6 +63,17 @@ export function createSessionServices(
     ...recording.handlers,
     transcription: transcription.handlers,
     notes: { ...storage.notes, ...generation.handlers },
+    meetings: {
+      ...storage.meetings,
+      // 取消保留时，已转写会议的音频立即按策略清理；开启保留不会恢复已删除的音频。
+      setRetainAudio: async (id, retain) => {
+        const result = await storage.meetings!.setRetainAudio!(id, retain);
+        if (retain || !retention.tryRelease(id)) return result;
+        const meeting = store.get(id);
+        emitMeeting(meeting);
+        return ok(meeting);
+      },
+    },
   };
   // Once quitting begins, no IPC call can create resources after shutdown's snapshot.
   for (const methods of Object.values(handlers)) {
@@ -71,7 +88,10 @@ export function createSessionServices(
   }
   return {
     handlers,
-    recover: recording.recover,
+    async recover() {
+      await recording.recover();
+      retention.sweep();
+    },
     interruptRecording: recording.shutdown,
     shutdown(): Promise<void> {
       closing = true;
