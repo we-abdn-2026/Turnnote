@@ -178,4 +178,4 @@ hasAudio 表示音频引用存在，实际文件存在性由 Main 在启动任�
 
 `MeetingStore` 提供会议 CRUD、音频引用、任务启动/取消/失败/完成、转写/纪要版本和设置存取。`createSessionServices` 合成 storage、recording 和 transcription handlers，接入真实 PCM 录音和 sidecar 转写；数据库仍不拥有文件和外部进程。`meetings.importAudio` 复制来源文件后以 `createCaptured` 入库，之后与录音共用同一条转写和保留/清理路径，清理只作用于管理目录内的副本。
 
-运行 `npm test -- tests/storage.test.mjs` 验证新库、v1 升级、失败迁移回滚、重启持久化、非法状态、SQL 注入输入、真实 SQL 故障事务回滚、任务令牌、编辑冲突、删除和设置白名单。
+运行 `npm test -- tests/storage.test.mjs` 验证新库、v1 升级、失败迁移回滚、重启持久化、非法状态、SQL 注入输入、真实 SQL 故障事务回滚、任务令牌、编辑冲突、设置白名单，以及会议管理：标题/转写检索（大小写不敏感、每会议一行、新到旧排序、无结果与通配符输入）、已删除会议不进入列表、重命名校验与持久化、对不存在/已删除会议的操作、墓碑删除（含文件已不存在、清理失败后重启续删、不触碰管理目录外的文件）。
