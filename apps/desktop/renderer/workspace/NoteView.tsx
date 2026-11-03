@@ -2,7 +2,8 @@
 import { Fragment, type ReactElement } from 'react';
 import type { MeetingNote, TranscriptSegment } from '@shared/contracts';
 import { Icon } from '../ui/icons';
-import { formatTimecode, segmentIndexAt } from '../ui/timecode';
+import { formatTimecode } from '@shared/timecode';
+import { segmentIndexAt } from '../ui/timecode';
 
 function displayNoteValue(value: string): string {
   const normalized = value.trim();

@@ -3,7 +3,7 @@ import { useState, type KeyboardEvent, type ReactElement } from 'react';
 import type { MeetingNote, NoteVersion } from '@shared/contracts';
 import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/icons';
-import { formatTimecode } from '../ui/timecode';
+import { formatTimecode } from '@shared/timecode';
 import type { MeetingSession } from './meeting-session';
 
 const UNSPECIFIED = 'unspecified';

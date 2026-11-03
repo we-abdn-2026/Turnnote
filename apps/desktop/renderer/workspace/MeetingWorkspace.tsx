@@ -5,12 +5,12 @@ import type { MeetingDetail } from '@shared/contracts';
 import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 import { Dialog } from '../ui/Dialog';
 import { describeError } from '../ui/errors';
+import { formatTimecode } from '@shared/timecode';
 import { Icon } from '../ui/icons';
 import {
   STATUS_DOT,
   STATUS_LABELS,
   formatDateTime,
-  formatTimecode,
   segmentIndexAt,
   transcriptLength,
 } from '../ui/timecode';
@@ -30,8 +30,6 @@ import { NoteView } from './NoteView';
 import { ProcessingProgress } from './ProcessingProgress';
 import { RecordingControls } from './RecordingControls';
 import { TranscriptLog, type Cue } from './TranscriptLog';
-
-export { STATUS_LABELS, formatTimecode } from '../ui/timecode';
 
 function canShowGenerationAction(meeting: MeetingDetail): boolean {
   return (

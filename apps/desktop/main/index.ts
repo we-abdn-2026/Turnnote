@@ -97,6 +97,20 @@ void app
     services = createSessionServices(store, {
       audioDirectory,
       modelsDirectory: join(app.getPath('userData'), 'models'),
+      exports: {
+        chooseSavePath: async (defaultFileName) => {
+          const options = {
+            title: '导出 Markdown',
+            defaultPath: defaultFileName,
+            filters: [{ name: 'Markdown', extensions: ['md'] }],
+          };
+          const result =
+            window && !window.isDestroyed()
+              ? await dialog.showSaveDialog(window, options)
+              : await dialog.showSaveDialog(options);
+          return result.canceled || !result.filePath ? null : result.filePath;
+        },
+      },
       credentials: new CredentialStore(
         join(app.getPath('userData'), 'credentials.json'),
         safeStorage,
