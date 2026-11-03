@@ -1,0 +1,155 @@
+/* 对话框：浮在纸面上的小卡片 */
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-m);
+  background: var(--sheet);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+  overflow: auto;
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialog[open] {
+  animation: dialog-in var(--t-base) var(--ease-out);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-5) var(--s-4) 0 var(--s-6);
+}
+
+.dialog-head .lamp {
+  display: none;
+}
+
+.dialog-head strong {
+  flex: 1;
+  font-family: var(--font-serif);
+  font-size: var(--t-lede);
+  font-weight: 500;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.dialog-body {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-6) var(--s-5);
+  color: var(--ink-2);
+  font-size: var(--t-ui);
+  line-height: 1.7;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: 0 var(--s-6) var(--s-6);
+}
+
+.dialog-actions .key {
+  min-height: 38px;
+}
+
+/* 设置：从右侧滑入的整高面板 */
+.settings-sheet {
+  width: min(460px, 100vw);
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0 0 0 auto;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+  background: var(--paper);
+}
+
+.settings-sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: sheet-in var(--t-base) var(--ease-out);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.settings-sheet .dialog-head strong {
+  font-family: var(--font-ui);
+  font-size: var(--t-ui);
+  font-weight: 600;
+}
+
+.settings-sheet .dialog-body {
+  flex: 1;
+  align-content: start;
+  gap: var(--s-8);
+  overflow-y: auto;
+}
+
+.settings-sheet .dialog-actions {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+
+.settings-group {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.settings-group h3 {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-3);
+  font-size: var(--t-ui);
+}
+
+.settings-row > label,
+.settings-row > span {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--ink-2);
+}
+
+.settings-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.settings-inline .field {
+  flex: 1 1 100%;
+}
+
+.key-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: calc(72px + var(--s-3));
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}

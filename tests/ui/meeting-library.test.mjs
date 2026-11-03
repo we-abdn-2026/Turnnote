@@ -1,0 +1,280 @@
+// #86 #30 #31 #34 #35：在 dev:web 中挂载真实应用，验证会议库、来源定位、键盘与焦点、删除确认、纪要编辑和窄窗口。
+import assert from 'node:assert/strict';
+import { after, before, test } from 'node:test';
+import { startBrowser } from './browser.mjs';
+
+let browser;
+before(async () => {
+  browser = await startBrowser();
+});
+after(async () => {
+  await browser?.close();
+});
+
+/** 通过 CDP 发送真实按键，覆盖原生 <dialog> 的 cancel 行为 */
+async function press(page, key, code = key, keyCode = 27) {
+  for (const type of ['keyDown', 'keyUp']) {
+    await page.send('Input.dispatchKeyEvent', {
+      type,
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+    });
+  }
+}
+
+const focused = `(() => {
+  const el = document.activeElement;
+  return el ? (el.id || el.getAttribute('aria-label') || el.textContent.trim()) : null;
+})()`;
+
+async function openSeeded(page) {
+  await page.waitFor(
+    `[...document.querySelectorAll('.reel')].some((r) => r.textContent.includes('Weekly sync'))`,
+  );
+  await page.eval(
+    `[...document.querySelectorAll('.reel')].find((r) => r.textContent.includes('Weekly sync')).click()`,
+  );
+  await page.waitFor(
+    `__ui.status() === '纪要已生成' && document.querySelectorAll('.transcript-segment').length === 4`,
+  );
+  await page.waitFor(`!!document.querySelector('.note-content')`);
+}
+
+test('library lists Main meetings, opens one and marks it current; switching is blocked while recording', async () => {
+  const page = await browser.open();
+  assert.equal(await page.eval('__ui.status()'), null);
+  await openSeeded(page);
+  assert.equal(await page.eval(`document.querySelector('h2').textContent`), 'Weekly sync');
+  assert.equal(
+    await page.eval(`document.querySelector('.reel[aria-current="true"] .reel-title').textContent`),
+    'Weekly sync',
+  );
+
+  await page.eval(`__ui.type('#meeting-title', 'Live one')`);
+  await page.eval(`__ui.click('新建会议')`);
+  await page.waitFor(`__ui.status() === '已创建，未开始录音'`);
+  await page.eval(`__ui.click('开始录音')`);
+  await page.eval(`__ui.click('已告知，开始录音')`);
+  await page.waitFor(`__ui.status() === '录音中'`);
+  await page.waitFor(`document.querySelectorAll('.reel').length === 2`);
+  assert.deepEqual(
+    await page.eval(
+      `[...document.querySelectorAll('.reel')].map((r) => [r.querySelector('.reel-title').textContent, r.disabled])`,
+    ),
+    [
+      ['Live one', false],
+      ['Weekly sync', true],
+    ],
+  );
+  assert.equal(await page.eval(`!!document.querySelector('.recording-indicator .dot-rec')`), true);
+  await page.eval(`__ui.click('停止录音')`);
+  await page.waitFor(`__ui.status() !== '录音中'`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('library search matches titles and transcript text, with an honest empty result', async () => {
+  const page = await browser.open();
+  await page.waitFor(`document.querySelectorAll('.reel').length === 1`);
+  await page.eval(`(() => {
+    const input = document.querySelector('[aria-label="搜索会议"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'release notes');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await page.waitFor(
+    `document.querySelector('.reel-list')?.getAttribute('aria-label') === '搜索结果：release notes'`,
+  );
+  assert.equal(await page.eval(`document.querySelectorAll('.reel').length`), 1);
+
+  await page.eval(`(() => {
+    const input = document.querySelector('[aria-label="搜索会议"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'nothing-like-this');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await page.waitFor(
+    `document.querySelector('.library-message')?.textContent.includes('nothing-like-this')`,
+  );
+  assert.equal(await page.eval(`document.querySelectorAll('.reel').length`), 0);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a note timecode cues its transcript segment, lights it and moves focus there', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('定位到转写 00:00:02')`);
+  await page.waitFor(
+    `document.querySelector('.transcript-segment.is-cued')?.dataset.segmentIndex === '1'`,
+  );
+  assert.equal(await page.eval(focused), 'transcript-segment-1');
+  assert.equal(
+    await page.eval(
+      `document.querySelector('.transcript-segment.is-cued').getAttribute('aria-current')`,
+    ),
+    'true',
+  );
+  // 没有来源时间的条目不伪造定位
+  assert.ok(await page.eval(`document.querySelectorAll('.note-nosource').length >= 1`));
+
+  await page.eval(`__ui.click('定位到转写 00:00:08')`);
+  await page.waitFor(
+    `document.querySelector('.transcript-segment.is-cued')?.dataset.segmentIndex === '3'`,
+  );
+  assert.equal(
+    await page.eval(`document.querySelectorAll('.transcript-segment.is-cued').length`),
+    1,
+  );
+  assert.deepEqual(page.errors, []);
+});
+
+test('real Escape cancels each confirmation without side effects and focus returns to the opener', async () => {
+  const page = await browser.open();
+  await page.eval(`__ui.type('#meeting-title', 'Keyboard')`);
+  await page.eval(`__ui.click('新建会议')`);
+  await page.waitFor(`__ui.status() === '已创建，未开始录音'`);
+
+  await page.eval(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent === '开始录音').focus()`,
+  );
+  await page.eval(`__ui.click('开始录音')`);
+  await page.waitFor(`!!document.querySelector('dialog[open]')`);
+  assert.equal(await page.eval(focused), '已告知，开始录音');
+  await press(page, 'Escape');
+  await page.waitFor(`!document.querySelector('dialog')`);
+  assert.equal(await page.eval(`__ui.calls['recording.start'] ?? 0`), 0);
+  assert.equal(await page.eval(focused), '开始录音');
+
+  await page.eval(`__ui.click('删除会议')`);
+  await page.waitFor(`!!document.querySelector('dialog[open]')`);
+  // 危险操作默认聚焦在取消上
+  assert.equal(await page.eval(focused), '取消');
+  await press(page, 'Escape');
+  await page.waitFor(`!document.querySelector('dialog')`);
+  assert.equal(await page.eval(`__ui.calls['meetings.delete'] ?? 0`), 0);
+  assert.equal(await page.eval('__ui.status()'), '已创建，未开始录音');
+  assert.deepEqual(page.errors, []);
+});
+
+test('delete asks first, then removes the meeting from the workspace and the library', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('删除会议')`);
+  const dialog = await page.eval(`document.querySelector('[role=alertdialog]').innerText`);
+  assert.match(dialog, /无法恢复/);
+  assert.match(dialog, /已发送给 DeepSeek 的转写文本不会因为本机删除而被删除/);
+  await page.eval(`__ui.click('取消')`);
+  assert.equal(await page.eval(`__ui.calls['meetings.delete'] ?? 0`), 0);
+
+  await page.eval(`__ui.click('删除会议')`);
+  await page.eval(`__ui.click('删除会议记录')`);
+  await page.waitFor(`__ui.status() === null && document.querySelectorAll('.reel').length === 0`);
+  assert.equal(await page.eval(`__ui.calls['meetings.delete']`), 1);
+  assert.equal(await page.eval(`!!document.querySelector('.empty-stage')`), true);
+  assert.deepEqual(page.errors, []);
+});
+
+test('note editing saves a user version; cancelling with changes asks before discarding', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('编辑纪要')`);
+  await page.waitFor(`!!document.querySelector('#edit-summary')`);
+  // 导出不能导出未保存的草稿
+  assert.equal(
+    await page.eval(`__ui.buttons().find((b) => b.label === '导出 Markdown').disabled`),
+    true,
+  );
+  await page.eval(`(() => {
+    const area = document.querySelector('#edit-summary');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, '人工核对后的摘要');
+    area.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+
+  await page.eval(`__ui.click('取消编辑')`);
+  await page.waitFor(
+    `document.querySelector('dialog[open] strong')?.textContent === '放弃未保存的修改？'`,
+  );
+  await page.eval(`__ui.click('继续编辑')`);
+  assert.equal(
+    await page.eval(`document.querySelector('#edit-summary').value`),
+    '人工核对后的摘要',
+  );
+
+  await page.eval(`__ui.click('保存纪要')`);
+  await page.waitFor(`document.querySelector('.note-source')?.textContent === '用户编辑'`);
+  assert.equal(
+    await page.eval(`document.querySelector('.note-summary p').textContent`),
+    '人工核对后的摘要',
+  );
+  assert.equal(
+    await page.eval(`document.querySelector('.note-meta span:last-child').textContent`),
+    '版本 2',
+  );
+  assert.equal(await page.eval(`__ui.calls['notes.saveEdit']`), 1);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a save conflict keeps the draft and explains the recovery', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('编辑纪要')`);
+  await page.waitFor(`!!document.querySelector('#edit-summary')`);
+  await page.eval(`(() => {
+    const area = document.querySelector('#edit-summary');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, '我的草稿');
+    area.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await page.eval(`__ui.faults['notes.saveEdit'] = {
+    type: 'result',
+    once: true,
+    error: { code: 'CONFLICT', message: 'The note has changed.' },
+  }`);
+  await page.eval(`__ui.click('保存纪要')`);
+  await page.waitFor(`__ui.alerts().some((a) => a.includes('纪要已在别处更新'))`);
+  assert.equal(await page.eval(`document.querySelector('#edit-summary').value`), '我的草稿');
+  assert.deepEqual(page.errors, []);
+});
+
+test('narrow window: library is a drawer, the note fills the width, the transcript replaces it when opened', async () => {
+  const page = await browser.open();
+  await page.send('Emulation.setDeviceMetricsOverride', {
+    width: 420,
+    height: 760,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await page.waitFor(
+    `getComputedStyle(document.querySelector('.library')).visibility === 'hidden'`,
+  );
+  await page.eval(`__ui.click('会议库')`);
+  await page.waitFor(
+    `getComputedStyle(document.querySelector('.library')).visibility === 'visible'`,
+  );
+  await openSeeded(page);
+  await page.waitFor(`document.querySelector('.shell').dataset.library === 'closed'`);
+
+  assert.equal(await page.eval(`document.documentElement.scrollWidth > window.innerWidth`), false);
+  assert.equal(
+    await page.eval(`getComputedStyle(document.querySelector('.canvas')).display`),
+    'flex',
+  );
+
+  // 点纪要里的时间码：转写抽屉接管整个宽度，并定位到来源
+  await page.eval(`__ui.click('定位到转写 00:00:02')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
+  await page.waitFor(
+    `document.querySelector('.transcript-segment.is-cued')?.dataset.segmentIndex === '1'`,
+  );
+  assert.equal(
+    await page.eval(`getComputedStyle(document.querySelector('.canvas')).display`),
+    'none',
+  );
+  assert.equal(await page.eval(`document.documentElement.scrollWidth > window.innerWidth`), false);
+
+  // 收起转写，回到纪要
+  await page.eval(`__ui.click('收起转写')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'closed'`);
+  assert.equal(
+    await page.eval(`getComputedStyle(document.querySelector('.canvas')).display`),
+    'flex',
+  );
+  assert.deepEqual(page.errors, []);
+});

@@ -140,7 +140,7 @@ test('start failure keeps the meeting startable and leaves the error to the work
   const disconnect = session.connect();
   await session.create('Denied');
   assert.equal(await session.start(), false);
-  assert.equal(session.getState().error, 'Audio capture permission was denied.');
+  assert.equal(session.getState().error, '录音权限被拒绝。请在系统设置中允许 Turnnote 录音。');
   const v = view(session);
   assert.equal(v.indicator, 'idle');
   assert.deepEqual(visible(v), ['start']);
@@ -238,7 +238,11 @@ test('processing failures do not offer recording controls', async () => {
 
 test('a confirmation opened for one snapshot never reappears after the meeting changes', async () => {
   const { api, session, disconnect } = await connected();
-  const opened = { action: 'start', revision: session.getState().revision };
+  const opened = {
+    action: 'start',
+    revision: session.getState().revision,
+    attempt: session.getState().attempt,
+  };
   assert.equal(activeConfirmation(opened, session.getState()), 'start');
 
   // 打开提醒后会议失败，再丢弃回到 created：提醒不能自行弹出。
@@ -257,15 +261,19 @@ test('a confirmation opened for one snapshot never reappears after the meeting c
 
 test('a confirmation never carries over to a newly created meeting', async () => {
   const { session, disconnect } = await connected();
-  const opened = { action: 'start', revision: session.getState().revision };
+  const opened = {
+    action: 'start',
+    revision: session.getState().revision,
+    attempt: session.getState().attempt,
+  };
   await session.create('Next meeting');
   assert.equal(activeConfirmation(opened, session.getState()), null);
   disconnect();
 });
 
 test('no meeting selected shows no indicator and no recording controls', () => {
-  const state = { meeting: null, pending: null, error: null, revision: 0 };
-  assert.equal(activeConfirmation({ action: 'start', revision: 0 }, state), null);
+  const state = { meeting: null, pending: null, error: null, revision: 0, attempt: 0 };
+  assert.equal(activeConfirmation({ action: 'start', revision: 0, attempt: 0 }, state), null);
   const v = deriveRecordingControls(state, 'start');
   assert.equal(v.indicator, 'none');
   assert.equal(v.showConsent, false);

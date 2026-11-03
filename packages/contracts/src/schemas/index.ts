@@ -63,7 +63,11 @@ export const settingsSchema = z.strictObject({
   includeSystemAudio: z.boolean(),
   transcriptionModel: modelSchema,
   transcriptionLanguage: z.enum(['en', 'zh', 'auto']),
-  noteProvider: z.string().min(1).max(64).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
+  noteProvider: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
   noteModel: modelSchema,
 }) satisfies z.ZodType<AppSettings>;
 export const settingsPatchSchema = settingsSchema
@@ -79,7 +83,11 @@ export const defaultSettings: AppSettings = {
   noteModel: 'deepseek-flash',
 };
 
-const providerSchema = z.string().min(1).max(64).regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
+const providerSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
 const apiKeySchema = z.string().trim().min(1).max(4096);
 
 export const errorCodeSchema = z.enum(Object.keys(errorMessages) as [ErrorCode, ...ErrorCode[]]);
