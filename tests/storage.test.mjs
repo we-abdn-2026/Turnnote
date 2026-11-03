@@ -654,3 +654,168 @@ test('IPC saveEdit validates structure, reports stale writers as CONFLICT and pu
   );
   assert.equal((await dispatch('notes:get-latest', [id])).value.note.summary, 'Via IPC');
 });
+
+test('list matches titles and transcripts case-insensitively, returns each meeting once and newest first (#26)', (t) => {
+  const f = fixture(t);
+  const older = f.store.create('Budget planning').id;
+  const withTranscript = ready(f.store, f.audioPath); // 转写含「预算」「Budget」两个片段
+  const newer = f.store.create('Roadmap budget').id;
+  const rows = f.store.list('BUDGET');
+  assert.deepEqual(rows.map((meeting) => meeting.id).sort(), [older, withTranscript, newer].sort());
+  for (let i = 1; i < rows.length; i++) {
+    const [previous, current] = [rows[i - 1], rows[i]];
+    assert.ok(
+      previous.createdAt > current.createdAt ||
+        (previous.createdAt === current.createdAt && previous.id > current.id),
+      'newest first, ties broken by id descending',
+    );
+  }
+  // 同一会议的多个片段命中只返回一行
+  assert.equal(f.store.list('budget').filter((meeting) => meeting.id === withTranscript).length, 1);
+  assert.equal(f.store.list('预算').length, 1);
+  // 无结果与通配/转义字符都返回空数组，而不是报错
+  for (const query of ['no such text', '%', '_', '\\', '[a-z]']) {
+    assert.deepEqual(f.store.list(query), [], query);
+  }
+  // 空查询等同于列出全部，仍按创建时间倒序
+  const all = f.store.list('').map((meeting) => meeting.id);
+  assert.equal(all.length, 3);
+  assert.deepEqual(
+    all,
+    f.store.list().map((meeting) => meeting.id),
+  );
+});
+
+test('deleted meetings never appear in list, even for queries that match their transcript or title (#26)', async (t) => {
+  const { store, audioPath, audioDirectory } = fixture(t);
+  const id = transcribed(store, audioPath);
+  const keep = store.create('Budget survivor').id;
+  assert.deepEqual(
+    store.list('预算').map((meeting) => meeting.id),
+    [id],
+  );
+  store.markDeleted(id);
+  assert.deepEqual(store.list('预算'), []);
+  assert.deepEqual(store.list('Planning'), []);
+  assert.deepEqual(
+    store.list('budget').map((meeting) => meeting.id),
+    [keep],
+  );
+  const handlers = createStorageHandlers(store, audioDirectory, () => {});
+  await assert.rejects(handlers.meetings.get(id), errorCode('NOT_FOUND'));
+});
+
+test('rename trims, validates, updates search and survives a restart; failures keep the old title (#26)', (t) => {
+  const f = fixture(t);
+  const id = f.store.create('Original').id;
+  const before = f.store.get(id).updatedAt;
+  const renamed = f.store.rename(id, '  季度复盘  ');
+  assert.equal(renamed.title, '季度复盘');
+  assert.ok(renamed.updatedAt >= before);
+  assert.deepEqual(
+    f.store.list('复盘').map((meeting) => meeting.id),
+    [id],
+  );
+  assert.deepEqual(f.store.list('Original'), []);
+
+  for (const bad of ['', '   ', 'a'.repeat(201), null, 42]) {
+    assert.throws(() => f.store.rename(id, bad), errorCode('INVALID_INPUT'), String(bad));
+  }
+  assert.equal(f.store.get(id).title, '季度复盘');
+
+  f.close();
+  const reopened = using(t, new MeetingStore(f.databasePath, f.audioDirectory));
+  assert.equal(reopened.get(id).title, '季度复盘');
+  assert.deepEqual(
+    reopened.list('复盘').map((meeting) => meeting.id),
+    [id],
+  );
+});
+
+test('metadata operations on absent or deleted meetings are NOT_FOUND and change nothing (#26)', async (t) => {
+  const { store, audioPath, audioDirectory } = fixture(t);
+  const gone = transcribed(store, audioPath);
+  store.markDeleted(gone);
+  const handlers = createStorageHandlers(store, audioDirectory, () => assert.fail('no event'));
+  const dispatch = createDispatcher(handlers);
+  for (const id of ['absent-id', gone]) {
+    for (const [channel, args] of [
+      ['meetings:get', [id]],
+      ['meetings:rename', [id, 'New title']],
+      ['meetings:set-retain-audio', [id, true]],
+      ['meetings:set-keywords', [id, ['Pricing']]],
+      ['transcription:get-segments', [id]],
+      ['notes:get-latest', [id]],
+    ]) {
+      assert.equal((await dispatch(channel, args)).error.code, 'NOT_FOUND', `${channel} ${id}`);
+    }
+  }
+  // 已删除会议的墓碑仍然完整，等待清理，不被元数据操作改写
+  assert.equal(store.get(gone, true).title, 'Planning');
+  assert.equal(store.get(gone, true).retainAudio, false);
+});
+
+test('list arguments are validated at the IPC boundary (#26)', async (t) => {
+  const { store, audioDirectory } = fixture(t);
+  store.create('Visible');
+  const dispatch = createDispatcher(createStorageHandlers(store, audioDirectory, () => {}));
+  assert.equal((await dispatch('meetings:list', [])).value.length, 1);
+  assert.equal((await dispatch('meetings:list', ['  visible  '])).value.length, 1);
+  assert.equal((await dispatch('meetings:list', ['nothing'])).value.length, 0);
+  for (const args of [['a'.repeat(201)], [42], [{}], ['a', 'b']]) {
+    assert.equal((await dispatch('meetings:list', args)).error.code, 'INVALID_INPUT');
+  }
+});
+
+test('deleting a meeting whose audio file is already gone succeeds; deleting twice is NOT_FOUND (#26)', async (t) => {
+  const { store, audioPath, audioDirectory, databasePath } = fixture(t);
+  const id = store.createCaptured('Already gone', audioPath).id; // 文件从未创建
+  const events = [];
+  const handlers = createStorageHandlers(store, audioDirectory, (meeting) => events.push(meeting));
+  assert.deepEqual(await handlers.meetings.delete(id), { ok: true, value: null });
+  assert.deepEqual(
+    events.map((meeting) => meeting.status),
+    ['deleted'],
+  );
+  assert.deepEqual(store.getDeleted(), []);
+  await assert.rejects(handlers.meetings.delete(id), errorCode('NOT_FOUND'));
+  const db = using(t, new Database(databasePath));
+  assert.equal(db.prepare('SELECT count(*) n FROM meetings').get().n, 0);
+});
+
+test('deletion only removes the managed copy; files outside the audio directory are untouched (#26)', async (t) => {
+  const { store, directory, audioPath, audioDirectory } = fixture(t);
+  const original = join(directory, 'user-recording.wav');
+  writeFileSync(original, 'the user original');
+  writeFileSync(audioPath, 'managed copy');
+  const id = store.createCaptured('Imported', audioPath).id;
+  const handlers = createStorageHandlers(store, audioDirectory, () => {});
+  assert.deepEqual(await handlers.meetings.delete(id), { ok: true, value: null });
+  assert.equal(existsSync(audioPath), false);
+  assert.equal(readFileSync(original, 'utf8'), 'the user original');
+  // 登记路径必须位于管理目录内，指向用户原始文件的登记被拒绝，因此删除永远不可能触及它
+  assert.throws(() => store.createCaptured('Escape', original), errorCode('INVALID_INPUT'));
+  assert.equal(readFileSync(original, 'utf8'), 'the user original');
+});
+
+test('a pending deletion survives a restart: hidden from list, then completed on the next delete (#26)', async (t) => {
+  const f = fixture(t);
+  mkdirSync(f.audioPath); // 目录导致 unlink 失败 → 墓碑保留
+  const id = f.store.createCaptured('Stuck deletion', f.audioPath).id;
+  const first = createStorageHandlers(f.store, f.audioDirectory, () => {});
+  assert.equal((await first.meetings.delete(id)).error.code, 'WRITE_FAILED');
+  f.close();
+
+  const reopened = using(t, new MeetingStore(f.databasePath, f.audioDirectory));
+  assert.deepEqual(reopened.list(), []);
+  assert.deepEqual(
+    reopened.getDeleted().map((meeting) => meeting.id),
+    [id],
+  );
+  assert.throws(() => reopened.get(id), errorCode('NOT_FOUND'));
+
+  rmSync(f.audioPath, { recursive: true });
+  const second = createStorageHandlers(reopened, f.audioDirectory, () => {});
+  for (const meeting of reopened.getDeleted()) await second.meetings.delete(meeting.id);
+  assert.deepEqual(reopened.getDeleted(), []);
+});
