@@ -1,17 +1,50 @@
 name: 开发任务
 description: roadmap 中的开发任务
 title: '[Task] '
-labels: ['task']
+labels: ['type/task']
 body:
   - type: dropdown
     id: group
     attributes:
       label: 分组
+      description: 自动添加 group/ 标签
       options:
-        - 前端
-        - 后端
-        - 测试
-        - 部署
+        - frontend · 前端
+        - backend · 后端
+        - testing · 测试
+        - deploy · 部署
+    validations:
+      required: true
+  - type: dropdown
+    id: areas
+    attributes:
+      label: 模块
+      description: 自动添加 area/ 标签
+      multiple: true
+      options:
+        - audio · 音频采集
+        - asr · 本地转写
+        - deepseek · 纪要生成
+        - database · 数据库与存储
+        - ipc · 进程通信与契约
+        - ui · 界面与交互
+        - export · 导出
+        - security · 凭证与隐私
+        - packaging · 打包与安装
+        - ci · CI 与工程配置
+        - docs · 文档
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      description: 自动添加 priority/ 标签
+      options:
+        - P0 · 阻塞：主流程不可用或数据丢失
+        - P1 · 高：影响当前里程碑
+        - P2 · 中：当前阶段内处理
+        - P3 · 低：有空再做
     validations:
       required: true
   - type: dropdown

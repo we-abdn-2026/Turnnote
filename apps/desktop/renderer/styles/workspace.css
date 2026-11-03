@@ -1,0 +1,577 @@
+/* 工作区：文档画布 + 转写抽屉 */
+.workspace {
+  grid-area: workspace;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0;
+  transition: grid-template-columns var(--t-slow) var(--ease-out);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--sheet);
+  border-top-left-radius: var(--r-m);
+  box-shadow: -1px 0 0 var(--rule);
+}
+
+.workspace[data-drawer='open'] {
+  grid-template-columns: minmax(0, 1fr) var(--drawer-w);
+}
+
+.canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.canvas > * {
+  flex: none;
+}
+
+.bulletins {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: grid;
+}
+
+.bulletin {
+  margin: 0;
+  padding: var(--s-3) var(--s-8);
+  background: var(--accent-wash);
+  font-size: var(--t-ui);
+}
+
+.bulletin-warn {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+
+.toast {
+  position: fixed;
+  z-index: 30;
+  bottom: var(--s-16);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--t-ui);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  animation: toast-in var(--t-base) var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+.bulletin strong {
+  margin-right: var(--s-2);
+}
+
+.bulletin p {
+  display: inline;
+}
+
+/* 文档：一列正文，限制行宽 */
+.doc {
+  width: 100%;
+  max-width: calc(var(--measure) + var(--s-16) * 2);
+  margin: 0 auto;
+  padding: var(--s-12) var(--s-16) var(--s-8);
+}
+
+.doc-head {
+  display: grid;
+  gap: var(--s-3);
+  margin-bottom: var(--s-8);
+}
+
+.doc-title {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.doc h2 {
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: var(--t-title);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.doc-title .key {
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.doc-title:hover .key,
+.doc-title .key:focus-visible {
+  opacity: 1;
+}
+
+.rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  width: 100%;
+}
+
+.rename .field {
+  flex: 1 1 260px;
+}
+
+.doc-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  color: var(--ink-2);
+  font-size: var(--t-ui);
+}
+
+.meeting-status {
+  color: var(--ink-2);
+}
+
+.doc-meta {
+  display: flex;
+  gap: var(--s-3);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.doc-meta {
+  order: 1;
+}
+
+.doc-line .dot {
+  order: 2;
+}
+
+.meeting-status {
+  order: 3;
+}
+
+.doc-meta time,
+.reel-time {
+  font-family: var(--font-ui);
+}
+
+.doc-gone {
+  display: grid;
+  gap: var(--s-4);
+  justify-items: start;
+  color: var(--ink-2);
+}
+
+/* 生成：关注词 + 一个按钮，成一行 */
+.generate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-8);
+}
+
+/* 已有纪要时，生成区降级为纪要条下方的一行 */
+.generate-quiet {
+  margin: var(--s-3) 0 var(--s-6);
+}
+
+.generate > .keywords {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.generate > .generation-blocked {
+  flex-basis: 100%;
+}
+
+.generation-blocked {
+  color: var(--warn);
+  font-size: var(--t-small);
+}
+
+.keyword-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.keyword-add form {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 28px;
+  padding: 0 var(--s-3);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-s);
+  color: var(--ink-3);
+  transition: border-color var(--t-fast) var(--ease-out);
+}
+
+.keyword-add form:hover {
+  border-color: var(--ink-3);
+}
+
+.keyword-add form:focus-within {
+  border: 1px solid var(--accent);
+  color: var(--accent-ink);
+}
+
+.keyword-add-label {
+  display: inline-flex;
+}
+
+.keyword-add .field {
+  width: 7em;
+  min-height: 26px;
+}
+
+.keyword-add .field::placeholder {
+  color: var(--ink-3);
+}
+
+.keyword-save {
+  min-height: 28px;
+  padding: 0 var(--s-3);
+  font-size: var(--t-small);
+}
+
+.keyword-message {
+  margin-top: var(--s-2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.keyword-message-error {
+  color: var(--warn);
+}
+
+/* 纪要条：版本和操作，贴近正文上方 */
+.note-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  white-space: nowrap;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.note-source {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.note-actions {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.note-blank {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+  color: var(--ink-2);
+}
+
+.note-message {
+  color: var(--ink-2);
+}
+
+.skeleton {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.skeleton > span:nth-child(odd) {
+  width: 82%;
+}
+
+.callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-s);
+  background: var(--sidebar);
+  font-size: var(--t-ui);
+}
+
+.callout-warn {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+
+.note-review-notice {
+  margin-top: var(--s-8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: 1.6;
+}
+
+.doc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--s-10);
+}
+
+.empty-stage {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--s-5);
+  min-height: 60vh;
+  padding: var(--s-12);
+}
+
+.empty-stage .key {
+  width: auto;
+  min-width: 132px;
+}
+
+.empty-stage-title {
+  color: var(--ink-3);
+  font-family: var(--font-serif);
+  font-size: var(--t-lede);
+  font-weight: 400;
+}
+
+/* 处理进度：一根细线 */
+.processing-progress {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-6);
+}
+
+.processing-progress-heading {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.processing-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.processing-progress progress {
+  flex: 1;
+  height: 3px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--selected);
+  appearance: none;
+  overflow: hidden;
+}
+
+.processing-progress progress::-webkit-progress-bar {
+  background: var(--selected);
+}
+
+.processing-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.processing-progress progress:indeterminate {
+  background: linear-gradient(90deg, transparent 0 35%, var(--accent) 35% 65%, transparent 65%)
+    var(--selected);
+  background-size: 300% 100%;
+  animation: sweep 1.4s linear infinite;
+}
+
+.processing-progress progress:indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+
+@keyframes sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* 录音条：画布底部居中的浮条 */
+.dock {
+  position: sticky;
+  bottom: var(--s-6);
+  z-index: 4;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  width: max-content;
+  max-width: calc(100% - var(--s-8));
+  margin: auto auto var(--s-6);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-5);
+  border-radius: var(--r-pill);
+  background: var(--sheet);
+  box-shadow: var(--shadow-float);
+}
+
+.dock[data-visible='true'],
+.dock:has(.dock-saving) {
+  display: flex;
+}
+
+.dock:not(:has(.recording-indicator, .dock-saving)) {
+  padding-left: var(--s-2);
+}
+
+.dock .recording-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.dock-time {
+  font-size: var(--t-lede);
+  color: var(--ink);
+}
+
+.dock-saving {
+  color: var(--ink-2);
+  font-size: var(--t-ui);
+}
+
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.transport .key {
+  min-height: 40px;
+  border-radius: var(--r-pill);
+  padding: 0 var(--s-5);
+}
+
+.transport:empty {
+  display: none;
+}
+
+/* 转写抽屉：始终在栅格里，列宽 0 ↔ 抽屉宽度过渡；收起时 inert，焦点和读屏都不会进入 */
+.drawer {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.drawer .log {
+  width: var(--drawer-w);
+  border-left: 1px solid var(--rule);
+}
+
+@media (max-width: 899px) {
+  .workspace,
+  .workspace[data-drawer='open'] {
+    grid-template-columns: minmax(0, 1fr);
+    transition: none;
+  }
+
+  .workspace[data-drawer='open'] .canvas {
+    display: none;
+  }
+
+  .workspace:not([data-drawer='open']) .drawer {
+    display: none;
+  }
+
+  .drawer .log {
+    width: 100%;
+  }
+
+  .doc {
+    padding: var(--s-6) var(--s-5) var(--s-6);
+  }
+
+  .doc h2 {
+    font-size: 26px;
+  }
+
+  .bulletin {
+    padding-inline: var(--s-5);
+  }
+}
+
+/* 切换会议：文档轻轻淡入；纪要章节依次淡入，总时长不超过 400ms */
+.doc {
+  animation: fade-in var(--t-base) var(--ease-out);
+}
+
+.note-content > section {
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+
+.note-content > section:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.note-content > section:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.note-content > section:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.note-content > section:nth-child(5) {
+  animation-delay: 200ms;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* 录音条：圆点和时间码出现时轻弹一下，之后只有圆点呼吸 */
+.dock .recording-indicator,
+.dock .dock-time,
+.dock .dock-saving {
+  animation: dock-in var(--t-base) var(--ease-out);
+}
+
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}

@@ -5,7 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'node_modules/', '.venv/'] },
+  { ignores: ['out/', 'dist/', 'node_modules/', '.venv/', '.impeccable/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -14,8 +14,14 @@ export default tseslint.config(
       'apps/desktop/preload/**/*.ts',
       '*.config.ts',
       'tests/**/*.mjs',
+      'scripts/**/*.mjs',
     ],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // 注入 dev:web 页面运行的测试脚本
+    files: ['tests/ui/page.js'],
+    languageOptions: { globals: globals.browser, sourceType: 'script' },
   },
   {
     files: ['apps/desktop/renderer/**/*.{ts,tsx}'],

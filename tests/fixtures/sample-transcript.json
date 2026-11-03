@@ -1,0 +1,30 @@
+{
+  "segments": [
+    {
+      "startMs": 0,
+      "endMs": 2400,
+      "text": "Let's review the launch plan for this week."
+    },
+    {
+      "startMs": 2400,
+      "endMs": 5200,
+      "text": "We decided to ship the beta on Friday."
+    },
+    {
+      "startMs": 5200,
+      "endMs": 8000,
+      "text": "Alex will prepare the release notes by Thursday."
+    },
+    {
+      "startMs": 8000,
+      "endMs": 11000,
+      "text": "Pricing for the team plan is still open. What should we charge?"
+    },
+    {
+      "startMs": 11000,
+      "endMs": 14500,
+      "text": "Sarah needs to research competitor pricing before we finalize."
+    }
+  ],
+  "fullText": "Let's review the launch plan for this week. We decided to ship the beta on Friday. Alex will prepare the release notes by Thursday. Pricing for the team plan is still open. What should we charge? Sarah needs to research competitor pricing before we finalize."
+}

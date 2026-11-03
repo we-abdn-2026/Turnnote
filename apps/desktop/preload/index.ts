@@ -1,24 +1,9 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import {
-  eventChannels,
-  invokeChannels,
-  loopbackChannels,
-  type TurnnoteApi,
-  type TurnnoteInvokeApi,
-} from '@shared/contracts';
+import { eventChannels, loopbackChannels, type TurnnoteApi } from '@shared/contracts';
+import { createInvokeApi } from '@shared/bridge';
 
 // 只暴露 invokeChannels 白名单中的通道
-const invokeApi = Object.fromEntries(
-  Object.entries(invokeChannels).map(([namespace, methods]) => [
-    namespace,
-    Object.fromEntries(
-      Object.entries(methods).map(([method, channel]) => [
-        method,
-        (...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
-      ]),
-    ),
-  ]),
-) as unknown as TurnnoteInvokeApi;
+const invokeApi = createInvokeApi((channel, ...args) => ipcRenderer.invoke(channel, ...args));
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
   const wrapped = (_event: IpcRendererEvent, payload: T) => listener(payload);

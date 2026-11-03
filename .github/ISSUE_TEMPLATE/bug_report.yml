@@ -1,26 +1,39 @@
 name: 缺陷报告
 description: 报告功能异常、崩溃或数据问题
 title: '[Bug] '
-labels: ['bug']
+labels: ['type/bug']
 body:
   - type: markdown
     attributes:
       value: 请勿粘贴 API Key、会议转写原文或包含用户名的完整本地路径。
   - type: dropdown
-    id: module
+    id: area
     attributes:
       label: 模块
+      description: 自动添加 area/ 标签；不确定可多选
+      multiple: true
       options:
-        - 音频采集
-        - 本地转写（sidecar）
-        - 纪要生成（DeepSeek）
-        - 编辑与导出
-        - 会议管理
-        - 设置与凭证
-        - 安装与启动
-        - 其他
+        - audio · 音频采集
+        - asr · 本地转写
+        - deepseek · 纪要生成
+        - database · 会议数据与存储
+        - ipc · 进程通信
+        - ui · 界面与交互
+        - export · 导出
+        - security · 凭证与隐私
+        - packaging · 安装与启动
     validations:
       required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      description: 自动添加 priority/ 标签；不确定可不选，由维护者判断
+      options:
+        - P0 · 阻塞：主流程不可用或数据丢失
+        - P1 · 高：影响当前里程碑
+        - P2 · 中：当前阶段内处理
+        - P3 · 低：有空再做
   - type: dropdown
     id: platform
     attributes:

@@ -13,5 +13,11 @@
       "@shared/*": ["packages/contracts/src/*"]
     }
   },
-  "include": ["apps", "packages", "electron.vite.config.ts", "vite.renderer.config.ts"]
+  "include": [
+    "apps",
+    "packages",
+    "tests/support/runtime.ts",
+    "electron.vite.config.ts",
+    "vite.renderer.config.ts"
+  ]
 }

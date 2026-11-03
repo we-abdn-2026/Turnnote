@@ -1,0 +1,303 @@
+/* 外壳：会议库 | 文档画布 | 转写抽屉。整窗不滚动，各区域自行滚动 */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: var(--topbar) minmax(0, 1fr);
+  grid-template-areas:
+    'topbar topbar'
+    'library workspace';
+  height: 100vh;
+}
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-3) 0 var(--s-4);
+  app-region: drag;
+}
+
+.topbar button {
+  app-region: no-drag;
+}
+
+.shell[data-chrome='darwin'] .topbar {
+  padding-left: 84px;
+}
+
+.shell[data-chrome='win32'] .topbar,
+.shell[data-chrome='linux'] .topbar {
+  padding-right: 152px;
+}
+
+.topbar-library {
+  display: none;
+}
+
+.topbar-tail {
+  display: flex;
+  gap: var(--s-1);
+  margin-left: auto;
+}
+
+/* 会议库：像文件夹列表，和画布之间没有分隔线，只靠底色区分 */
+.library {
+  grid-area: library;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: calc(var(--topbar) * -1);
+  padding-top: var(--topbar);
+  background: var(--sidebar);
+}
+
+.create-meeting {
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4) var(--s-4);
+}
+
+.create-meeting .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 0 var(--s-3) var(--s-2) var(--s-4);
+}
+
+.library-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-s);
+  background: var(--selected);
+  color: var(--ink-3);
+}
+
+.library-search:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+  color: var(--ink-2);
+}
+
+.library-search .field:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.library-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-2) var(--s-2) var(--s-6);
+}
+
+.reel-day {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--sidebar);
+  padding: var(--s-4) var(--s-3) var(--s-1);
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  font-weight: 500;
+}
+
+.reel-list {
+  display: grid;
+  gap: 1px;
+}
+
+.reel {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s-3);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease-out);
+}
+
+.reel-title {
+  overflow: hidden;
+  font-size: var(--t-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reel-snippet {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reel-snippet mark {
+  border-radius: 2px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+
+.reel-time {
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.reel:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.reel[aria-current='true'] {
+  background: var(--selected);
+  font-weight: 500;
+}
+
+.reel:disabled:not([aria-current='true']) {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.reel-skeleton {
+  display: block;
+  padding: var(--s-3);
+}
+
+.skeleton-line,
+.skeleton > span {
+  display: block;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--selected) 0%, var(--hover) 50%, var(--selected) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.library-message {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+  padding: var(--s-4) var(--s-3);
+  color: var(--ink-2);
+  font-size: var(--t-ui);
+}
+
+.scrim {
+  display: none;
+}
+
+/* 拖拽手柄：压在会议库和画布交界处，悬停 / 聚焦 / 拖动时显出一条强调线 */
+.sidebar-resizer {
+  position: relative;
+  z-index: 5;
+  grid-area: library;
+  justify-self: end;
+  align-self: stretch;
+  width: 9px;
+  margin-right: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.sidebar-resizer[data-dragging='true']::after {
+  opacity: 1;
+}
+
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+body:has(.sidebar-resizer[data-dragging='true']) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* 中等宽度：会议库收进抽屉 */
+@media (max-width: 1099px) {
+  .sidebar-resizer {
+    display: none;
+  }
+
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'topbar'
+      'workspace';
+  }
+
+  .topbar-library {
+    display: inline-flex;
+  }
+
+  .library {
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(320px, 86vw);
+    margin-top: 0;
+    padding-top: var(--topbar);
+    box-shadow: var(--shadow-float);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform var(--t-base) var(--ease-out),
+      visibility 0s linear var(--t-base);
+  }
+
+  .library.is-prompted {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+
+  .shell[data-library='open'] .library {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--t-base) var(--ease-out);
+  }
+
+  .shell[data-library='open'] .scrim {
+    display: block;
+    position: fixed;
+    z-index: 19;
+    inset: 0;
+    background: var(--scrim);
+  }
+}

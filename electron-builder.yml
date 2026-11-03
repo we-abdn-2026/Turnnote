@@ -1,0 +1,36 @@
+appId: uk.ac.abdn.turnnote
+productName: Turnnote
+
+directories:
+  output: dist-packaging
+
+# Keep native dependencies aligned with the target Electron runtime and architecture.
+npmRebuild: true
+nativeRebuilder: sequential
+buildDependenciesFromSource: false
+
+files:
+  - out/**/*
+  - package.json
+
+asarUnpack:
+  - node_modules/**/*.node
+
+extraResources:
+  - from: build/sidecar/asr-worker
+    to: asr-worker
+
+mac:
+  category: public.app-category.productivity
+  artifactName: '${productName}-${version}-macos-${arch}.${ext}'
+  target:
+    - dmg
+
+win:
+  artifactName: '${productName}-${version}-windows-${arch}.${ext}'
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

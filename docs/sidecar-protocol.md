@@ -14,6 +14,12 @@ Node.js Main Process 与 Python ASR Worker 通过 stdin/stdout 的 JSON Lines �
 
 Sidecar 每任务单次启动，不常驻。
 
+Main 的 `createSessionServices` 接入 recording.stop 自动启动及 transcription.start/cancel IPC，processing_jobs 创建后立即返回 transcribing 快照。收到合法 done 且进程释放后，调用正式 MeetingStore 在事务中提交片段、完成 job 和 transcribed 状态；失败写入安全错误目录中的 code/message，可通过 meetings.get.lastError 查询。取消记为 cancelled 并保留音频，不持久化部分片段。
+
+开发命令由 app.getAppPath() 解析 worker.py；Python 优先使用 TURNNOTE_PYTHON，其次项目 .venv（Windows 为 Scripts/python.exe，其他平台为 bin/python），最后系统 python/python3。安装包使用 process.resourcesPath/asr-worker/asr-worker[.exe]，不依赖 cwd 或 Renderer 提供的路径。模型参数来自经共享 schema 校验的设置，解析到 userData/models/<model>。这些资源布局仍需打包任务实际验证。
+
+Main 使用 processing_jobs 的唯一 ID 关联 transcribe 请求和响应，进度转发时携带 jobId。取消或重试后，旧 job 的 segment/done/error 不提交、不转发进度；数据库通过 isJobCurrent 及完成方法二次校验。Sidecar 的 INVALID_JSON/INVALID_REQUEST/UNKNOWN_REQUEST 属于协议问题，由 Main 映射为 SIDECAR_PROTOCOL_ERROR，不将不受控 message 直接展示。见 [W1 IPC 契约基线](ipc-contract.md)。
+
 ## 请求格式
 
 每行一个 JSON 对象，以 `\n` 结束。
@@ -105,8 +111,8 @@ Sidecar 每任务单次启动，不常驻。
 | `INVALID_REQUEST` | 缺少必需字段 |
 | `UNKNOWN_REQUEST` | 不支持的 `type` |
 | `AUDIO_NOT_FOUND` | 音频文件不存在 |
-| `AUDIO_DECODE_FAILED` | 音频格式无效 |
-| `MODEL_LOAD_FAILED` | 模型加载失败 |
+| `AUDIO_DECODE_FAILED` | 扩展名不在 `.wav`/`.mp3`/`.m4a` 内，或音频无法解码、无采样 |
+| `MODEL_LOAD_FAILED` | `modelPath` 不是目录、缺少 `model.bin`/`config.json`/`tokenizer.json`、模型加载失败或 faster-whisper 未安装 |
 | `TRANSCRIBE_FAILED` | 转写过程失败 |
 | `NOT_IMPLEMENTED` | 功能未实现（脚手架阶段） |
 
@@ -116,7 +122,7 @@ Sidecar 每任务单次启动，不常驻。
 |---|---|
 | 10 秒内无 `pong` | 杀进程，记录 `SIDECAR_START_FAILED` |
 | 转写中 120 秒无任何输出 | 杀进程，记录 `SIDECAR_TIMEOUT` |
-| 进程意外退出 | 记录 `SIDECAR_CRASHED`，附 stderr 末尾 |
+| 进程意外退出 | 记录 `SIDECAR_CRASHED`；stderr 仅用于内部诊断，不透传或持久化原文 |
 | stdout 出现非 JSON 行 | 记录 `SIDECAR_PROTOCOL_ERROR`，杀进程 |
 | 用户取消 | 直接杀进程，不发送取消消息 |
 
@@ -132,12 +138,23 @@ Sidecar 每任务单次启动，不常驻。
 
 ## 诊断日志
 
-Sidecar 将诊断信息写入 stderr，Main Process 捕获并记录。
+Sidecar 将诊断信息写入 stderr，Main 生命周期管理器仅保留末尾作为内部诊断；当前编排不向 Renderer、数据库或日志输出该原文。
 
-stdout 只输出 JSON Lines 响应。
+stdout 只输出 JSON Lines 响应。启动时 sidecar 把 fd 1 重定向到 stderr、协议输出走复制出的描述符，原生库直接写 stdout 的内容也会进入 stderr。
+
+Sidecar 自己写的诊断只包含阶段和异常类型名（如 `decode failed: InvalidDataError`），不输出异常原文，因为原文可能包含音频或模型的完整路径。
+
+## 转写行为
+
+- 音频由 PyAV 解码为 16kHz 单声道后送入 faster-whisper（CPU、int8），开启 VAD 过滤静音。
+- `startMs`/`endMs` 为整数毫秒，截断到 `durationMs` 以内；`durationMs` 为解码后音频时长。
+- 输出的片段满足共享 `transcriptSegmentsSchema`：`endMs > startMs`、文本非空、`startMs` 非递减。截断或舍入后时长为零的片段（完全落在音频之外、零时长、舍入坍缩）和空文本片段不输出；`segmentCount` 等于实际输出的 `segment` 数。
+- 每个 `segment` 后发送一次 `progress`（按片段结束时间占总时长计算，最高 99），`done` 前发送 100。
 
 ## 模型存储
 
-模型存储在 `userData/models/<model>/`。首次使用时 Main Process 下载并校验。
+模型存储在 `userData/models/<model>/`。当前 Main 尚无自动下载实现，真实运行前需单独
+准备完整的本地模型目录；打包验收的模型准备方式见
+[Sidecar 打包与真实模型验证](sidecar-packaging.md)。
 
-Sidecar 只读取 `modelPath`，不访问网络。
+Sidecar 只读取 `modelPath`，不访问网络。加载前检查 `model.bin`、`config.json`、`tokenizer.json` 都存在；faster-whisper 在缺 `tokenizer.json` 时会调用 `Tokenizer.from_pretrained` 联网下载，且不受 `local_files_only` 控制。

@@ -1,0 +1,68 @@
+[
+  {
+    "name": "type/bug",
+    "color": "d73a4a",
+    "description": "功能异常、崩溃或数据问题",
+    "aliases": ["bug"]
+  },
+  {
+    "name": "type/feature",
+    "color": "a2eeef",
+    "description": "新功能或功能改进",
+    "aliases": ["enhancement"]
+  },
+  {
+    "name": "type/task",
+    "color": "0e8a16",
+    "description": "roadmap 开发任务",
+    "aliases": ["task"]
+  },
+  { "name": "type/chore", "color": "c5def5", "description": "工程配置、依赖、重构" },
+
+  {
+    "name": "priority/P0",
+    "color": "b60205",
+    "description": "阻塞：主流程不可用或数据丢失，立即处理"
+  },
+  { "name": "priority/P1", "color": "d93f0b", "description": "高：影响当前里程碑，本周处理" },
+  { "name": "priority/P2", "color": "fbca04", "description": "中：当前阶段内处理" },
+  { "name": "priority/P3", "color": "c2e0c6", "description": "低：有空再做" },
+
+  { "name": "group/frontend", "color": "1d76db", "description": "前端组", "aliases": ["前端"] },
+  { "name": "group/backend", "color": "5319e7", "description": "后端组", "aliases": ["后端"] },
+  { "name": "group/testing", "color": "fef2c0", "description": "测试组", "aliases": ["测试"] },
+  { "name": "group/deploy", "color": "f9d0c4", "description": "部署组", "aliases": ["部署"] },
+
+  { "name": "area/audio", "color": "bfdadc", "description": "音频采集、AudioWriter、权限" },
+  { "name": "area/asr", "color": "bfdadc", "description": "Python sidecar、faster-whisper 转写" },
+  { "name": "area/deepseek", "color": "bfdadc", "description": "DeepSeek 纪要生成" },
+  {
+    "name": "area/database",
+    "color": "bfdadc",
+    "description": "SQLite、migration、状态机、崩溃恢复"
+  },
+  { "name": "area/ipc", "color": "bfdadc", "description": "packages/contracts、Preload、IPC 通道" },
+  { "name": "area/ui", "color": "bfdadc", "description": "界面和交互" },
+  { "name": "area/export", "color": "bfdadc", "description": "Markdown 导出" },
+  { "name": "area/security", "color": "bfdadc", "description": "API Key、日志脱敏、隐私" },
+  {
+    "name": "area/packaging",
+    "color": "bfdadc",
+    "description": "electron-builder、PyInstaller、安装包"
+  },
+  { "name": "area/ci", "color": "bfdadc", "description": "GitHub Actions、lint、工程配置" },
+  { "name": "area/docs", "color": "0075ca", "description": "文档", "aliases": ["documentation"] },
+  {
+    "name": "area/accessibility",
+    "color": "f143ab",
+    "description": "无障碍",
+    "aliases": ["accessibility"]
+  },
+
+  { "name": "duplicate", "color": "cfd3d7", "description": "重复的 issue 或 PR" },
+  { "name": "invalid", "color": "e4e669", "description": "无效或信息不足" },
+  { "name": "wontfix", "color": "ffffff", "description": "不处理" },
+  { "name": "question", "color": "d876e3", "description": "需要进一步讨论" },
+  { "name": "good first issue", "color": "7057ff", "description": "适合新成员" },
+  { "name": "help wanted", "color": "008672", "description": "需要协助" }
+]

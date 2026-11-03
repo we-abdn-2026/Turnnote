@@ -1,11 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Turnnote</title>
   </head>
   <body>
+    <!--
+      THESIS: 会议是一卷待剪的素材。转写是场记单，纪要是剪辑决定表，每条决策和行动项都带可以一键定位回原话的入点时间码。拒绝笔记应用的圆角卡片堆叠和 AI 渐变光晕。
+      OWN-WORLD: 机房深灰机架面板，发丝线分隔的模块；背光按键（点亮即选中）；等宽表格数字时间码；tally 灯语：红只代表正在采集，绿代表完成，琥珀代表故障；白色选中背光。
+      STORY: 开会时把窗口缩到侧边，只看 REC 和走动的时间码；会后拉宽，左边场记、右边纪要，点入点就回到原话，核对、编辑、导出。数据在本机，外发前必须确认。
+      FIRST VIEWPORT: 48px 时间码条（品牌灯、REC tally、主时间码、设置）；左侧 264px 会议库（新建表单在顶部，主操作“新建会议”）；中间场记板与信号路径（本机 | 外发 边界）；右侧监视器：大号时间码和输入设备。
+      FORM: 广播场记单 / 剪辑决定表（自有方向排序第 1），seed e3d7e745。
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+    -->
     <div id="root"></div>
     <script type="module" src="/main.tsx"></script>
   </body>

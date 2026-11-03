@@ -23,6 +23,7 @@
 
 # 部署和工程配置
 # /.github/                        @部署负责人
+# /scripts/                        @部署负责人
 # /package.json                    @部署负责人
 # /package-lock.json               @部署负责人
 # /electron.vite.config.ts         @部署负责人

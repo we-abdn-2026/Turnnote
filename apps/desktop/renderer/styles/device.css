@@ -1,0 +1,93 @@
+/* 音频输入：两行，设备选择 + 系统音频开关。没有标题和解释 */
+.input-module {
+  width: 100%;
+  max-width: calc(var(--measure) + var(--s-16) * 2);
+  margin: 0 auto;
+  padding: 0 var(--s-16);
+}
+
+.device-selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-5);
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.device-selector > h3 {
+  display: none;
+}
+
+.device-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.device-option > label:not(.switch) {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.device-option .icon {
+  color: var(--ink-3);
+}
+
+.device-select-wrapper {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.device-select-wrapper .field {
+  width: 15em;
+  min-width: 0;
+}
+
+.disabled-hint {
+  color: var(--ink-3);
+}
+
+.device-option .warning,
+.device-option .error {
+  flex-basis: 100%;
+  color: var(--warn);
+  font-size: var(--t-small);
+}
+
+.permission-notice,
+.error-notice {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-s);
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: var(--t-ui);
+}
+
+.permission-notice strong,
+.error-notice strong {
+  font-weight: 600;
+}
+
+.device-selector.loading {
+  color: var(--ink-3);
+}
+
+@media (max-width: 899px) {
+  .input-module {
+    padding-inline: var(--s-5);
+  }
+
+  .device-select-wrapper .field {
+    width: 100%;
+  }
+}

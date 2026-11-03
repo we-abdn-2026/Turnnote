@@ -8,6 +8,7 @@ Turnnote/
 ├── apps/
 │   └── desktop/
 │       ├── main/           # Electron Main / Node.js
+│       │   └── storage/    # MeetingStore、IPC handlers、编号 SQL migrations
 │       ├── preload/        # 安全 IPC bridge
 │       └── renderer/       # React + TypeScript
 │           └── mock/       # dev:web 使用的内存 API
@@ -52,11 +53,24 @@ pip install -r requirements.txt -r requirements-dev.txt
 | `npm run format` | 自动修复格式 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run test` | Node 测试 |
+| `npm run test:electron` | 用 Electron Node 运行时验证原生 SQLite 加载、迁移和持久化，不打开 GUI |
+| `npm run test:ui` | 在本机 Chrome（headless）中运行 dev:web，挂载真实组件做界面测试；需要 Chrome 或设置 `CHROME_PATH`，不在 CI 中运行 |
 | `npm run build` | 构建到 `out/` |
 
 `npm run lint` 和 `npm run format` 需要先激活 `.venv`。
 
 测试中的 Python 解释器按顺序选择：环境变量 `TURNNOTE_PYTHON`、`.venv`、系统 `python3`。
+
+`TURNNOTE_ASR_FAKE=1 npm run dev` 使用不加载模型的真实 Python sidecar，录音停止后自动转写。Main 使用相同的 Python 选择顺序，Windows 系统命令为 python；安装包改用 resources/asr-worker/asr-worker[.exe]。`npm test -- tests/transcription-integration.test.mjs` 验证正式 Main 的 PCM/WAV/fake sidecar/SQLite 链路，不需要麦克风、API Key 或模型。
+
+`npm test -- tests/storage.test.mjs` 可运行指定测试。测试脚本用 esbuild 将 TypeScript 和正式 SQL migrations 构建到 out/tests，再运行 Node test runner，不使用测试专用 schema。
+
+better-sqlite3 13 是原生生产依赖。`electron-builder` 在各目标平台按 Electron 版本和架构
+执行顺序重编译；`npm run test:electron` 验证开发环境的 Electron 运行时，安装包自检验证
+安装后的原生模块和 sidecar 资源布局。Node 单测不能代替这两项验收，配置与复现方式见
+[安装资源与原生模块](native-packaging.md)。
+
+Main 启动时迁移数据库、结束中断的转写/生成任务、继续未完成的删除，并按保留策略收敛未完成的音频清理。录音 header 修复已接入，未结束录音保留音频并标记 INTERRUPTED；失败不重建或静默清空数据库。
 
 ## 更新依赖
 
@@ -78,6 +92,31 @@ uv pip compile requirements.in --universal --python-version 3.12 -o requirements
 
 `main` 和 `dev` 禁止直接推送和强制推送。
 
+## 标签
+
+标签定义在 `.github/labels.json`，修改后由管理员同步：
+
+```bash
+npm run labels:sync              # 预览
+npm run labels:sync -- --apply   # 应用
+```
+
+| 前缀 | 含义 | 来源 |
+|---|---|---|
+| `type/` | bug、feature、task、chore | issue 模板自动添加 |
+| `group/` | frontend、backend、testing、deploy | 表单「分组」自动添加 |
+| `area/` | audio、asr、deepseek、database、ipc、ui、export、security、packaging、ci、docs | 表单「模块」自动添加 |
+| `priority/` | P0–P3 | 表单「优先级」自动添加；bug 未选时由维护者补充 |
+
+| 优先级 | 标准 |
+|---|---|
+| P0 | 主流程不可用或数据丢失，立即处理 |
+| P1 | 影响当前里程碑，本周处理 |
+| P2 | 当前阶段内处理 |
+| P3 | 有空再做 |
+
+PR 手动添加 `type/` 和 `area/` 标签。
+
 ## 实现约束
 
 1. UI 通过 Preload IPC 调用 Main，不直接使用 Node.js 能力。
@@ -86,3 +125,4 @@ uv pip compile requirements.in --universal --python-version 3.12 -o requirements
 4. 共享类型和 schema 放在 `packages/contracts`，禁止在多个进程重复定义协议。
 5. 失败任务必须保留可恢复数据，不得用静默清理掩盖错误。
 6. 新增 IPC 方法：在 `packages/contracts` 添加类型和 `invokeChannels`，Main 通过 `registerIpc` 实现，同步更新 `renderer/mock/mock-api.ts`。Preload 自动暴露。
+7. IPC 运行时参数校验放在共享 invokeSchemas；状态与任务身份遵循 [W1 IPC 契约基线](ipc-contract.md)。未实现方法保持 NOT_IMPLEMENTED。契约变更同步 schema、mock 和测试，前后端各一人审核。
