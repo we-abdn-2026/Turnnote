@@ -57,8 +57,9 @@ export function KeywordEditor({
         ))}
         <li className="keyword-add">
           <form onSubmit={submit}>
-            <label className="visually-hidden" htmlFor="meeting-keyword">
-              添加关键词
+            <label className="keyword-add-label" htmlFor="meeting-keyword">
+              <Icon name="plus" size={12} />
+              <span className="visually-hidden">添加关键词</span>
             </label>
             <input
               id="meeting-keyword"
@@ -66,7 +67,7 @@ export function KeywordEditor({
               value={draft.input}
               maxLength={100}
               disabled={disabled}
-              placeholder={draft.values.length ? '' : '关键词'}
+              placeholder="关键词"
               onChange={(event) => onInput(event.target.value)}
             />
             <button

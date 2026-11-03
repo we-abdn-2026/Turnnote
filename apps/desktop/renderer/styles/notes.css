@@ -61,14 +61,29 @@
 
 .edl-row {
   position: relative;
-  padding-left: var(--s-5);
+}
+
+.edl-row {
+  margin-left: calc(var(--s-3) * -1);
+  padding-left: calc(var(--s-5) + var(--s-3));
+  border-radius: var(--r-s);
+  transition: background-color var(--t-base) var(--ease-out);
+}
+
+.edl-row[data-linked='true'] {
+  background: var(--accent-wash);
+}
+
+.edl-row[data-linked='true'] .cue {
+  background: var(--accent);
+  color: var(--paper);
 }
 
 .edl-row::before {
   content: '';
   position: absolute;
   top: 0.78em;
-  left: 4px;
+  left: calc(var(--s-3) + 4px);
   width: 5px;
   height: 5px;
   border-radius: 50%;

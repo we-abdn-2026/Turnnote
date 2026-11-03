@@ -23,9 +23,17 @@ interface TranscriptLogProps {
   state: SessionState;
   cue: Cue | null;
   onClose(): void;
+  /** 悬停或聚焦某一行时报告它的入点；离开时为 null，纪要据此高亮引用它的条目 */
+  onHover(startMs: number | null): void;
 }
 
-export function TranscriptLog({ session, state, cue, onClose }: TranscriptLogProps): ReactElement {
+export function TranscriptLog({
+  session,
+  state,
+  cue,
+  onClose,
+  onHover,
+}: TranscriptLogProps): ReactElement {
   const listRef = useRef<HTMLOListElement>(null);
   const meeting = state.meeting!;
   const manage = meetingActions(state);
@@ -126,6 +134,7 @@ export function TranscriptLog({ session, state, cue, onClose }: TranscriptLogPro
               segment={segment}
               index={index}
               cued={cue?.index === index}
+              onHover={onHover}
             />
           ))}
         </ol>
@@ -138,10 +147,12 @@ function Segment({
   segment,
   index,
   cued,
+  onHover,
 }: {
   segment: TranscriptSegment;
   index: number;
   cued: boolean;
+  onHover(startMs: number | null): void;
 }): ReactElement {
   const duration = segment.endMs - segment.startMs;
   return (
@@ -153,6 +164,10 @@ function Segment({
       data-end-ms={segment.endMs}
       aria-current={cued ? 'true' : undefined}
       tabIndex={-1}
+      onPointerEnter={() => onHover(segment.startMs)}
+      onPointerLeave={() => onHover(null)}
+      onFocus={() => onHover(segment.startMs)}
+      onBlur={() => onHover(null)}
     >
       <time
         className="transcript-time"

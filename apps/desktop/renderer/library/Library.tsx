@@ -8,7 +8,6 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { MeetingSummary } from '@shared/contracts';
 import { Icon } from '../ui/icons';
 import { SHORT_STATUS, STATUS_DOT } from '../ui/timecode';
 import {
@@ -18,7 +17,7 @@ import {
   type MeetingSession,
   type SessionState,
 } from '../workspace/meeting-session';
-import type { MeetingLibrary } from './meeting-library';
+import type { LibraryItem, MeetingLibrary } from './meeting-library';
 
 interface LibraryProps {
   session: MeetingSession;
@@ -49,8 +48,8 @@ function dayLabel(iso: string, now = new Date()): string {
   return dayFormat.format(date);
 }
 
-function groupByDay(items: MeetingSummary[]): { label: string; items: MeetingSummary[] }[] {
-  const groups: { label: string; items: MeetingSummary[] }[] = [];
+function groupByDay(items: LibraryItem[]): { label: string; items: LibraryItem[] }[] {
+  const groups: { label: string; items: LibraryItem[] }[] = [];
   for (const item of items) {
     const label = dayLabel(item.createdAt);
     const last = groups[groups.length - 1];
@@ -219,6 +218,13 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
                       <time className="reel-time" dateTime={item.createdAt}>
                         {clock.format(new Date(item.createdAt))}
                       </time>
+                      {item.snippet && (
+                        <span className="reel-snippet">
+                          {item.snippet.before}
+                          <mark>{item.snippet.match}</mark>
+                          {item.snippet.after}
+                        </span>
+                      )}
                       <span className="visually-hidden">{SHORT_STATUS[item.status]}</span>
                     </button>
                   </li>

@@ -51,11 +51,16 @@ export function NoteView({
   note,
   segments,
   onCue,
+  linkedMs,
 }: {
   note: MeetingNote;
   segments: TranscriptSegment[];
   onCue(timestampMs: number): void;
+  /** 转写里正被悬停的行入点；引用它的条目显示为关联状态 */
+  linkedMs: number | null;
 }): ReactElement {
+  const linked = (timestampMs: number | undefined): string | undefined =>
+    linkedMs !== null && timestampMs === linkedMs ? 'true' : undefined;
   return (
     <article className="note-content">
       <section className="note-summary" aria-labelledby="note-summary-heading">
@@ -88,7 +93,11 @@ export function NoteView({
         {note.decisions.length > 0 ? (
           <ol className="note-list edl" aria-label="决策">
             {note.decisions.map((decision, index) => (
-              <li className="edl-row" key={`${index}-${decision.timestampMs ?? 'no-time'}`}>
+              <li
+                className="edl-row"
+                data-linked={linked(decision.timestampMs)}
+                key={`${index}-${decision.timestampMs ?? 'no-time'}`}
+              >
                 <span className="note-item-text">{decision.text.trim() || '未指定'}</span>
                 <SourceCue timestampMs={decision.timestampMs} segments={segments} onCue={onCue} />
               </li>
@@ -119,7 +128,11 @@ export function NoteView({
         {note.actionItems.length > 0 ? (
           <ol className="note-list note-action-list edl" aria-label="行动项">
             {note.actionItems.map((item, index) => (
-              <li className="note-action edl-row" key={`${index}-${item.timestampMs ?? 'no-time'}`}>
+              <li
+                className="note-action edl-row"
+                data-linked={linked(item.timestampMs)}
+                key={`${index}-${item.timestampMs ?? 'no-time'}`}
+              >
                 <div className="note-action-main">
                   <span className="note-item-text">{item.task.trim() || '未指定'}</span>
                   <SourceCue timestampMs={item.timestampMs} segments={segments} onCue={onCue} />

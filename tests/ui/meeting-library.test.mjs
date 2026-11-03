@@ -278,3 +278,47 @@ test('narrow window: library is a drawer, the note fills the width, the transcri
   );
   assert.deepEqual(page.errors, []);
 });
+
+test('hovering a transcript line links the note entries that cite it', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('定位到转写 00:00:02')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
+  await page.eval(
+    `document.querySelector('[data-start-ms="2400"]').dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))`,
+  );
+  await page.waitFor(`document.querySelectorAll('.edl-row[data-linked="true"]').length === 1`);
+  assert.match(
+    await page.eval(`document.querySelector('.edl-row[data-linked="true"]').textContent`),
+    /Ship the beta on Friday/,
+  );
+  await page.eval(
+    `document.querySelector('[data-start-ms="2400"]').dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }))`,
+  );
+  await page.waitFor(`document.querySelectorAll('.edl-row[data-linked="true"]').length === 0`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('double-clicking the title starts renaming, and a closed transcript drawer is inert', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  assert.equal(await page.eval(`document.querySelector('.drawer').inert`), true);
+  await page.eval(
+    `document.querySelector('.doc h2').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
+  );
+  await page.waitFor(`!!document.querySelector('#rename-title')`);
+  assert.equal(await page.eval(`document.querySelector('#rename-title').value`), 'Weekly sync');
+  await page.eval(`__ui.click('转写')`);
+  await page.waitFor(`document.querySelector('.drawer').inert === false`);
+  assert.deepEqual(page.errors, []);
+});
+
+test('export confirmation is a toast that disappears by itself', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('导出 Markdown')`);
+  await page.waitFor(`!!document.querySelector('.toast')`);
+  assert.match(await page.eval(`document.querySelector('.toast').textContent`), /已导出/);
+  await page.waitFor(`!document.querySelector('.toast')`, { timeout: 6000 });
+  assert.deepEqual(page.errors, []);
+});

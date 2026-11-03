@@ -142,7 +142,7 @@ input[type='search']::-webkit-search-cancel-button {
   gap: 2px;
   min-height: 28px;
   padding: 0 2px 0 var(--s-3);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-s);
   background: var(--selected);
   font-size: var(--t-small);
 }
