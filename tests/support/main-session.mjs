@@ -108,6 +108,7 @@ function realFakeWorker(root) {
  *   apiKeys?: Record<string, string | null>,
  *   providerTimeoutMs?: number,
  *   permissions?: () => { microphone: string, screen: string },
+ *   models?: object | ((ctx: { root: string, store: object }) => object),
  *   root?: string,
  *   recover?: boolean,
  *   shared?: object,
@@ -148,6 +149,7 @@ export async function createMainSession(t, opts = {}) {
   const databasePath = join(root, 'turnnote.db');
   const store = new MeetingStore(databasePath, audioDirectory);
   if (opts.recover) store.interruptProcessing();
+  const models = typeof opts.models === 'function' ? opts.models({ root, store }) : opts.models;
 
   const credentials = {
     has: (provider) =>
@@ -169,6 +171,7 @@ export async function createMainSession(t, opts = {}) {
     audioDirectory,
     modelsDirectory: join(root, 'models'),
     sidecar,
+    models,
     permissions: opts.permissions ?? (() => ({ microphone: 'granted', screen: 'granted' })),
     emitMeeting: (meeting) => shared.events.push(structuredClone(meeting)),
     emitProgress: (event) => shared.progress.push(structuredClone(event)),
@@ -231,6 +234,7 @@ export async function createMainSession(t, opts = {}) {
     progress: shared.progress,
     fetches: shared.fetches,
     credentials,
+    models,
     server: shared.server,
     close,
     setMode: (next, timeoutMs) => {

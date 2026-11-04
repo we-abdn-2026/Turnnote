@@ -27,6 +27,9 @@
 | `notes.generate` | `generating` | 只允许 transcribed、ready 或 failed/generating，且有非空转写；须具备凭证，由用户显式请求 |
 | `notes.saveEdit` | 新 `NoteVersion` | 校验 schema 和 `expectedVersion`；旧版本返回 `CONFLICT`，不覆盖新编辑 |
 | `exports.markdown` | `{ saved: true }`；用户取消为 `{ saved: false }` | Main 打开保存对话框，写入**写入时刻**已保存的最新纪要版本（含用户编辑）。无纪要返回 `INVALID_STATE` 且不弹对话框；会议不存在 `NOT_FOUND`；写入失败 `WRITE_FAILED`。任何失败都不改变会议记录，先写同目录临时文件再 rename，不截断已有文件 |
+| `models.getStatus` | 当前转写模型的 `ModelStatus`（`ready` / `missing` / `downloading` / `failed`，含字节进度） | 状态取自磁盘与下载进度；清单外的模型 `downloadable=false` |
+| `models.download` | 返回当前 `ModelStatus` | `missing` / `failed` → `downloading`；已就绪或已在下载时直接返回当前状态；清单外的模型返回 `MODEL_NOT_READY` |
+| `models.cancelDownload` | 取消后的 `ModelStatus`（`missing`） | 保留已下载部分以便续传；不是失败 |
 | `meetings.delete` | `null` | 先提交 deleted 墓碑并取消任务，再清文件，最后级联删库；清理失败保留墓碑，列表和 get 不可见，允许重试 |
 
 Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:mm`），然后依次为摘要、关键主题、决策、未决问题、行动项，小节名与界面一致；决策和行动项带 `（来源 HH:MM:SS）`，空小节写“未指定”。用户文本一律按数据转义，不会被解释为 Markdown 或 HTML。输出样例见 [`tests/fixtures/exported-meeting.md`](../tests/fixtures/exported-meeting.md)，`tests/markdown-export.test.mjs` 逐字比对。
@@ -39,6 +42,7 @@ Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:m
 
 - 每次启动或重试创建新的 job ID；同会议同阶段 attempt 递增。`MeetingDetail.activeJobId` 指向当前任务，结束后为 null。
 - appendChunk、stop、recording.cancel/fail 和 transcription.cancel 必须携带启动时获得的 jobId。旧会话的 PCM、停止、失败或取消请求不得影响新任务；失败录音的显式丢弃使用 lastError.jobId。
+- `onModelStatus`（`events:model-status`）推送 `ModelStatus`：下载开始、进度（约每 200 ms 一次）、完成、失败、取消，以及切换 `settings.transcriptionModel` 后的新状态。Renderer 启动时先 `models.getStatus()`，之后以事件为准。
 - `onJobProgress` 包含 meetingId、jobId、kind 和 0–100 的整数 percent。Renderer 只显示 jobId 等于当前 activeJobId 的进度。
 - Main 在转发进度和提交结果前调用 `store.isJobCurrent(jobId)`。取消、删除、失败或重试后的旧 ID 的完成／失败操作返回 false，不修改数据库、不发完成事件。单看会议状态不能区分旧任务和重试。
 - ASR 片段先暂存在 Main；只有收到合法 done 才将全部片段、job completed 和 meeting transcribed 一次提交。

@@ -58,6 +58,16 @@ const modelSchema = z
   .min(1)
   .max(100)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
+/**
+ * AI 服务商的模型名：只用于请求体，从不拼进路径，所以允许 Ollama 的 `llama3.1:8b`、
+ * OpenRouter 的 `openai/gpt-4o` 这类含 `:` `/` 的名字。转写模型名（拼进目录）仍用严格的 modelSchema。
+ */
+export const noteModelSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/@+-]*$/)
+  .refine((value) => !value.includes('..'));
 export const settingsSchema = z.strictObject({
   microphoneDeviceId: z.string().min(1).max(256).nullable(),
   includeSystemAudio: z.boolean(),
@@ -68,7 +78,7 @@ export const settingsSchema = z.strictObject({
     .min(1)
     .max(64)
     .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
-  noteModel: modelSchema,
+  noteModel: noteModelSchema,
 }) satisfies z.ZodType<AppSettings>;
 export const settingsPatchSchema = settingsSchema
   .partial()
@@ -89,6 +99,16 @@ const providerSchema = z
   .max(64)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
 const apiKeySchema = z.string().trim().min(1).max(4096);
+// 名称里不允许控制字符；长度按字符数而不是字节数
+// eslint-disable-next-line no-control-regex
+const NO_CONTROL = /^[^\u0000-\u001f\u007f]*$/;
+export const providerLabelSchema = z.string().trim().min(1).max(40).regex(NO_CONTROL);
+export const customProviderSchema = z.strictObject({
+  id: providerSchema.optional(),
+  label: providerLabelSchema,
+  baseUrl: z.string().trim().min(8).max(200),
+  needsKey: z.boolean(),
+});
 
 export const errorCodeSchema = z.enum(Object.keys(errorMessages) as [ErrorCode, ...ErrorCode[]]);
 export const captureErrorCodeSchema = z.enum([
@@ -139,6 +159,13 @@ export const invokeSchemas = {
     saveEdit: z.tuple([meetingIdSchema, meetingNoteSchema, expectedVersionSchema]),
   },
   exports: { markdown: idArgs },
+  providers: {
+    list: noArgs,
+    saveCustom: z.tuple([customProviderSchema]),
+    removeCustom: z.tuple([providerSchema]),
+    test: z.tuple([providerSchema, noteModelSchema]),
+  },
+  models: { getStatus: noArgs, download: noArgs, cancelDownload: noArgs },
   settings: {
     get: noArgs,
     update: z.tuple([settingsPatchSchema]),

@@ -7,17 +7,18 @@ import {
   type CSSProperties,
   type ReactElement,
 } from 'react';
-import type { AppSettings, TurnnoteApi } from '@shared/contracts';
+import type { AiProviderInfo, AppSettings, TurnnoteApi } from '@shared/contracts';
 import { createCaptureRecording } from './audio/meeting-recording';
 import { Library } from './library/Library';
 import { createMeetingLibrary } from './library/meeting-library';
 import { SidebarResizer, useSidebarWidth } from './shell/SidebarResizer';
 import { TopBar } from './shell/TopBar';
 import { SettingsSheet } from './settings/SettingsSheet';
-import { providerInfo } from './ui/providers';
+import { ModelBanner, useModelStatus } from './shell/ModelBanner';
 import { useShortcuts } from './ui/shortcuts';
 import { createMeetingSession, type MeetingRecording } from './workspace/meeting-session';
 import { MeetingWorkspace } from './workspace/MeetingWorkspace';
+import { GENERIC_SERVICE, deriveNoteService, type NoteService } from './settings/provider-view';
 import { createRecordingClock } from './workspace/recording-clock';
 
 /** Electron 窗口使用自绘标题栏；浏览器 dev:web 没有窗口按钮，不预留位置 */
@@ -44,10 +45,9 @@ export function App({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
-  const [noteSettings, setNoteSettings] = useState<Pick<
-    AppSettings,
-    'noteProvider' | 'noteModel'
-  > | null>(null);
+  // 当前纪要服务的名称、模型和数据去向，全部来自 Main 的服务商目录
+  const [noteService, setNoteService] = useState<NoteService | null>(null);
+  const modelStatus = useModelStatus(window.turnnote);
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const elapsedMs = useSyncExternalStore(clock.subscribe, clock.getSnapshot);
 
@@ -58,13 +58,14 @@ export function App({
   );
   useEffect(() => clock.connect(), [clock]);
 
-  // 纪要服务的名称和模型来自设置；读取失败时用通用名称，不写死服务商
+  // 读取失败时用通用名称，不猜测服务商
   useEffect(() => {
     let active = true;
-    void window.turnnote.settings
-      .get()
-      .then((result) => {
-        if (active && result.ok) setNoteSettings(result.value);
+    void Promise.all([window.turnnote.settings.get(), window.turnnote.providers.list()])
+      .then(([settings, providers]) => {
+        if (active && settings.ok && providers.ok) {
+          setNoteService(deriveNoteService(settings.value, providers.value));
+        }
       })
       .catch(() => {});
     return () => {
@@ -72,11 +73,13 @@ export function App({
     };
   }, []);
 
-  const onSettingsChanged = useCallback((settings: AppSettings) => setNoteSettings(settings), []);
+  const onSettingsChanged = useCallback(
+    (settings: AppSettings, providers: AiProviderInfo[]) =>
+      setNoteService(deriveNoteService(settings, providers)),
+    [],
+  );
 
-  const provider = noteSettings
-    ? { label: providerInfo(noteSettings.noteProvider).label, model: noteSettings.noteModel }
-    : { label: 'AI 服务', model: '' };
+  const provider = noteService ?? GENERIC_SERVICE;
   const hasMeeting = !!state.meeting && state.meeting.status !== 'deleted';
 
   const focusLibrary = useCallback((id: string) => {
@@ -129,6 +132,7 @@ export function App({
         drawerOpen={drawerOpen}
         onDrawer={setDrawerOpen}
       />
+      <ModelBanner api={window.turnnote} status={modelStatus} />
       {settingsOpen && (
         <SettingsSheet onClose={() => setSettingsOpen(false)} onChanged={onSettingsChanged} />
       )}

@@ -92,8 +92,10 @@ test('HTTP status codes map to stable codes without reading the error body', asy
     [401, 'DEEPSEEK_UNAUTHORIZED', false],
     [403, 'DEEPSEEK_UNAUTHORIZED', false],
     [402, 'DEEPSEEK_UNAVAILABLE', false],
-    [400, 'INTERNAL', false],
-    [422, 'INTERNAL', false],
+    // 请求被拒绝（模型名或网址填错）：用户能自己修，不再落成意外错误
+    [400, 'AI_REQUEST_REJECTED', false],
+    [404, 'AI_REQUEST_REJECTED', false],
+    [422, 'AI_REQUEST_REJECTED', false],
     [429, 'DEEPSEEK_RATE_LIMITED', true],
     [500, 'DEEPSEEK_UNAVAILABLE', true],
     [503, 'DEEPSEEK_UNAVAILABLE', true],

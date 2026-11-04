@@ -49,6 +49,9 @@ function backend(t, mediaOptions = {}) {
       onJobProgress() {
         return () => {};
       },
+      onModelStatus() {
+        return () => {};
+      },
     },
   };
   t.after(async () => {

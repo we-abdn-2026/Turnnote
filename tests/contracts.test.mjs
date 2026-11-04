@@ -41,6 +41,7 @@ test('Preload bridge, schemas and Main dispatcher cover exactly the same invoke 
   assert.deepEqual(eventChannels, {
     meetingUpdated: 'events:meeting-updated',
     jobProgress: 'events:job-progress',
+    modelStatus: 'events:model-status',
   });
   assert.deepEqual(loopbackChannels, {
     enable: 'enable-loopback-audio',

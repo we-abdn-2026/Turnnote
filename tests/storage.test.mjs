@@ -80,7 +80,7 @@ function ready(store, audioPath) {
   return id;
 }
 
-test('new database has six tables, migration version, foreign keys and lifecycle indexes', (t) => {
+test('new database has seven tables, migration version, foreign keys and lifecycle indexes', (t) => {
   const { store, databasePath, audioPath } = fixture(t);
   const db = using(t, new Database(databasePath));
   assert.equal(db.pragma('user_version', { simple: true }), migrations.length);
@@ -92,6 +92,7 @@ test('new database has six tables, migration version, foreign keys and lifecycle
     [
       'app_settings',
       'audio_assets',
+      'custom_providers',
       'meetings',
       'note_versions',
       'processing_jobs',

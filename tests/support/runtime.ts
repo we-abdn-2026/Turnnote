@@ -13,6 +13,31 @@ export { createAudioRetention } from '../../apps/desktop/main/services/audio-ret
 export { removeManagedFile } from '../../apps/desktop/main/storage/managed-file';
 export { createExportHandlers } from '../../apps/desktop/main/services/export';
 export {
+  BUILTIN_PROVIDERS,
+  DEEPSEEK_PROFILE,
+  DEFAULT_PROVIDER,
+  MAX_CUSTOM_PROVIDERS,
+  createProviderCatalog,
+  profileFor,
+} from '../../apps/desktop/main/services/ai-providers';
+export { createProviderHandlers } from '../../apps/desktop/main/services/providers';
+export {
+  BUILTIN_PROVIDER_PRESETS,
+  PROVIDER_URL_PROBLEMS,
+  parseProviderUrl,
+} from '../../packages/contracts/src/providers';
+export {
+  createModelHandlers,
+  createModelManager,
+} from '../../apps/desktop/main/services/model-manager';
+export {
+  DEFAULT_MODEL_SOURCES,
+  MODEL_MANIFEST,
+  SIDECAR_MODEL_FILES,
+  modelSizeBytes,
+} from '../../apps/desktop/main/services/model-manifest';
+export { deriveModelBanner, formatBytes } from '../../apps/desktop/renderer/shell/model-status';
+export {
   markdownFileName,
   renderMeetingMarkdown,
 } from '../../apps/desktop/main/services/markdown-export';

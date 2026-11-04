@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -10,6 +11,7 @@ import type {
   MeetingNote,
   MeetingStatus,
   MeetingSummary,
+  NoteOrigin,
   NoteVersion,
   TranscriptSegment,
 } from '@shared/contracts';
@@ -75,7 +77,21 @@ interface NoteRow {
   source: NoteVersion['source'];
   content_json: string;
   created_at: string;
+  generated_by: string | null;
 }
+export interface CustomProviderRecord {
+  id: string;
+  label: string;
+  baseUrl: string;
+  needsKey: boolean;
+}
+const noteOriginSchema = z.strictObject({
+  provider: z.string().min(1).max(64),
+  label: z.string().min(1).max(40),
+  model: z.string().min(1).max(100),
+  // 没有这个字段的记录（本字段加入前写入的）按"非本机"处理：宁可多提醒也不漏提醒
+  local: z.boolean().default(false),
+});
 
 const RELEASABLE_STATUSES: readonly MeetingStatus[] = ['transcribed', 'generating', 'ready'];
 
@@ -438,29 +454,46 @@ export class MeetingStore {
           source: row.source,
           note: parseInput(meetingNoteSchema, JSON.parse(row.content_json)),
           createdAt: row.created_at,
+          generatedBy: row.generated_by
+            ? parseInput(noteOriginSchema, JSON.parse(row.generated_by))
+            : null,
         }
       : null;
   }
-  private insertNote(id: string, note: MeetingNote, source: NoteVersion['source']): NoteVersion {
+  private insertNote(
+    id: string,
+    note: MeetingNote,
+    source: NoteVersion['source'],
+    generatedBy: NoteOrigin | null = null,
+  ): NoteVersion {
     const version = (this.getLatestNote(id)?.version ?? 0) + 1;
     const createdAt = new Date().toISOString();
     this.db
       .prepare(
-        'INSERT INTO note_versions(meeting_id,version,source,content_json,created_at) VALUES(?,?,?,?,?)',
+        'INSERT INTO note_versions(meeting_id,version,source,content_json,created_at,generated_by) VALUES(?,?,?,?,?,?)',
       )
-      .run(id, version, source, JSON.stringify(note), createdAt);
-    return { version, source, note, createdAt };
+      .run(
+        id,
+        version,
+        source,
+        JSON.stringify(note),
+        createdAt,
+        generatedBy ? JSON.stringify(generatedBy) : null,
+      );
+    return { version, source, note, createdAt, generatedBy };
   }
-  completeGeneration(jobId: string, note: MeetingNote): boolean {
+  /** generatedBy 记录这一版由哪个服务和模型生成；省略表示来源未知（例如旧版本数据） */
+  completeGeneration(jobId: string, note: MeetingNote, generatedBy?: NoteOrigin): boolean {
     return this.atomic(() => {
       const job = this.activeJob(jobId, 'generating');
       if (!job) return false;
       const validated = parseInput(meetingNoteSchema, note);
+      const origin = generatedBy ? parseInput(noteOriginSchema, generatedBy) : null;
       requireCondition(
         (this.getLatestNote(job.meetingId)?.version ?? 0) === job.baseNoteVersion,
         'CONFLICT',
       );
-      this.insertNote(job.meetingId, validated, 'generated');
+      this.insertNote(job.meetingId, validated, 'generated', origin);
       this.finishJob(job, 'completed');
       this.setStatus(job.meetingId, 'ready');
       return true;
@@ -545,6 +578,40 @@ export class MeetingStore {
           .run(id);
         this.failJob(id, 'INTERRUPTED');
       });
+    });
+  }
+
+  listCustomProviders(): CustomProviderRecord[] {
+    const rows = this.db
+      .prepare(
+        'SELECT id, label, base_url AS baseUrl, needs_key AS needsKey FROM custom_providers ORDER BY created_at, id',
+      )
+      .all() as (Omit<CustomProviderRecord, 'needsKey'> & { needsKey: number })[];
+    return rows.map((row) => ({ ...row, needsKey: row.needsKey === 1 }));
+  }
+  /** 新增或按 id 覆盖；调用方已校验网址和名称 */
+  saveCustomProvider(record: CustomProviderRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO custom_providers(id,label,base_url,needs_key,created_at) VALUES(?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET label = excluded.label, base_url = excluded.base_url, needs_key = excluded.needs_key`,
+      )
+      .run(
+        record.id,
+        record.label,
+        record.baseUrl,
+        record.needsKey ? 1 : 0,
+        new Date().toISOString(),
+      );
+  }
+  /** 删除服务商；如果它正在使用，同一事务内把设置改回给定的默认服务商和模型 */
+  removeCustomProvider(
+    id: string,
+    fallback: Pick<AppSettings, 'noteProvider' | 'noteModel'>,
+  ): void {
+    this.atomic(() => {
+      this.db.prepare('DELETE FROM custom_providers WHERE id = ?').run(id);
+      if (this.getSettings().noteProvider === id) this.updateSettings(fallback);
     });
   }
 

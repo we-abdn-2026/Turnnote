@@ -1,0 +1,145 @@
+/* 设置里的 AI 服务商列表、表单和当前服务详情 */
+.provider-lede strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.provider-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-m);
+  background: var(--sheet);
+  overflow: hidden;
+}
+
+.provider-row {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--rule);
+}
+
+.provider-row:first-child {
+  border-top: 0;
+}
+
+.provider-row[data-active] {
+  background: var(--accent-wash);
+}
+
+.provider-row[data-pending] {
+  background: var(--warn-wash);
+}
+
+.provider-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-pick:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.provider-pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.provider-main {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.provider-name {
+  font-size: var(--t-ui);
+  font-weight: 600;
+}
+
+.provider-dest {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.provider-state[data-badge='needs-key'] {
+  color: var(--warn);
+}
+
+.provider-current {
+  padding: 1px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-ink);
+  font-size: var(--t-micro);
+}
+
+.provider-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding-right: var(--s-2);
+}
+
+.provider-add {
+  justify-self: start;
+}
+
+.provider-detail {
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+}
+
+.provider-form {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-m);
+  background: var(--sheet);
+}
+
+.provider-field {
+  display: grid;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.provider-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-ui);
+}
+
+.field-problem {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--t-small);
+}
