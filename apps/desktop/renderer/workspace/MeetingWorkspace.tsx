@@ -50,6 +50,8 @@ function statusText(state: SessionState): string {
   if (meeting.status === 'recording' && state.captureStopped) return '录音已结束，等待保存';
   if (state.cancelledKind === 'transcribing' && meeting.status === 'captured')
     return '转写已取消，录音已保存';
+  if (meeting.status === 'ready' && meeting.noteStale)
+    return '纪要待更新：转写里有纪要没有包含的新录音';
   const label = STATUS_LABELS[meeting.status];
   return meeting.status === 'failed' && meeting.lastError
     ? `${label}：${describeError(meeting.lastError)}`
@@ -460,7 +462,8 @@ export function MeetingWorkspace({
                         <Icon name="export" />
                         <span>{state.pending === 'export' ? '正在导出...' : '导出 Markdown'}</span>
                       </button>
-                      {canShowGenerationAction(meeting) && (
+                      {/* 纪要过期时，重新生成放在下方的提示框里作为主操作，这里不再重复 */}
+                      {canShowGenerationAction(meeting) && !meeting.noteStale && (
                         <button
                           type="button"
                           className="key key-quiet"
@@ -476,6 +479,27 @@ export function MeetingWorkspace({
                         </button>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {note && meeting.noteStale && !editorOpen && (
+                  <div className="note-stale callout callout-warn" role="status">
+                    <p>
+                      这份纪要写成之后，又追加了新的录音，下面的内容不包含新增部分。重新生成可以把新内容纳入纪要，当前版本会保留。
+                    </p>
+                    {canShowGenerationAction(meeting) && (
+                      <button
+                        type="button"
+                        className="key key-primary"
+                        onClick={() =>
+                          setPrompt({ revision: state.revision, attempt: state.attempt })
+                        }
+                        disabled={!actions.generate || keywordsDirty}
+                      >
+                        <Icon name="send" />
+                        {generationLabel}
+                      </button>
+                    )}
                   </div>
                 )}
 

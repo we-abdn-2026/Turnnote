@@ -74,7 +74,7 @@ export function RecordingControls({
         <Dialog
           titleId="consent-title"
           descriptionId="consent-description"
-          title="开始录音前"
+          title={view.start.resume ? '继续录音前' : '开始录音前'}
           tone="consent"
           onClose={() => setConfirming(null)}
           actions={
@@ -86,7 +86,7 @@ export function RecordingControls({
                 data-primary
                 onClick={() => void confirmStart()}
               >
-                已告知，开始录音
+                {view.start.resume ? '已告知，继续录音' : '已告知，开始录音'}
               </button>
               <button type="button" className="key" onClick={() => setConfirming(null)}>
                 取消
@@ -94,6 +94,14 @@ export function RecordingControls({
             </>
           }
         >
+          {view.start.resume && (
+            <>
+              <p>新的录音会接在这场会议已有内容之后，停止后自动转写并追加到转写里。</p>
+              {state.note && (
+                <p>已有纪要不会被改动，但会标记为“未包含新录音”，之后可以重新生成。</p>
+              )}
+            </>
+          )}
           <p>请告知所有参会者本次会议将被录音，并按当地法律和组织要求取得必要的同意。</p>
         </Dialog>
       )}
@@ -112,7 +120,7 @@ export function RecordingControls({
                 className="key key-caution"
                 onClick={() => void confirmDiscard()}
               >
-                丢弃并重新录音
+                {state.transcriptSegments.length > 0 ? '丢弃这一段' : '丢弃并重新录音'}
               </button>
               <button
                 type="button"
@@ -125,7 +133,11 @@ export function RecordingControls({
             </>
           }
         >
-          <p>已采集的音频将被删除且无法恢复，之后可以重新录音。</p>
+          {state.transcriptSegments.length > 0 ? (
+            <p>这一段录音将被删除且无法恢复。这场会议已有的转写和纪要不受影响。</p>
+          ) : (
+            <p>已采集的音频将被删除且无法恢复，之后可以重新录音。</p>
+          )}
         </Dialog>
       )}
 
@@ -133,13 +145,18 @@ export function RecordingControls({
         {view.start.visible && (
           <button
             type="button"
-            className="key key-record"
+            className={view.start.resume ? 'key' : 'key key-record'}
             onClick={() => setConfirming('start')}
             disabled={!view.start.enabled}
           >
             <Icon name="record" />
-            {view.start.busy ? '正在开始...' : '开始录音'}
+            {view.start.busy ? '正在开始...' : view.start.resume ? '继续录音' : '开始录音'}
           </button>
+        )}
+        {view.hint && (
+          <p className="dock-hint" role="status">
+            {view.hint}
+          </p>
         )}
         {view.stop.visible && (
           <button

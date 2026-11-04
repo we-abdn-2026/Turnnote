@@ -1,6 +1,7 @@
 // 录音控制按钮和状态指示器的视图状态。只从会话状态推导展示，不新增业务状态，
 // 媒体关闭但 Main 尚未提交时显示保存等待，业务终态仍只来自 Main。
 import type { MeetingStatus } from '@shared/contracts';
+import { canAddRecording } from '@shared/lifecycle';
 import { availableActions, type SessionState } from './meeting-session';
 
 /** 媒体关闭后的 recording 显示 saving；captured/transcribing/generating 是处理中 */
@@ -51,9 +52,23 @@ export interface RecordingControlsView {
   showConsent: boolean;
   /** 显示丢弃录音确认；丢弃不再可用时自动收起 */
   showDiscardConfirm: boolean;
-  start: { visible: boolean; enabled: boolean; busy: boolean };
+  start: {
+    visible: boolean;
+    enabled: boolean;
+    busy: boolean;
+    /** 这场会议已经录过：按钮是"继续录音"，不再重复弹授权提醒 */
+    resume: boolean;
+  };
+  /** 暂时不能录音的原因（正在转写/生成），用来解释为什么按钮不可用 */
+  hint: string | null;
   stop: { visible: boolean; enabled: boolean; busy: boolean };
   discard: { visible: boolean; enabled: boolean; busy: boolean };
+}
+
+function waitingReason(status: MeetingStatus): string | null {
+  if (status === 'transcribing') return '正在转写，完成后可以继续录音';
+  if (status === 'generating') return '正在生成纪要，完成后可以继续录音';
+  return null;
 }
 
 export function deriveRecordingControls(
@@ -75,10 +90,13 @@ export function deriveRecordingControls(
     showDiscardConfirm: confirming === 'discard' && actions.discard,
     // 按钮是否显示只看会议状态：响应到达前 Main 的事件已推进状态时，旧按钮立即消失
     start: {
-      visible: meeting?.status === 'created',
+      // 第一段，或暂停后继续、对已有转写追加的下一段；转写/生成中显示为不可用并说明原因
+      visible: !!meeting && (canAddRecording(meeting) || waitingReason(meeting.status) !== null),
       enabled: actions.start && confirming === null,
       busy: pending === 'start',
+      resume: !!meeting && meeting.status !== 'created',
     },
+    hint: meeting ? waitingReason(meeting.status) : null,
     stop: {
       visible: meeting?.status === 'recording',
       enabled: actions.stop,

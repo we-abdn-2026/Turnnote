@@ -38,7 +38,19 @@ export interface AudioAsset {
   meetingId: string;
   filePath: string;
   createdAt: string;
+  /** 这是会议的第几段录音（导入的音频是第 1 段） */
+  partNo: number;
+  /** 已转写过；为 false 表示还在等待转写 */
+  transcribed: boolean;
 }
+/** 一次转写任务里每一段音频的结果；segments 的时间已加上这段在整场会议里的起点 */
+export interface TranscribedPart {
+  assetId: string;
+  /** 解码后的音频时长，下一段录音的转写从这里接着计时 */
+  durationMs: number;
+}
+const AUDIO_COLUMNS =
+  'id, meeting_id AS meetingId, file_path AS filePath, created_at AS createdAt, part_no AS partNo, transcribed_at IS NOT NULL AS transcribed';
 export interface ProcessingJob {
   id: string;
   meetingId: string;
@@ -59,6 +71,9 @@ interface MeetingRow {
   keywords: string;
   created_at: string;
   updated_at: string;
+  timeline_ms: number;
+  transcript_revision: number;
+  note_stale?: number;
 }
 interface JobRow {
   id: string;
@@ -93,6 +108,13 @@ const noteOriginSchema = z.strictObject({
   local: z.boolean().default(false),
 });
 
+/** 最新纪要的转写修订落后于会议当前的转写修订 */
+const NOTE_STALE_SQL = `EXISTS (
+  SELECT 1 FROM note_versions n
+  WHERE n.meeting_id = m.id
+    AND n.version = (SELECT MAX(version) FROM note_versions WHERE meeting_id = m.id)
+    AND n.transcript_revision < m.transcript_revision)`;
+
 const RELEASABLE_STATUSES: readonly MeetingStatus[] = ['transcribed', 'generating', 'ready'];
 
 /** 同步事务只拥有数据库；文件写入/删除和事件发布由 Main 服务在事务外协调。 */
@@ -125,8 +147,9 @@ export class MeetingStore {
 
   private row(id: string, includeDeleted = false): MeetingRow {
     id = parseInput(meetingIdSchema, id);
-    const row = this.db.prepare('SELECT * FROM meetings WHERE id = ?').get(id) as
-      MeetingRow | undefined;
+    const row = this.db
+      .prepare(`SELECT m.*, ${NOTE_STALE_SQL} AS note_stale FROM meetings m WHERE m.id = ?`)
+      .get(id) as MeetingRow | undefined;
     requireCondition(row && (includeDeleted || row.status !== 'deleted'), 'NOT_FOUND');
     return row;
   }
@@ -147,6 +170,7 @@ export class MeetingStore {
       status: row.status,
       retainAudio: row.retain_audio === 1,
       hasAudio: this.getAudio(row.id) !== null,
+      noteStale: row.note_stale === 1,
       keywords: parseInput(keywordsSchema, JSON.parse(row.keywords)),
       activeJobId:
         (
@@ -174,7 +198,7 @@ export class MeetingStore {
     const q = parseInput(querySchema, query) ?? '';
     const rows = this.db
       .prepare(
-        `SELECT id, title, status, created_at, updated_at FROM meetings m
+        `SELECT id, title, status, created_at, updated_at, ${NOTE_STALE_SQL} AS note_stale FROM meetings m
       WHERE status != 'deleted' AND (? = '' OR instr(lower(title), lower(?)) > 0 OR EXISTS (
         SELECT 1 FROM transcript_segments s WHERE s.meeting_id = m.id AND instr(lower(s.text), lower(?)) > 0
       )) ORDER BY created_at DESC, id DESC`,
@@ -186,6 +210,7 @@ export class MeetingStore {
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      noteStale: row.note_stale === 1,
     }));
   }
 
@@ -223,13 +248,29 @@ export class MeetingStore {
     return this.update(id, 'retain_audio', retain ? 1 : 0);
   }
 
-  getAudio(id: string): AudioAsset | null {
-    const row = this.db
+  private audios(id: string, where = ''): AudioAsset[] {
+    const rows = this.db
       .prepare(
-        'SELECT id, meeting_id AS meetingId, file_path AS filePath, created_at AS createdAt FROM audio_assets WHERE meeting_id = ?',
+        `SELECT ${AUDIO_COLUMNS} FROM audio_assets WHERE meeting_id = ? ${where} ORDER BY part_no`,
       )
-      .get(id) as AudioAsset | undefined;
-    return row ?? null;
+      .all(id) as (Omit<AudioAsset, 'transcribed'> & { transcribed: number })[];
+    return rows.map((row) => ({ ...row, transcribed: row.transcribed === 1 }));
+  }
+  /** 会议的所有音频，按录音先后 */
+  getAudios(id: string): AudioAsset[] {
+    return this.audios(id);
+  }
+  /** 还没转写的音频，按录音先后；转写任务按这个顺序处理 */
+  getPendingAudio(id: string): AudioAsset[] {
+    return this.audios(id, 'AND transcribed_at IS NULL');
+  }
+  /** 最新一段音频：正在录或刚录完的那段，录音恢复和丢弃都作用于它 */
+  getAudio(id: string): AudioAsset | null {
+    return this.audios(id).at(-1) ?? null;
+  }
+  /** 已转写音频的总时长；下一段录音的转写时间从这里开始 */
+  getTimelineMs(id: string): number {
+    return this.row(id).timeline_ms;
   }
 
   private attachAudio(id: string, filePath: string): void {
@@ -254,9 +295,17 @@ export class MeetingStore {
       !lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink(),
       'INVALID_INPUT',
     );
+    const partNo =
+      (
+        this.db
+          .prepare('SELECT COALESCE(MAX(part_no), 0) AS n FROM audio_assets WHERE meeting_id = ?')
+          .get(id) as { n: number }
+      ).n + 1;
     this.db
-      .prepare('INSERT INTO audio_assets(id,meeting_id,file_path,created_at) VALUES(?,?,?,?)')
-      .run(randomUUID(), id, path, new Date().toISOString());
+      .prepare(
+        'INSERT INTO audio_assets(id,meeting_id,file_path,created_at,part_no) VALUES(?,?,?,?,?)',
+      )
+      .run(randomUUID(), id, path, new Date().toISOString(), partNo);
   }
 
   createCaptured(title: string, filePath: string): MeetingDetail {
@@ -379,10 +428,21 @@ export class MeetingStore {
           "UPDATE processing_jobs SET status = 'cancelled', updated_at = ? WHERE meeting_id = ? AND status IN ('pending','running')",
         )
         .run(new Date().toISOString(), id);
-      this.db.prepare('DELETE FROM audio_assets WHERE meeting_id = ?').run(id);
-      this.setStatus(id, 'created');
+      // 只丢弃这一段（最新的一段）；之前已录的各段和已有转写、纪要都保留
+      const discarded = this.getAudio(id);
+      if (discarded) this.db.prepare('DELETE FROM audio_assets WHERE id = ?').run(discarded.id);
+      this.setStatus(id, this.settledStatus(id));
       return this.get(id);
     });
+  }
+
+  /** 没有进行中的任务时，会议应处的状态：有待转写的音频、有转写（有纪要则 ready）、或还是空的 */
+  private settledStatus(id: string): MeetingStatus {
+    if (this.getPendingAudio(id).length > 0) return 'captured';
+    if (this.getSegments(id).length > 0 || this.getTimelineMs(id) > 0) {
+      return this.getLatestNote(id) ? 'ready' : 'transcribed';
+    }
+    return 'created';
   }
 
   cancelTranscription(id: string, jobId: string): MeetingDetail {
@@ -425,20 +485,64 @@ export class MeetingStore {
       )
       .all(id) as TranscriptSegment[];
   }
-  completeTranscription(jobId: string, segments: TranscriptSegment[]): boolean {
+  /**
+   * 提交一次转写：把新片段追加到已有转写之后，标记这些音频已转写，累加时间线并递增转写修订。
+   * segments 的时间已包含各段音频的起点；parts 缺省时，把所有待转写音频都视为已转写，
+   * 时间线推进到最后一个片段的结束（用于不经过转写服务的调用方）。
+   */
+  completeTranscription(
+    jobId: string,
+    segments: TranscriptSegment[],
+    parts?: readonly TranscribedPart[],
+  ): boolean {
     return this.atomic(() => {
       const job = this.activeJob(jobId, 'transcribing');
       if (!job) return false;
       const validated = parseInput(transcriptSegmentsSchema, segments);
-      this.db.prepare('DELETE FROM transcript_segments WHERE meeting_id = ?').run(job.meetingId);
+      const existing = this.db
+        .prepare(
+          'SELECT COALESCE(MAX(sequence), -1) AS last, COALESCE(MAX(start_ms), 0) AS lastStart FROM transcript_segments WHERE meeting_id = ?',
+        )
+        .get(job.meetingId) as { last: number; lastStart: number };
+      // 追加的片段不能排到已有片段之前，否则时间轴会乱
+      requireCondition(
+        validated.length === 0 || validated[0].startMs >= existing.lastStart,
+        'INVALID_INPUT',
+      );
       const insert = this.db.prepare(
         'INSERT INTO transcript_segments(meeting_id,sequence,start_ms,end_ms,text) VALUES(?,?,?,?,?)',
       );
       validated.forEach((segment, i) =>
-        insert.run(job.meetingId, i, segment.startMs, segment.endMs, segment.text),
+        insert.run(
+          job.meetingId,
+          existing.last + 1 + i,
+          segment.startMs,
+          segment.endMs,
+          segment.text,
+        ),
       );
+      const pending = this.getPendingAudio(job.meetingId);
+      const done = parts ?? pending.map((asset) => ({ assetId: asset.id, durationMs: 0 }));
+      const now = new Date().toISOString();
+      for (const part of done) {
+        const changed = this.db
+          .prepare(
+            'UPDATE audio_assets SET transcribed_at = ? WHERE id = ? AND meeting_id = ? AND transcribed_at IS NULL',
+          )
+          .run(now, part.assetId, job.meetingId).changes;
+        requireCondition(changed === 1, 'INVALID_STATE');
+      }
+      const timeline = parts
+        ? this.getTimelineMs(job.meetingId) +
+          parts.reduce((total, part) => total + part.durationMs, 0)
+        : Math.max(this.getTimelineMs(job.meetingId), validated.at(-1)?.endMs ?? 0);
+      this.db
+        .prepare(
+          'UPDATE meetings SET timeline_ms = ?, transcript_revision = transcript_revision + 1 WHERE id = ?',
+        )
+        .run(timeline, job.meetingId);
       this.finishJob(job, 'completed');
-      this.setStatus(job.meetingId, 'transcribed');
+      this.setStatus(job.meetingId, this.getLatestNote(job.meetingId) ? 'ready' : 'transcribed');
       return true;
     });
   }
@@ -467,10 +571,23 @@ export class MeetingStore {
     generatedBy: NoteOrigin | null = null,
   ): NoteVersion {
     const version = (this.getLatestNote(id)?.version ?? 0) + 1;
+    // AI 生成的版本看到的是当前全部转写；用户编辑沿用上一版的修订，不会因为编辑就变成"最新"，
+    // 首次手写纪要则视为基于当前转写
+    const current = this.row(id).transcript_revision;
+    const revision =
+      source === 'generated'
+        ? current
+        : ((
+            this.db
+              .prepare(
+                'SELECT transcript_revision AS r FROM note_versions WHERE meeting_id = ? ORDER BY version DESC LIMIT 1',
+              )
+              .get(id) as { r: number } | undefined
+          )?.r ?? current);
     const createdAt = new Date().toISOString();
     this.db
       .prepare(
-        'INSERT INTO note_versions(meeting_id,version,source,content_json,created_at,generated_by) VALUES(?,?,?,?,?,?)',
+        'INSERT INTO note_versions(meeting_id,version,source,content_json,created_at,generated_by,transcript_revision) VALUES(?,?,?,?,?,?,?)',
       )
       .run(
         id,
@@ -479,6 +596,7 @@ export class MeetingStore {
         JSON.stringify(note),
         createdAt,
         generatedBy ? JSON.stringify(generatedBy) : null,
+        revision,
       );
     return { version, source, note, createdAt, generatedBy };
   }
@@ -513,14 +631,13 @@ export class MeetingStore {
   }
 
   /**
-   * 转写已可靠入库且用户未选择保留时可以清理的音频，否则为 null。
-   * failed / captured 等状态的音频是重试输入，永远不可清理。
+   * 转写已可靠入库且用户未选择保留时可以清理的音频（已转写的各段），否则为空。
+   * 还在等待转写的音频、failed / captured 状态下的音频是重试输入，永远不可清理。
    */
-  getReleasableAudio(id: string): AudioAsset | null {
+  getReleasableAudio(id: string): AudioAsset[] {
     const meeting = this.get(id);
-    return !meeting.retainAudio && RELEASABLE_STATUSES.includes(meeting.status)
-      ? this.getAudio(id)
-      : null;
+    if (meeting.retainAudio || !RELEASABLE_STATUSES.includes(meeting.status)) return [];
+    return this.audios(id, 'AND transcribed_at IS NOT NULL');
   }
 
   /** 文件先删除，再清理引用；并发修改保留标志后不再允许删除。由 Main 串行协调文件操作。 */
@@ -531,7 +648,10 @@ export class MeetingStore {
         !meeting.retainAudio && RELEASABLE_STATUSES.includes(meeting.status),
         'INVALID_STATE',
       );
-      requireCondition(this.getAudio(id)?.id === assetId, 'CONFLICT');
+      requireCondition(
+        this.audios(id, 'AND transcribed_at IS NOT NULL').some((asset) => asset.id === assetId),
+        'CONFLICT',
+      );
       this.db.prepare('DELETE FROM audio_assets WHERE id = ?').run(assetId);
     });
   }

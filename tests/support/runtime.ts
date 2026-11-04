@@ -126,3 +126,5 @@ export {
   buildMergeMessages,
   MERGE_SYSTEM_PROMPT,
 } from '../../apps/desktop/main/services/note-prompt';
+
+export { canAddRecording } from '../../packages/contracts/src/lifecycle';

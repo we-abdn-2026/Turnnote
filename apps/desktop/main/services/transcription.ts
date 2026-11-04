@@ -1,8 +1,8 @@
 import { lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import type { JobProgress, MeetingDetail } from '@shared/contracts';
+import type { JobProgress, MeetingDetail, TranscriptSegment } from '@shared/contracts';
 import { ok, requireCondition, TurnnoteError } from '@shared/result';
-import type { MeetingStore, ProcessingJob } from '../storage/database';
+import type { AudioAsset, MeetingStore, ProcessingJob, TranscribedPart } from '../storage/database';
 import { SidecarError, transcribe, type SidecarCommand } from './sidecar';
 import type { SafeLogger } from '../safe-logger';
 
@@ -41,9 +41,8 @@ export function createTranscriptionService(store: MeetingStore, options: Transcr
       /* Event delivery cannot undo a committed transition. */
     }
   }
-  function audioPath(id: string): string {
-    const audio = store.getAudio(id);
-    requireCondition(audio, 'AUDIO_NOT_FOUND');
+  /** 校验一段待转写音频的文件：必须是受管目录内的普通文件 */
+  function audioPath(audio: AudioAsset): string {
     try {
       requireCondition(lstatSync(audio.filePath).isFile(), 'AUDIO_NOT_FOUND');
       const path = realpathSync(audio.filePath);
@@ -61,31 +60,54 @@ export function createTranscriptionService(store: MeetingStore, options: Transcr
     try {
       if (!store.isJobCurrent(job.id) || signal.aborted) return;
       const settings = store.getSettings();
-      const path = audioPath(job.meetingId);
-      const result = await transcribe({
-        sidecar: options.sidecar(),
-        jobId: job.id,
-        audioPath: path,
-        language: settings.transcriptionLanguage,
-        modelPath: join(options.modelsDirectory, settings.transcriptionModel),
-        signal,
-        pingTimeoutMs: options.pingTimeoutMs,
-        idleTimeoutMs: options.idleTimeoutMs,
-        onProgress: (percent) => {
-          if (!store.isJobCurrent(job.id) || signal.aborted) return;
-          try {
-            options.emitProgress({
-              meetingId: job.meetingId,
-              jobId: job.id,
-              kind: 'transcribing',
-              percent,
-            });
-          } catch {
-            /* A closed window cannot fail transcription. */
-          }
-        },
-      });
-      if (!signal.aborted && store.completeTranscription(job.id, result.segments)) {
+      // 待转写的各段按录音先后依次处理；全部成功后一次提交，任何一段失败都不留下部分结果
+      const pending = store.getPendingAudio(job.meetingId);
+      requireCondition(pending.length > 0, 'AUDIO_NOT_FOUND');
+      const paths = pending.map(audioPath);
+      let offsetMs = store.getTimelineMs(job.meetingId);
+      const segments: TranscriptSegment[] = [];
+      const parts: TranscribedPart[] = [];
+      let reported = 0;
+      for (const [index, asset] of pending.entries()) {
+        const result = await transcribe({
+          sidecar: options.sidecar(),
+          jobId: job.id,
+          audioPath: paths[index],
+          language: settings.transcriptionLanguage,
+          modelPath: join(options.modelsDirectory, settings.transcriptionModel),
+          signal,
+          pingTimeoutMs: options.pingTimeoutMs,
+          idleTimeoutMs: options.idleTimeoutMs,
+          onProgress: (percent) => {
+            if (!store.isJobCurrent(job.id) || signal.aborted) return;
+            // 多段时按"已完成的段数 + 当前段进度"折算，进度只增不减
+            const overall = Math.round(((index + percent / 100) / pending.length) * 100);
+            if (overall < reported) return;
+            reported = overall;
+            try {
+              options.emitProgress({
+                meetingId: job.meetingId,
+                jobId: job.id,
+                kind: 'transcribing',
+                percent: overall,
+              });
+            } catch {
+              /* A closed window cannot fail transcription. */
+            }
+          },
+        });
+        // 片段的时间是相对这一段的；加上这一段在整场会议里的起点
+        for (const segment of result.segments) {
+          segments.push({
+            ...segment,
+            startMs: segment.startMs + offsetMs,
+            endMs: segment.endMs + offsetMs,
+          });
+        }
+        parts.push({ assetId: asset.id, durationMs: result.durationMs });
+        offsetMs += result.durationMs;
+      }
+      if (!signal.aborted && store.completeTranscription(job.id, segments, parts)) {
         // 转写已提交；清理失败只记录，不改变任务结果。事件在清理后发布，hasAudio 才是最终值。
         options.afterTranscribed?.(job.meetingId);
         emit(store.get(job.meetingId));

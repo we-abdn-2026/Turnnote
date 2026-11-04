@@ -80,12 +80,23 @@ test('captured, transcribing and generating are processing, never shown as recor
     const v = seen.get(status);
     assert.ok(v, `saw ${status}`);
     assert.equal(v.indicator, 'processing', status);
-    assert.deepEqual(visible(v), [], status);
     assert.equal(v.stop.visible, false, status);
+    assert.equal(v.discard.visible, false, status);
   }
+  // 转写和生成进行中：能看到"继续录音"，但不可用，并说明原因
+  for (const status of ['transcribing', 'generating']) {
+    const v = seen.get(status);
+    assert.equal(v.start.visible, true, status);
+    assert.equal(v.start.enabled, false, status);
+    assert.match(v.hint, /完成后可以继续录音/, status);
+  }
+  // 落定之后：可以继续录音，按钮是"继续"而不是"开始"
   for (const status of ['transcribed', 'ready']) {
-    assert.equal(seen.get(status).indicator, 'done', status);
-    assert.deepEqual(visible(seen.get(status)), [], status);
+    const v = seen.get(status);
+    assert.equal(v.indicator, 'done', status);
+    assert.equal(v.start.visible, true, status);
+    assert.equal(v.start.resume, true, status);
+    assert.equal(v.hint, null, status);
   }
   disconnect();
 });
@@ -110,7 +121,12 @@ test('while start or stop is pending the control stays visible, busy and disable
   await session.create('Pending');
 
   const starting = session.start();
-  assert.deepEqual(view(session).start, { visible: true, enabled: false, busy: true });
+  assert.deepEqual(view(session).start, {
+    visible: true,
+    enabled: false,
+    busy: true,
+    resume: false,
+  });
   assert.equal(await session.start(), false);
   gates.shift()();
   await starting;
@@ -174,7 +190,8 @@ test('when the captured event arrives before the stop response, stop disappears 
   const v = view(session);
   assert.equal(v.indicator, 'processing');
   assert.equal(v.stop.visible, false);
-  assert.equal(v.start.visible, false);
+  // 处理中不能再开始新的一段：即使按钮可见，也不可用
+  assert.equal(v.start.enabled, false);
   release();
   await stopping;
   disconnect();
@@ -224,7 +241,7 @@ test('capture failure offers discard with confirmation, then recording can start
   disconnect();
 });
 
-test('processing failures do not offer recording controls', async () => {
+test('a failed transcription offers no stop or discard, but the user can keep recording', async () => {
   const { session, disconnect } = await connected({ transcriptionError: 'TRANSCRIBE_FAILED' });
   await session.start();
   await session.stop();
@@ -232,7 +249,10 @@ test('processing failures do not offer recording controls', async () => {
   const v = view(session);
   assert.equal(session.getState().meeting.lastError.kind, 'transcribing');
   assert.equal(v.indicator, 'failed');
-  assert.deepEqual(visible(v), []);
+  assert.deepEqual(visible(v), ['start']);
+  assert.equal(v.start.resume, true);
+  assert.equal(v.stop.visible, false);
+  assert.equal(v.discard.visible, false);
   disconnect();
 });
 

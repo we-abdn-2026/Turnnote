@@ -66,6 +66,11 @@ export interface MeetingSummary {
   status: MeetingStatus;
   createdAt: string;
   updatedAt: string;
+  /**
+   * 最新纪要写成之后，转写又追加了新内容（例如继续录音）：纪要没有包含这部分，建议重新生成。
+   * 没有纪要时恒为 false。
+   */
+  noteStale: boolean;
 }
 
 export interface MeetingDetail extends MeetingSummary {

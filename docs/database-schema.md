@@ -15,6 +15,8 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 | keywords | TEXT | NOT NULL DEFAULT '[]', JSON 数组 |
 | created_at | TEXT | NOT NULL |
 | updated_at | TEXT | NOT NULL |
+| timeline_ms | INTEGER | NOT NULL DEFAULT 0，已转写录音的总时长 |
+| transcript_revision | INTEGER | NOT NULL DEFAULT 0，转写每提交一次加 1 |
 
 `keywords` 存储用户标注的关键词（JSON 数组，如 `["定价讨论","技术债务"]`），用于引导 AI 生成纪要。
 
@@ -28,8 +30,10 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 | meeting_id | TEXT | NOT NULL, FOREIGN KEY REFERENCES meetings(id) ON DELETE CASCADE |
 | file_path | TEXT | NOT NULL |
 | created_at | TEXT | NOT NULL |
+| part_no | INTEGER | NOT NULL DEFAULT 1，第几段录音（导入的音频是第 1 段） |
+| transcribed_at | TEXT | NULL 表示这段还没转写（待处理） |
 
-唯一索引 idx_audio_one_per_meeting(meeting_id) 覆盖查询；文件路径另设唯一索引 idx_audio_one_owner。
+一场会议可以有多段录音（暂停后继续、对已转写的会议追加）：`idx_audio_part(meeting_id, part_no)` 唯一，`part_no` 取已有最大值加 1；文件路径另设唯一索引 `idx_audio_one_owner`。转写完成并按保留策略清理后音频行会被删除，所以总时长记在 `meetings.timeline_ms`，不从音频行推导。
 
 ### transcript_segments
 
@@ -54,8 +58,12 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 | source | TEXT | NOT NULL, CHECK(source IN ('generated','user')) |
 | content_json | TEXT | NOT NULL |
 | created_at | TEXT | NOT NULL |
+| generated_by | TEXT | NULL，AI 生成时的 `{provider,label,model,local}` 快照 |
+| transcript_revision | INTEGER | NOT NULL DEFAULT 0，这一版写成时看到的转写修订 |
 
 主键：`PRIMARY KEY (meeting_id, version)`
+
+**纪要是否过期**：最新一版的 `transcript_revision` 小于会议当前的 `transcript_revision`，即 `MeetingSummary.noteStale`。AI 生成的版本记录生成时的修订；用户编辑沿用上一版的修订（编辑不会让纪要“包含”新录音），首次手写纪要视为基于当前转写。没有纪要时恒为未过期。
 
 最新版本：`SELECT * FROM note_versions WHERE meeting_id = ? ORDER BY version DESC LIMIT 1`
 
@@ -89,7 +97,7 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 
 索引：`CREATE INDEX idx_jobs_meeting_kind ON processing_jobs(meeting_id, kind)`
 
-部分唯一索引 `idx_jobs_one_active` 保证每个会议最多一个 pending/running 任务。只有 failed job 可以有 error_code/error_message，错误信息来自共享安全目录。音频使用 `idx_audio_one_per_meeting` 限制每会议一份当前引用，`idx_audio_one_owner` 禁止不同会议共享同一个文件路径。
+部分唯一索引 `idx_jobs_one_active` 保证每个会议最多一个 pending/running 任务。只有 failed job 可以有 error_code/error_message，错误信息来自共享安全目录。音频用 `idx_audio_part` 保证同一会议的段号唯一，`idx_audio_one_owner` 禁止不同会议共享同一个文件路径。
 
 ### app_settings
 
@@ -158,9 +166,9 @@ get 同样排除 deleted。文件删除失败返回 WRITE_FAILED 并保留墓碑
 
 ## 音频保留
 
-- 转写成功且 `retain_audio=0`：删除音频文件和 `audio_assets` 行
+- 转写成功且 `retain_audio=0`：删除这次转写覆盖的各段音频文件和 `audio_assets` 行（已转写的各段；还在等待转写的段永远不会被清理）
 - 转写失败：保留音频，允许重试
-- `audio_assets` 行存在即表示音频已保留
+- `audio_assets` 行存在即表示这段音频还在；`transcribed_at` 为空的是待转写输入
 
 音频登记要求绝对路径位于管理目录内，父目录已存在。登记时将父目录和管理根目录按 realpath 规范化，并再次检查实际路径边界；目录内部的符号链接别名保存为同一个规范路径，由唯一索引阻止跨会议共享。文件本身不得为符号链接；文件可以尚未创建，以支持录音开始前预留所有权。调用方须使用 `getAudio().filePath` 返回的规范路径读写文件。
 

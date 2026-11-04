@@ -69,15 +69,25 @@ export function stubSidecar(body, { pong = true } = {}) {
   };
 }
 
-export const succeedingSidecar = (segments = SAMPLE_SEGMENTS, pauseMs = 0) =>
+/** durationMs 是整段音频的时长，可以比最后一个片段的结束更长（结尾有静音） */
+export const succeedingSidecar = (
+  segments = SAMPLE_SEGMENTS,
+  pauseMs = 0,
+  durationMs = segments.at(-1)?.endMs ?? 1000,
+) =>
   stubSidecar(`
     setTimeout(() => {
-      for (const segment of ${JSON.stringify(segments)}) out({ id: msg.id, type: 'segment', ...segment });
+      // 与真实 sidecar 一致：每个片段后上报进度（最高 99），done 之前上报 100
+      for (const segment of ${JSON.stringify(segments)}) {
+        out({ id: msg.id, type: 'segment', ...segment });
+        out({ id: msg.id, type: 'progress', percent: Math.min(99, Math.round(segment.endMs / ${durationMs} * 100)) });
+      }
+      out({ id: msg.id, type: 'progress', percent: 100 });
       out({
         id: msg.id,
         type: 'done',
         detectedLanguage: 'en',
-        durationMs: ${segments.at(-1)?.endMs ?? 1000},
+        durationMs: ${durationMs},
         segmentCount: ${segments.length},
       });
     }, ${pauseMs});
@@ -269,6 +279,19 @@ export async function createMainSession(t, opts = {}) {
       value(await api.recording.stop(meeting.id, started.activeJobId));
       await until(() => store.get(meeting.id).status === status, `recording→${status}`);
       return meeting.id;
+    },
+    /**
+     * 在已有会议上录一段（暂停后继续、对已转写的会议追加）：start → append → stop，
+     * 然后等到会议进入 until 之一。返回这段录音的任务 id。
+     */
+    async recordPart(id, { until: target = ['transcribed', 'ready'], samples } = {}) {
+      const started = value(await api.recording.start(id));
+      const pcm = samples ?? Int16Array.from({ length: 1600 }, (_, i) => ((i * 7) % 1800) - 900);
+      value(await api.recording.appendChunk(id, started.activeJobId, pcm));
+      value(await api.recording.stop(id, started.activeJobId));
+      const wanted = Array.isArray(target) ? target : [target];
+      await until(() => wanted.includes(store.get(id).status), `recording part → ${wanted}`);
+      return started.activeJobId;
     },
     captured(title = 'Captured', content = 'audio bytes') {
       const path = join(audioDirectory, `${title.replace(/\W+/g, '_')}-${Date.now()}.wav`);

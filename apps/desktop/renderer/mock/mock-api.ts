@@ -29,6 +29,8 @@ const SAMPLE_SEGMENTS: TranscriptSegment[] = [
   { startMs: 5200, endMs: 8000, text: 'Alex will prepare the release notes.' },
   { startMs: 8000, endMs: 11000, text: 'Pricing for the team plan is still open.' },
 ];
+/** 样本音频的时长，结尾比最后一个片段多 1 秒静音 */
+const SAMPLE_DURATION_MS = (SAMPLE_SEGMENTS.at(-1)?.endMs ?? 0) + 1000;
 const SAMPLE_NOTE: MeetingNote = {
   summary:
     'The team reviewed the launch plan and agreed on a Friday beta release.\n' +
@@ -92,6 +94,8 @@ export function createMockApi({
   const meetings = new Map<string, MeetingDetail>();
   const segments = new Map<string, TranscriptSegment[]>();
   const notes = new Map<string, NoteVersion[]>();
+  /** 已转写录音的总时长；下一段的转写时间接在它后面 */
+  const timeline = new Map<string, number>();
   const jobs = new Map<string, MockJob>();
   const pendingTranscriptions = new Map<string, ReturnType<typeof setTimeout>>();
   const meetingListeners = new Set<(meeting: MeetingDetail) => void>();
@@ -223,6 +227,7 @@ export function createMockApi({
       updatedAt: now(),
       retainAudio: false,
       hasAudio: false,
+      noteStale: false,
       keywords: [],
       lastError: null,
       activeJobId: null,
@@ -283,9 +288,25 @@ export function createMockApi({
       return;
     }
     if (job.kind === 'transcribing') {
-      segments.set(id, structuredClone(SAMPLE_SEGMENTS));
+      // 新一段接在已有转写之后；已有纪要不动，只标记为没有包含新内容
+      const existing = segments.get(id) ?? [];
+      const offset = timeline.get(id) ?? 0;
+      segments.set(id, [
+        ...existing,
+        ...SAMPLE_SEGMENTS.map((segment) => ({
+          ...segment,
+          startMs: segment.startMs + offset,
+          endMs: segment.endMs + offset,
+        })),
+      ]);
+      timeline.set(id, offset + SAMPLE_DURATION_MS);
+      const hasNote = (notes.get(id)?.length ?? 0) > 0;
       jobs.delete(id);
-      update(id, { status: 'transcribed', hasAudio: meetings.get(id)!.retainAudio });
+      update(id, {
+        status: hasNote ? 'ready' : 'transcribed',
+        hasAudio: meetings.get(id)!.retainAudio,
+        noteStale: hasNote && existing.length > 0 ? true : meetings.get(id)!.noteStale,
+      });
     } else {
       const versions = notes.get(id) ?? [];
       if ((versions.at(-1)?.version ?? 0) !== job.baseVersion) {
@@ -303,7 +324,7 @@ export function createMockApi({
       });
       notes.set(id, versions);
       jobs.delete(id);
-      update(id, { status: 'ready' });
+      update(id, { status: 'ready', noteStale: false });
     }
   }
   function startJob(id: string, kind: Exclude<JobKind, 'recording'>): Result<MeetingDetail> {
@@ -355,9 +376,10 @@ export function createMockApi({
                   (segments.get(meeting.id) ?? []).some((s) => s.text.toLowerCase().includes(q))),
             )
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
-            .map(({ id, title, status, createdAt, updatedAt }) => ({
+            .map(({ id, title, status, createdAt, updatedAt, noteStale }) => ({
               id,
               title,
+              noteStale,
               status,
               createdAt,
               updatedAt,
@@ -421,7 +443,20 @@ export function createMockApi({
           )
             return fail('INVALID_STATE');
           jobs.delete(id);
-          return ok(update(id, { status: 'created', hasAudio: false, lastError: null }));
+          // 只丢弃这一段：已有转写、纪要保持，会议回到录音前的状态
+          const hasTranscript = (segments.get(id)?.length ?? 0) > 0;
+          const status = !hasTranscript
+            ? 'created'
+            : notes.get(id)?.length
+              ? 'ready'
+              : 'transcribed';
+          return ok(
+            update(id, {
+              status,
+              hasAudio: hasTranscript && meeting.retainAudio,
+              lastError: null,
+            }),
+          );
         }),
       fail: async (id, jobId, code) =>
         withMeeting(id, (meeting) => {

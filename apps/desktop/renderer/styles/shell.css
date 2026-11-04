@@ -398,3 +398,14 @@ body:has(.sidebar-resizer[data-dragging='true']) {
 .model-banner .key {
   justify-self: end;
 }
+
+/* 会议库里纪要待更新的标记 */
+.reel-stale {
+  grid-column: 2 / -1;
+  justify-self: start;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: var(--t-micro);
+}
