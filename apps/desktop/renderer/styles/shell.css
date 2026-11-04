@@ -344,3 +344,68 @@ body:has(.sidebar-resizer[data-dragging='true']) {
     background: var(--scrim);
   }
 }
+
+/* 转写模型下载提示：悬浮卡片，不占用布局 */
+.model-banner {
+  position: fixed;
+  right: var(--s-6);
+  bottom: var(--s-6);
+  z-index: 25;
+  display: grid;
+  gap: var(--s-2);
+  width: min(360px, calc(100vw - var(--s-8)));
+  padding: var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-m);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: var(--t-small);
+  box-shadow:
+    0 1px 0 var(--edge-light) inset,
+    0 8px 24px var(--edge-dark);
+}
+
+.model-banner[data-tone='error'] {
+  background: var(--warn-wash);
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.model-banner strong {
+  font-size: var(--t-ui);
+}
+
+.model-banner p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.model-banner[data-tone='error'] p {
+  color: var(--warn);
+}
+
+.model-banner progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.model-banner .model-banner-error {
+  color: var(--warn);
+}
+
+.model-banner .key {
+  justify-self: end;
+}
+
+/* 会议库里纪要待更新的标记 */
+.reel-stale {
+  grid-column: 2 / -1;
+  justify-self: start;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: var(--t-micro);
+}

@@ -153,8 +153,17 @@ Sidecar 自己写的诊断只包含阶段和异常类型名（如 `decode failed
 
 ## 模型存储
 
-模型存储在 `userData/models/<model>/`。当前 Main 尚无自动下载实现，真实运行前需单独
-准备完整的本地模型目录；打包验收的模型准备方式见
-[Sidecar 打包与真实模型验证](sidecar-packaging.md)。
+模型存储在 `userData/models/<model>/`。Main 的 `ModelManager`（`services/model-manager.ts`）在应用启动时
+检查当前 `settings.transcriptionModel`，缺失且在内置清单（`services/model-manifest.ts`）中时自动下载：
+
+- **只下载清单里固定 revision 的文件**，每个文件校验 SHA-256；下载源（`huggingface.co`、`hf-mirror.com`）不被信任，内容不符即丢弃并换源。可用环境变量 `TURNNOTE_MODEL_SOURCES`（逗号分隔）覆盖源列表。
+- **源选择**：并发探测所有源，响应最快的优先，其余按配置顺序兜底；同一源上网络抖动和 5xx 会用 Range 续传重试，4xx 与哈希不符直接换源。
+- **续传**：下载写入 `models/.partial/<model>@<revision>/`，取消、失败或退出后保留，下次从已有字节继续；已完整且校验通过的文件不会重新下载。清单已不再引用的 revision 的残留在启动时清理。
+- **原子安装**：全部文件校验通过后，整目录 rename 到 `models/<model>/`。因此 sidecar 永远看不到半截目录；`isInstalled` 与 sidecar 的加载前检查一致（三个必需文件都存在，且清单内的 `model.bin` 大小吻合）。
+- **磁盘空间**：开始前检查剩余空间（所需 + 64 MiB 余量），不足返回 `INSUFFICIENT_DISK_SPACE`，不发起任何下载。
+- **闸门**：模型未就绪时 `transcription.start` 与自动转写不创建任务（`MODEL_NOT_READY`），会议保持 `captured`、音频保留；下载完成后对「从未尝试过转写」的 `captured` 会议自动补发（用户取消过的不会被擅自重启）。启动恢复在模型就绪时同样补发。
+- 使用 fake sidecar（`TURNNOTE_ASR_FAKE=1`）时不需要模型，不下载也不设闸门。清单外的模型只能由用户自行放置完整目录，不能下载。
+
+打包验收的模型准备方式见 [Sidecar 打包与真实模型验证](sidecar-packaging.md)。
 
 Sidecar 只读取 `modelPath`，不访问网络。加载前检查 `model.bin`、`config.json`、`tokenizer.json` 都存在；faster-whisper 在缺 `tokenizer.json` 时会调用 `Tokenizer.from_pretrained` 联网下载，且不受 `local_files_only` 控制。

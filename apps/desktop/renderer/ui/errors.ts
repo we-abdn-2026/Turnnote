@@ -20,6 +20,9 @@ const MESSAGES: Record<ErrorCode, string> = {
   AUDIO_NOT_FOUND: '这场会议的音频不可用。',
   AUDIO_DECODE_FAILED: '这场会议的音频无法解码。',
   MODEL_LOAD_FAILED: '转写模型无法加载。',
+  MODEL_NOT_READY: '转写模型还没有准备好，下载完成后会自动开始转写。',
+  MODEL_DOWNLOAD_FAILED: '转写模型下载失败，请检查网络后重试。',
+  INSUFFICIENT_DISK_SPACE: '磁盘剩余空间不足，无法下载转写模型。请清理空间后重试。',
   TRANSCRIBE_FAILED: '转写失败，音频已保留，可以重试。',
   INTERRUPTED: '处理被中断，已保存的数据都还在。',
   API_KEY_MISSING: '请先在设置中填写所选 AI 服务的 API Key。',
@@ -28,6 +31,7 @@ const MESSAGES: Record<ErrorCode, string> = {
   DEEPSEEK_TIMEOUT: '请求所选 AI 服务超时。',
   DEEPSEEK_INVALID_RESPONSE: '所选 AI 服务返回的纪要格式无效。',
   DEEPSEEK_UNAVAILABLE: '所选 AI 服务暂时不可用。',
+  AI_REQUEST_REJECTED: '所选 AI 服务拒绝了请求。请检查设置里的模型名和服务地址是否正确。',
   TRANSCRIPT_TOO_LONG: '转写过长，无法生成纪要。转写内容已保留。',
 };
 

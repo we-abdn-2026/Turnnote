@@ -20,6 +20,7 @@ import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 import { SafeLogger, safeLogPath } from './safe-logger';
 import { CredentialStore } from './platform/credentials';
+import { createModelManager } from './services/model-manager';
 
 // The package probe does not initialize capture IPC or acquire media permissions.
 if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
@@ -133,8 +134,21 @@ void app
         }
       }
     };
+    const modelSources = process.env.TURNNOTE_MODEL_SOURCES?.split(',')
+      .map((source) => source.trim())
+      .filter(Boolean);
+    const models = createModelManager({
+      modelsDirectory: join(app.getPath('userData'), 'models'),
+      getModelName: () => store!.getSettings().transcriptionModel,
+      emit: (status) => publish(eventChannels.modelStatus, status),
+      // fake sidecar 不加载模型，不需要下载
+      required: process.env.TURNNOTE_ASR_FAKE !== '1',
+      sources: modelSources?.length ? modelSources : undefined,
+      logger,
+    });
     services = createSessionServices(store, {
       audioDirectory,
+      models,
       modelsDirectory: join(app.getPath('userData'), 'models'),
       exports: {
         chooseSavePath: async (defaultFileName) => {
@@ -183,6 +197,8 @@ void app
       }),
     });
     await services.recover();
+    // 模型缺失时在后台自动下载，不阻塞窗口；进度通过 events:model-status 推送
+    models.ensure();
     // 清理上次未完成的删除；失败时保留墓碑，下一次启动继续。
     for (const meeting of store.getDeleted()) await services.handlers.meetings!.delete!(meeting.id);
     registerIpc(

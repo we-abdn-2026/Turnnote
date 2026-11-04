@@ -16,17 +16,20 @@
 | 入口 | 成功返回／状态 | 失败或取消边界 |
 |---|---|---|
 | `meetings.create` | `created` | 标题为空或超限拒绝 |
-| `recording.start` | `recording`，带 `activeJobId` | 仅 `created` 可录音；一份音频、一个活动任务 |
+| `recording.start` | `recording`，带 `activeJobId` | 一场会议可以录多段：第一段（`created`），或暂停后继续、对已有转写追加的下一段（`captured` / `transcribed` / `ready`，以及转写或生成失败后）。正在录音、转写、生成，或有失败的录音（须先丢弃）时返回 `INVALID_STATE`；一个活动任务 |
 | `recording.appendChunk` | `null` | 只接受正在录音会议的 PCM16；失败后 Renderer 停止轨道并调用 `recording.fail` |
 | `recording.stop` | 固定返回已提交的 `captured` 快照 | WAV finalize 完成后提交；随后 Main 自动启动转写，用事件报告 `transcribing`，不在响应中混用两种状态 |
-| `recording.cancel` | 文件清理完成后返回 `created` | 允许录音中或失败阶段为 recording；丢弃当前音频，清理失败保留引用和可恢复数据 |
+| `recording.cancel` | 文件清理完成后返回录音前的状态 | 允许录音中或失败阶段为 recording；只丢弃这一段（最新的一段），已有转写、纪要和之前各段音频保持。第一段回到 `created`；追加的一段回到 `captured`（还有待转写的音频）、`ready`（有纪要）或 `transcribed`。清理失败保留引用和可恢复数据 |
 | `recording.fail` | `failed`，`lastError.kind=recording` | 仅接受采集四种错误码，由 Main 生成安全信息；保留音频，重录前显式 cancel |
 | `meetings.importAudio` | 取消为 `null`；成功为 `captured` | Main 打开文件选择并复制到管理目录（随机文件名，原文件只读），随后自动转写；Renderer 不提交路径。仅接受 `.wav`/`.mp3`/`.m4a`（大小写不敏感，与 sidecar 一致），空文件和不支持的格式返回 `AUDIO_DECODE_FAILED`，文件缺失/非普通文件 `AUDIO_NOT_FOUND`，超过 2 GiB `INVALID_INPUT`，复制失败 `WRITE_FAILED`；任何失败都回收副本、不创建会议。无法解码的文件在转写阶段以 `AUDIO_DECODE_FAILED` 失败并保留副本供重试 |
-| `transcription.start` | `transcribing` | 只允许 captured 或 failed/transcribing，且音频引用存在；Main 启动前检查实际文件 |
+| `transcription.start` | `transcribing` | 只允许 captured 或 failed/transcribing，且有待转写的音频；Main 启动前检查实际文件。一次任务按录音先后依次转写**所有待转写的段**，每段的时间加上它在整场会议里的起点（前面各段音频的总时长），全部成功后一次提交并追加在已有转写之后；任何一段失败都不留下部分结果。完成后有纪要的会议回到 `ready`（`noteStale` 为 true），否则为 `transcribed` |
 | `transcription.cancel` | `captured` | 杀死进程、结束当前 job，不保存部分片段；音频保留 |
-| `notes.generate` | `generating` | 只允许 transcribed、ready 或 failed/generating，且有非空转写；须具备凭证，由用户显式请求 |
-| `notes.saveEdit` | 新 `NoteVersion` | 校验 schema 和 `expectedVersion`；旧版本返回 `CONFLICT`，不覆盖新编辑 |
+| `notes.generate` | `generating` | 只允许 transcribed、ready 或 failed/generating，且有非空转写；须具备凭证，由用户显式请求。基于**全部**转写生成；成功后 `noteStale` 变为 false。继续录音后纪要会被标记为 `noteStale`（不会自动重新生成），由用户决定是否重新生成 |
+| `notes.saveEdit` | 新 `NoteVersion`（`generatedBy` 为 null） | 校验 schema 和 `expectedVersion`；旧版本返回 `CONFLICT`，不覆盖新编辑 |
 | `exports.markdown` | `{ saved: true }`；用户取消为 `{ saved: false }` | Main 打开保存对话框，写入**写入时刻**已保存的最新纪要版本（含用户编辑）。无纪要返回 `INVALID_STATE` 且不弹对话框；会议不存在 `NOT_FOUND`；写入失败 `WRITE_FAILED`。任何失败都不改变会议记录，先写同目录临时文件再 rename，不截断已有文件 |
+| `models.getStatus` | 当前转写模型的 `ModelStatus`（`ready` / `missing` / `downloading` / `failed`，含字节进度） | 状态取自磁盘与下载进度；清单外的模型 `downloadable=false` |
+| `models.download` | 返回当前 `ModelStatus` | `missing` / `failed` → `downloading`；已就绪或已在下载时直接返回当前状态；清单外的模型返回 `MODEL_NOT_READY` |
+| `models.cancelDownload` | 取消后的 `ModelStatus`（`missing`） | 保留已下载部分以便续传；不是失败 |
 | `meetings.delete` | `null` | 先提交 deleted 墓碑并取消任务，再清文件，最后级联删库；清理失败保留墓碑，列表和 get 不可见，允许重试 |
 
 Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:mm`），然后依次为摘要、关键主题、决策、未决问题、行动项，小节名与界面一致；决策和行动项带 `（来源 HH:MM:SS）`，空小节写“未指定”。用户文本一律按数据转义，不会被解释为 Markdown 或 HTML。输出样例见 [`tests/fixtures/exported-meeting.md`](../tests/fixtures/exported-meeting.md)，`tests/markdown-export.test.mjs` 逐字比对。
@@ -39,6 +42,7 @@ Markdown 导出的格式：标题、创建时间（本地时区 `YYYY-MM-DD HH:m
 
 - 每次启动或重试创建新的 job ID；同会议同阶段 attempt 递增。`MeetingDetail.activeJobId` 指向当前任务，结束后为 null。
 - appendChunk、stop、recording.cancel/fail 和 transcription.cancel 必须携带启动时获得的 jobId。旧会话的 PCM、停止、失败或取消请求不得影响新任务；失败录音的显式丢弃使用 lastError.jobId。
+- `onModelStatus`（`events:model-status`）推送 `ModelStatus`：下载开始、进度（约每 200 ms 一次）、完成、失败、取消，以及切换 `settings.transcriptionModel` 后的新状态。Renderer 启动时先 `models.getStatus()`，之后以事件为准。
 - `onJobProgress` 包含 meetingId、jobId、kind 和 0–100 的整数 percent。Renderer 只显示 jobId 等于当前 activeJobId 的进度。
 - Main 在转发进度和提交结果前调用 `store.isJobCurrent(jobId)`。取消、删除、失败或重试后的旧 ID 的完成／失败操作返回 false，不修改数据库、不发完成事件。单看会议状态不能区分旧任务和重试。
 - ASR 片段先暂存在 Main；只有收到合法 done 才将全部片段、job completed 和 meeting transcribed 一次提交。

@@ -6,7 +6,10 @@ import type {
   JobKind,
   JobProgress,
   MeetingDetail,
+  AiProviderInfo,
+  CustomProviderInput,
   MeetingNote,
+  ModelStatus,
   NoteVersion,
   Result,
   TranscriptSegment,
@@ -18,6 +21,7 @@ import { createDispatcher } from '@shared/invoke';
 import { canCancelRecording, canEditNote, canStartJob } from '@shared/lifecycle';
 import { errorMessages, fail, ok } from '@shared/result';
 import { defaultSettings } from '@shared/schemas';
+import { BUILTIN_PROVIDER_PRESETS, parseProviderUrl } from '@shared/providers';
 
 const SAMPLE_SEGMENTS: TranscriptSegment[] = [
   { startMs: 0, endMs: 2400, text: "Let's review the launch plan for this week." },
@@ -25,6 +29,8 @@ const SAMPLE_SEGMENTS: TranscriptSegment[] = [
   { startMs: 5200, endMs: 8000, text: 'Alex will prepare the release notes.' },
   { startMs: 8000, endMs: 11000, text: 'Pricing for the team plan is still open.' },
 ];
+/** 样本音频的时长，结尾比最后一个片段多 1 秒静音 */
+const SAMPLE_DURATION_MS = (SAMPLE_SEGMENTS.at(-1)?.endMs ?? 0) + 1000;
 const SAMPLE_NOTE: MeetingNote = {
   summary:
     'The team reviewed the launch plan and agreed on a Friday beta release.\n' +
@@ -74,6 +80,8 @@ interface MockOptions {
   seed?: boolean;
   transcriptionError?: ErrorCode;
   generationError?: ErrorCode;
+  /** 转写模型初始状态；缺省为已就绪，使既有界面测试不受影响 */
+  model?: 'ready' | 'missing';
 }
 
 export function createMockApi({
@@ -81,20 +89,102 @@ export function createMockApi({
   seed = true,
   transcriptionError,
   generationError,
+  model: initialModel = 'ready',
 }: MockOptions = {}): TurnnoteApi {
   const meetings = new Map<string, MeetingDetail>();
   const segments = new Map<string, TranscriptSegment[]>();
   const notes = new Map<string, NoteVersion[]>();
+  /** 已转写录音的总时长；下一段的转写时间接在它后面 */
+  const timeline = new Map<string, number>();
   const jobs = new Map<string, MockJob>();
   const pendingTranscriptions = new Map<string, ReturnType<typeof setTimeout>>();
   const meetingListeners = new Set<(meeting: MeetingDetail) => void>();
   const progressListeners = new Set<(progress: JobProgress) => void>();
+  const modelListeners = new Set<(status: ModelStatus) => void>();
+  const MODEL_BYTES = 483_546_902;
+  let model: ModelStatus = {
+    model: defaultSettings.transcriptionModel,
+    state: initialModel,
+    totalBytes: MODEL_BYTES,
+    downloadedBytes: 0,
+    downloadable: true,
+    error: null,
+  };
+  let modelTimer: ReturnType<typeof setInterval> | undefined;
   let settings = structuredClone(defaultSettings);
   const apiKeys = new Map<string, string>();
+  const customProviders = new Map<string, CustomProviderInput & { id: string }>();
+  let nextProviderId = 1;
+  function providerList(): AiProviderInfo[] {
+    const toInfo = (
+      item: { id: string; label: string; baseUrl: string; needsKey: boolean },
+      builtin: boolean,
+      models: readonly string[],
+    ): AiProviderInfo => {
+      const parsed = parseProviderUrl(item.baseUrl);
+      const hasKey = apiKeys.has(item.id);
+      return {
+        id: item.id,
+        label: item.label,
+        baseUrl: item.baseUrl,
+        host: parsed.ok ? parsed.host : '',
+        builtin,
+        local: parsed.ok && parsed.local,
+        needsKey: item.needsKey,
+        hasKey,
+        ready: !item.needsKey || hasKey,
+        defaultModel: models[0] ?? '',
+        models: [...models],
+      };
+    };
+    return [
+      ...BUILTIN_PROVIDER_PRESETS.map((preset) => toInfo(preset, true, preset.models)),
+      ...[...customProviders.values()].map((item) => toInfo(item, false, [])),
+    ];
+  }
+  const originOf = () => {
+    const service = providerList().find((item) => item.id === settings.noteProvider);
+    return {
+      provider: settings.noteProvider,
+      label: service?.label ?? settings.noteProvider,
+      model: settings.noteModel,
+      local: service?.local ?? false,
+    };
+  };
   let nextId = 1;
   let nextJobId = 1;
   const now = () => new Date().toISOString();
   const wait = () => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  function publishModel(next: Partial<ModelStatus>): void {
+    model = { ...model, ...next };
+    for (const listener of modelListeners) {
+      try {
+        listener(structuredClone(model));
+      } catch {
+        /* UI listener owns its failure. */
+      }
+    }
+  }
+  function startModelDownload(): void {
+    publishModel({ state: 'downloading', downloadedBytes: 0, error: null });
+    modelTimer = setInterval(
+      () => {
+        const downloadedBytes = Math.min(MODEL_BYTES, model.downloadedBytes + MODEL_BYTES / 5);
+        if (downloadedBytes < MODEL_BYTES) return publishModel({ downloadedBytes });
+        clearInterval(modelTimer);
+        modelTimer = undefined;
+        publishModel({ state: 'ready', downloadedBytes: 0 });
+        // 与 Main 一致：补发此前因模型未就绪而没有启动的自动转写
+        for (const meeting of meetings.values()) {
+          if (meeting.status === 'captured' && !segments.has(meeting.id)) {
+            scheduleAutoTranscription(meeting.id);
+          }
+        }
+      },
+      Math.max(delayMs, 20),
+    );
+  }
 
   function cancelAutoTranscription(id: string): void {
     clearTimeout(pendingTranscriptions.get(id));
@@ -137,6 +227,7 @@ export function createMockApi({
       updatedAt: now(),
       retainAudio: false,
       hasAudio: false,
+      noteStale: false,
       keywords: [],
       lastError: null,
       activeJobId: null,
@@ -197,9 +288,25 @@ export function createMockApi({
       return;
     }
     if (job.kind === 'transcribing') {
-      segments.set(id, structuredClone(SAMPLE_SEGMENTS));
+      // 新一段接在已有转写之后；已有纪要不动，只标记为没有包含新内容
+      const existing = segments.get(id) ?? [];
+      const offset = timeline.get(id) ?? 0;
+      segments.set(id, [
+        ...existing,
+        ...SAMPLE_SEGMENTS.map((segment) => ({
+          ...segment,
+          startMs: segment.startMs + offset,
+          endMs: segment.endMs + offset,
+        })),
+      ]);
+      timeline.set(id, offset + SAMPLE_DURATION_MS);
+      const hasNote = (notes.get(id)?.length ?? 0) > 0;
       jobs.delete(id);
-      update(id, { status: 'transcribed', hasAudio: meetings.get(id)!.retainAudio });
+      update(id, {
+        status: hasNote ? 'ready' : 'transcribed',
+        hasAudio: meetings.get(id)!.retainAudio,
+        noteStale: hasNote && existing.length > 0 ? true : meetings.get(id)!.noteStale,
+      });
     } else {
       const versions = notes.get(id) ?? [];
       if ((versions.at(-1)?.version ?? 0) !== job.baseVersion) {
@@ -208,18 +315,25 @@ export function createMockApi({
       }
       const note = structuredClone(SAMPLE_NOTE);
       note.keyTopics = [...new Set([...note.keyTopics, ...job.keywords])];
-      versions.push({ version: versions.length + 1, source: 'generated', note, createdAt: now() });
+      versions.push({
+        version: versions.length + 1,
+        source: 'generated',
+        note,
+        createdAt: now(),
+        generatedBy: originOf(),
+      });
       notes.set(id, versions);
       jobs.delete(id);
-      update(id, { status: 'ready' });
+      update(id, { status: 'ready', noteStale: false });
     }
   }
   function startJob(id: string, kind: Exclude<JobKind, 'recording'>): Result<MeetingDetail> {
     return withMeeting(id, (meeting) => {
       if (!canStartJob(meeting, kind, (segments.get(id)?.length ?? 0) > 0))
         return fail('INVALID_STATE');
-      if (kind === 'generating' && !apiKeys.has(settings.noteProvider))
-        return fail('API_KEY_MISSING');
+      if (kind === 'transcribing' && model.state !== 'ready') return fail('MODEL_NOT_READY');
+      const service = providerList().find((item) => item.id === settings.noteProvider);
+      if (kind === 'generating' && service && !service.ready) return fail('API_KEY_MISSING');
       const { job, meeting: snapshot } = begin(id, kind);
       void runJob(id, job);
       return ok(snapshot);
@@ -230,7 +344,18 @@ export function createMockApi({
     const meeting = create('Weekly sync', { status: 'ready', keywords: ['Pricing'] });
     segments.set(meeting.id, structuredClone(SAMPLE_SEGMENTS));
     notes.set(meeting.id, [
-      { version: 1, source: 'generated', note: structuredClone(SAMPLE_NOTE), createdAt: now() },
+      {
+        version: 1,
+        source: 'generated',
+        note: structuredClone(SAMPLE_NOTE),
+        createdAt: now(),
+        generatedBy: {
+          provider: 'deepseek',
+          label: 'DeepSeek',
+          model: 'deepseek-flash',
+          local: false,
+        },
+      },
     ]);
   }
 
@@ -251,9 +376,10 @@ export function createMockApi({
                   (segments.get(meeting.id) ?? []).some((s) => s.text.toLowerCase().includes(q))),
             )
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
-            .map(({ id, title, status, createdAt, updatedAt }) => ({
+            .map(({ id, title, status, createdAt, updatedAt, noteStale }) => ({
               id,
               title,
+              noteStale,
               status,
               createdAt,
               updatedAt,
@@ -317,7 +443,20 @@ export function createMockApi({
           )
             return fail('INVALID_STATE');
           jobs.delete(id);
-          return ok(update(id, { status: 'created', hasAudio: false, lastError: null }));
+          // 只丢弃这一段：已有转写、纪要保持，会议回到录音前的状态
+          const hasTranscript = (segments.get(id)?.length ?? 0) > 0;
+          const status = !hasTranscript
+            ? 'created'
+            : notes.get(id)?.length
+              ? 'ready'
+              : 'transcribed';
+          return ok(
+            update(id, {
+              status,
+              hasAudio: hasTranscript && meeting.retainAudio,
+              lastError: null,
+            }),
+          );
         }),
       fail: async (id, jobId, code) =>
         withMeeting(id, (meeting) => {
@@ -350,6 +489,7 @@ export function createMockApi({
           const version: NoteVersion = {
             version: versions.length + 1,
             source: 'user',
+            generatedBy: null,
             note: structuredClone(note),
             createdAt: now(),
           };
@@ -366,6 +506,53 @@ export function createMockApi({
         withMeeting(id, () =>
           notes.get(id)?.length ? ok({ saved: true }) : fail('INVALID_STATE'),
         ),
+    },
+    models: {
+      getStatus: async () => ok(structuredClone(model)),
+      download: async () => {
+        if (model.state === 'missing' || model.state === 'failed') startModelDownload();
+        return ok(structuredClone(model));
+      },
+      cancelDownload: async () => {
+        if (modelTimer) {
+          clearInterval(modelTimer);
+          modelTimer = undefined;
+          publishModel({ state: 'missing', downloadedBytes: 0 });
+        }
+        return ok(structuredClone(model));
+      },
+    },
+    providers: {
+      list: async () => ok(providerList()),
+      saveCustom: async (input) => {
+        const parsed = parseProviderUrl(input.baseUrl);
+        if (!parsed.ok) return fail('INVALID_INPUT');
+        const label = input.label.trim();
+        const clash = providerList().some(
+          (item) => item.id !== input.id && item.label.toLowerCase() === label.toLowerCase(),
+        );
+        if (clash || (input.id && !customProviders.has(input.id))) return fail('INVALID_INPUT');
+        const id = input.id ?? `custom-mock-${nextProviderId++}`;
+        customProviders.set(id, { id, label, baseUrl: parsed.baseUrl, needsKey: input.needsKey });
+        return ok(providerList().find((item) => item.id === id)!);
+      },
+      removeCustom: async (id) => {
+        if (!customProviders.delete(id)) return fail('INVALID_INPUT');
+        apiKeys.delete(id);
+        if (settings.noteProvider === id) {
+          settings = {
+            ...settings,
+            noteProvider: defaultSettings.noteProvider,
+            noteModel: defaultSettings.noteModel,
+          };
+        }
+        return ok(null);
+      },
+      test: async (id) => {
+        const service = providerList().find((item) => item.id === id);
+        if (!service) return fail('INVALID_INPUT');
+        return service.ready ? ok(null) : fail('API_KEY_MISSING');
+      },
     },
     settings: {
       get: async () => ok(structuredClone(settings)),
@@ -395,6 +582,10 @@ export function createMockApi({
       onJobProgress: (listener) => {
         progressListeners.add(listener);
         return () => progressListeners.delete(listener);
+      },
+      onModelStatus: (listener) => {
+        modelListeners.add(listener);
+        return () => modelListeners.delete(listener);
       },
     },
     loopback: { enable: async () => {}, disable: async () => {} },

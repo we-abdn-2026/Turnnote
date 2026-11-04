@@ -230,7 +230,15 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
                           {item.snippet.after}
                         </span>
                       )}
-                      <span className="visually-hidden">{SHORT_STATUS[item.status]}</span>
+                      {item.status === 'ready' && item.noteStale && (
+                        <span className="reel-stale" title="纪要写成之后又追加了新的录音">
+                          待更新
+                        </span>
+                      )}
+                      <span className="visually-hidden">
+                        {SHORT_STATUS[item.status]}
+                        {item.status === 'ready' && item.noteStale ? '，纪要待更新' : ''}
+                      </span>
                     </button>
                   </li>
                 );

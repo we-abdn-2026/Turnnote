@@ -1027,13 +1027,21 @@ test('available actions follow meeting status; processing states are never start
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).create, false);
   for (const status of ['captured', 'transcribing', 'transcribed', 'generating', 'ready']) {
     const a = actions(meeting(status, { activeJobId: 'j' }));
-    assert.equal(a.start, false, status);
+    // 正在转写或生成时不能开始新的一段；已落定的会议可以继续录音（暂停后继续、追加）
+    assert.equal(a.start, ['captured', 'transcribed', 'ready'].includes(status), status);
     assert.equal(a.stop, false, status);
     assert.equal(a.discard, false, status);
     // 已不在录音中，可以新建会议
     assert.equal(a.create, true, status);
     assert.equal(a.keywords, ['captured', 'transcribed', 'ready'].includes(status), status);
   }
+  // 失败的录音必须先丢弃；转写或生成失败的会议可以继续录音
+  const failed = (kind) =>
+    meeting('failed', { lastError: { kind, jobId: 'j', code: 'INTERNAL', message: '' } });
+  assert.equal(actions(failed('recording')).start, false);
+  assert.equal(actions(failed('recording')).discard, true);
+  assert.equal(actions(failed('transcribing')).start, true);
+  assert.equal(actions(failed('generating')).start, true);
   assert.deepEqual(actions(meeting('created'), 'create'), {
     create: false,
     start: false,

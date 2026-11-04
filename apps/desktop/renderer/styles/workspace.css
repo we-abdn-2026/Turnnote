@@ -593,3 +593,22 @@
     transform: scale(0.92);
   }
 }
+
+/* 继续录音：转写/生成中的说明 */
+.dock-hint {
+  margin: 0;
+  padding: 0 var(--s-3);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+/* 纪要过期提示：追加录音后，说明纪要缺什么并给出重新生成 */
+.note-stale {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+}
+
+.note-stale p {
+  margin: 0;
+}

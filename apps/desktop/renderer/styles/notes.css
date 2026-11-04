@@ -255,3 +255,9 @@
   background: var(--warn-wash);
   color: var(--warn);
 }
+
+.note-model {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+}

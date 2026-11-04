@@ -16,6 +16,7 @@ const api: TurnnoteApi = {
   events: {
     onMeetingUpdated: (listener) => subscribe(eventChannels.meetingUpdated, listener),
     onJobProgress: (listener) => subscribe(eventChannels.jobProgress, listener),
+    onModelStatus: (listener) => subscribe(eventChannels.modelStatus, listener),
   },
   loopback: {
     enable: () => ipcRenderer.invoke(loopbackChannels.enable),

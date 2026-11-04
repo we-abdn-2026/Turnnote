@@ -3,7 +3,7 @@ import { unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CapturePermissions, MeetingDetail } from '@shared/contracts';
 import type { InvokeHandlers } from '@shared/invoke';
-import { canCancelRecording } from '@shared/lifecycle';
+import { canAddRecording, canCancelRecording } from '@shared/lifecycle';
 import { fail, ok, requireCondition } from '@shared/result';
 import type { MeetingStore } from '../storage/database';
 import { createAudioWriter, repairWavHeader, type AudioWriter } from './audio-writer';
@@ -59,7 +59,8 @@ export function createRecordingHandlers(
     recording: {
       getPermissions: async () => ok(permissions()),
       start: async (id) => {
-        requireCondition(store.get(id).status === 'created', 'INVALID_STATE');
+        // 第一段，或暂停后继续、对已有转写追加的下一段；其余状态由 canStartJob 拒绝
+        requireCondition(canAddRecording(store.get(id)), 'INVALID_STATE');
         requireCondition(recordings.size === 0, 'INVALID_STATE');
         const path = join(directory, `${randomUUID()}.wav`);
         const writer = createAudioWriter(path);

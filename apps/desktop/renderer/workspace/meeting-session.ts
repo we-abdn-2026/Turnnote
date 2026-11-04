@@ -136,7 +136,7 @@ export interface MeetingSession {
   create(title: string): Promise<boolean>;
   start(): Promise<boolean>;
   stop(): Promise<boolean>;
-  /** 丢弃录音中或失败的录音，回到 created 以便重新录音 */
+  /** 丢弃录音中或失败的录音这一段；会议回到录音前的状态（第一段则回到 created），已有转写和纪要不受影响 */
   discard(): Promise<boolean>;
   /** 保存会议关键词；成功结果以 Main 返回的会议快照为准。 */
   saveKeywords(keywords: string[]): Promise<boolean>;
@@ -629,10 +629,12 @@ function isStaleMeeting(
   // These are the supported recovery/cancellation transitions without a new active job.
   if (current.status === 'recording' && next.status === 'created') return false;
   if (current.status === 'transcribing' && next.status === 'captured') return false;
+  // 失败的录音被丢弃后，会议回到录音前的状态：第一段回到 created，追加的一段回到 captured /
+  // transcribed / ready（取决于是否有待转写的音频、转写和纪要）
   if (
     current.status === 'failed' &&
     current.lastError?.kind === 'recording' &&
-    next.status === 'created'
+    ['created', 'captured', 'transcribed', 'ready'].includes(next.status)
   )
     return false;
   if (

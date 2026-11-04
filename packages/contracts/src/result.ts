@@ -19,14 +19,22 @@ export const errorMessages: Record<ErrorCode, string> = {
   AUDIO_NOT_FOUND: 'The meeting audio is unavailable.',
   AUDIO_DECODE_FAILED: 'The meeting audio could not be decoded.',
   MODEL_LOAD_FAILED: 'The transcription model could not be loaded.',
+  MODEL_NOT_READY:
+    'The transcription model is not ready yet. Transcription starts automatically once it is downloaded.',
+  MODEL_DOWNLOAD_FAILED:
+    'The transcription model could not be downloaded. Check the network connection and retry.',
+  INSUFFICIENT_DISK_SPACE:
+    'There is not enough free disk space to download the transcription model.',
   TRANSCRIBE_FAILED: 'Transcription failed. The audio has been kept for retry.',
   INTERRUPTED: 'Processing was interrupted. Your saved data has been kept.',
-  API_KEY_MISSING: 'Add a DeepSeek API key in Settings first.',
-  DEEPSEEK_UNAUTHORIZED: 'DeepSeek rejected the API key.',
-  DEEPSEEK_RATE_LIMITED: 'DeepSeek is rate limiting requests. Please retry later.',
-  DEEPSEEK_TIMEOUT: 'The DeepSeek request timed out.',
-  DEEPSEEK_INVALID_RESPONSE: 'DeepSeek returned an invalid meeting note.',
-  DEEPSEEK_UNAVAILABLE: 'DeepSeek is currently unavailable.',
+  API_KEY_MISSING: 'Add an API key for the selected AI service in Settings first.',
+  DEEPSEEK_UNAUTHORIZED: 'The AI service rejected the API key.',
+  DEEPSEEK_RATE_LIMITED: 'The AI service is rate limiting requests. Please retry later.',
+  DEEPSEEK_TIMEOUT: 'The AI service request timed out.',
+  DEEPSEEK_INVALID_RESPONSE: 'The AI service returned an invalid meeting note.',
+  DEEPSEEK_UNAVAILABLE: 'The AI service is currently unavailable.',
+  AI_REQUEST_REJECTED:
+    'The AI service rejected the request. Check the model name and service address in Settings.',
   TRANSCRIPT_TOO_LONG: 'The transcript is too long to summarize. Your transcript has been kept.',
 };
 
