@@ -103,6 +103,27 @@ test('appending to a meeting with notes marks the note stale; the note itself is
   assert.match(sent, /\[5000\] first sentence/, 'the appended part is part of the transcript sent');
 });
 
+test('a part with no recognised speech advances the timeline but does not make the note stale', async (t) => {
+  let call = 0;
+  const env = await createMainSession(t, {
+    // 第二段是静音：整段 3 秒，没有任何片段
+    sidecar: () => (++call === 2 ? succeedingSidecar([], 0, 3000) : part()),
+  });
+  const id = await env.recordTo('transcribed');
+  value(await env.api.notes.generate(id));
+  await until(() => env.status(id) === 'ready', 'note');
+
+  await env.recordPart(id, { until: 'ready' });
+  assert.equal(env.store.get(id).noteStale, false, 'nothing was added to the transcript');
+  assert.deepEqual(env.store.getSegments(id), PART);
+  assert.equal(env.store.getTimelineMs(id), PART_DURATION + 3000);
+
+  // 之后的第三段接在静音之后：偏移包含那 3 秒
+  await env.recordPart(id, { until: 'ready' });
+  assert.deepEqual(env.store.getSegments(id).slice(-2), shifted(PART_DURATION + 3000));
+  assert.equal(env.store.get(id).noteStale, true);
+});
+
 test('editing a stale note does not make it fresh; a meeting without a note is never stale', async (t) => {
   const env = await createMainSession(t, { sidecar: part });
   const id = await env.recordTo('transcribed');

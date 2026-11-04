@@ -16,7 +16,7 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 | created_at | TEXT | NOT NULL |
 | updated_at | TEXT | NOT NULL |
 | timeline_ms | INTEGER | NOT NULL DEFAULT 0，已转写录音的总时长 |
-| transcript_revision | INTEGER | NOT NULL DEFAULT 0，转写每提交一次加 1 |
+| transcript_revision | INTEGER | NOT NULL DEFAULT 0，转写每追加一次文字加 1（没有识别出话语的录音不递增，但 `timeline_ms` 仍会推进） |
 
 `keywords` 存储用户标注的关键词（JSON 数组，如 `["定价讨论","技术债务"]`），用于引导 AI 生成纪要。
 

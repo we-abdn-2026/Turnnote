@@ -536,11 +536,13 @@ export class MeetingStore {
         ? this.getTimelineMs(job.meetingId) +
           parts.reduce((total, part) => total + part.durationMs, 0)
         : Math.max(this.getTimelineMs(job.meetingId), validated.at(-1)?.endMs ?? 0);
+      // 时间线总是推进（后续各段的起点依赖它）；转写修订只在真的追加了文字时才递增——
+      // 一段没有识别出话语的录音（静音）不会让已有纪要缺少任何内容，不应把它标成过期
       this.db
         .prepare(
-          'UPDATE meetings SET timeline_ms = ?, transcript_revision = transcript_revision + 1 WHERE id = ?',
+          'UPDATE meetings SET timeline_ms = ?, transcript_revision = transcript_revision + ? WHERE id = ?',
         )
-        .run(timeline, job.meetingId);
+        .run(timeline, validated.length > 0 ? 1 : 0, job.meetingId);
       this.finishJob(job, 'completed');
       this.setStatus(job.meetingId, this.getLatestNote(job.meetingId) ? 'ready' : 'transcribed');
       return true;
