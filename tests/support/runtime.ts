@@ -128,3 +128,10 @@ export {
 } from '../../apps/desktop/main/services/note-prompt';
 
 export { canAddRecording } from '../../packages/contracts/src/lifecycle';
+export {
+  SYSTEM_AUDIO_NEEDS_PERMISSION,
+  SYSTEM_AUDIO_UNAVAILABLE,
+  systemAudioBlocked,
+  systemAudioWarning,
+} from '../../apps/desktop/renderer/audio/permissions';
+export { permissionSettingsUrl } from '../../apps/desktop/main/platform/permission-settings';

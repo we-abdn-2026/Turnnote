@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Icon } from '../ui/icons';
-import type { AppError, AppSettings, CapturePermissions } from '@shared/contracts';
+import type {
+  AppError,
+  AppSettings,
+  CapturePermissions,
+  PermissionTarget,
+} from '@shared/contracts';
+import { systemAudioBlocked } from '../audio/permissions';
 import {
   LOAD_FAILED_MESSAGE,
   deriveDeviceView,
@@ -23,6 +29,7 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
   const [saving, setSaving] = useState(false);
   const [loadKey, setLoadKey] = useState(0);
   const [scanKey, setScanKey] = useState(0);
+  const [openError, setOpenError] = useState<string | null>(null);
   // 枚举可能乱序完成（#72）：只接受最后一次发起的扫描结果
   const scanRequest = useRef(0);
 
@@ -65,6 +72,15 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
       navigator.mediaDevices?.removeEventListener('devicechange', scan);
     };
   }, [permissions, scanKey]);
+
+  /** 打开系统里对应的权限设置页；这个平台没有时，告诉用户去哪里手动找 */
+  async function openPermissionSettings(target: PermissionTarget): Promise<void> {
+    setOpenError(null);
+    const result = await window.turnnote.recording.openPermissionSettings(target).catch(() => null);
+    if (!result?.ok) {
+      setOpenError('无法自动打开系统设置，请手动前往：系统设置 → 隐私与安全性。');
+    }
+  }
 
   const handleRetry = (): void => {
     setLoadingState('loading');
@@ -129,6 +145,13 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
             <>
               <strong>麦克风权限被拒绝</strong>
               <p>请在系统设置中允许 Turnnote 使用麦克风，然后重启应用。</p>
+              <button
+                type="button"
+                className="key key-quiet"
+                onClick={() => void openPermissionSettings('microphone')}
+              >
+                打开系统设置
+              </button>
             </>
           )}
           {micPermission === 'not-determined' && (
@@ -212,6 +235,28 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
           <span>同时录制系统音频</span>
           <span className="switch-state" aria-hidden="true" />
         </label>
+        {settings.includeSystemAudio && systemAudioBlocked(permissions) && (
+          <div className="permission-notice" role="status">
+            <strong>系统音频需要“屏幕与系统音频录制”权限</strong>
+            <p>
+              目前没有授权，录音时只能录到麦克风。请在系统设置的“屏幕与系统音频录制”里打开 Turnnote
+              的开关，然后重新打开 Turnnote。
+              {import.meta.env.DEV && ' 开发模式下需要允许的是 Electron，或启动它的终端应用。'}
+            </p>
+            <button
+              type="button"
+              className="key key-quiet"
+              onClick={() => void openPermissionSettings('screen')}
+            >
+              打开系统设置
+            </button>
+          </div>
+        )}
+        {openError && (
+          <p className="warning" role="status">
+            {openError}
+          </p>
+        )}
       </div>
     </div>
   );

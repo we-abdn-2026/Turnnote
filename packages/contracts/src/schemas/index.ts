@@ -151,6 +151,7 @@ export const invokeSchemas = {
     stop: jobArgs,
     cancel: jobArgs,
     fail: z.tuple([meetingIdSchema, meetingIdSchema, captureErrorCodeSchema]),
+    openPermissionSettings: z.tuple([z.enum(['microphone', 'screen'])]),
   },
   transcription: { start: idArgs, cancel: jobArgs, getSegments: idArgs },
   notes: {

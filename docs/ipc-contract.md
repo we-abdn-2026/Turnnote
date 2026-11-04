@@ -21,6 +21,7 @@
 | `recording.stop` | 固定返回已提交的 `captured` 快照 | WAV finalize 完成后提交；随后 Main 自动启动转写，用事件报告 `transcribing`，不在响应中混用两种状态 |
 | `recording.cancel` | 文件清理完成后返回录音前的状态 | 允许录音中或失败阶段为 recording；只丢弃这一段（最新的一段），已有转写、纪要和之前各段音频保持。第一段回到 `created`；追加的一段回到 `captured`（还有待转写的音频）、`ready`（有纪要）或 `transcribed`。清理失败保留引用和可恢复数据 |
 | `recording.fail` | `failed`，`lastError.kind=recording` | 仅接受采集四种错误码，由 Main 生成安全信息；保留音频，重录前显式 cancel |
+| `recording.openPermissionSettings` | `null` | 参数只能是 `'microphone'` 或 `'screen'`，地址由 Main 按平台固定（macOS：麦克风、屏幕与系统音频录制；Windows：麦克风）。该平台没有对应设置页返回 `NOT_IMPLEMENTED`。授权后通常需要重新打开应用 |
 | `meetings.importAudio` | 取消为 `null`；成功为 `captured` | Main 打开文件选择并复制到管理目录（随机文件名，原文件只读），随后自动转写；Renderer 不提交路径。仅接受 `.wav`/`.mp3`/`.m4a`（大小写不敏感，与 sidecar 一致），空文件和不支持的格式返回 `AUDIO_DECODE_FAILED`，文件缺失/非普通文件 `AUDIO_NOT_FOUND`，超过 2 GiB `INVALID_INPUT`，复制失败 `WRITE_FAILED`；任何失败都回收副本、不创建会议。无法解码的文件在转写阶段以 `AUDIO_DECODE_FAILED` 失败并保留副本供重试 |
 | `transcription.start` | `transcribing` | 只允许 captured 或 failed/transcribing，且有待转写的音频；Main 启动前检查实际文件。一次任务按录音先后依次转写**所有待转写的段**，每段的时间加上它在整场会议里的起点（前面各段音频的总时长），全部成功后一次提交并追加在已有转写之后；任何一段失败都不留下部分结果。完成后有纪要的会议回到 `ready`（`noteStale` 为 true），否则为 `transcribed` |
 | `transcription.cancel` | `captured` | 杀死进程、结束当前 job，不保存部分片段；音频保留 |

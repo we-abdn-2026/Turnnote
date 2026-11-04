@@ -168,6 +168,9 @@ export interface CustomProviderInput {
 
 export type PermissionState = 'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown';
 
+/** 有对应系统设置页的权限 */
+export type PermissionTarget = 'microphone' | 'screen';
+
 export interface CapturePermissions {
   microphone: PermissionState;
   /** macOS 屏幕录制权限，Windows 恒为 granted */
@@ -229,6 +232,11 @@ export interface TurnnoteInvokeApi {
     cancel(meetingId: string, jobId: string): Promise<Result<MeetingDetail>>;
     /** Renderer 采集失败；Main 映射安全错误信息并保留可恢复音频 */
     fail(meetingId: string, jobId: string, code: CaptureErrorCode): Promise<Result<MeetingDetail>>;
+    /**
+     * 打开操作系统里对应权限的设置页（macOS 的麦克风、屏幕与系统音频录制；Windows 的麦克风）。
+     * 该平台没有对应设置页时返回 NOT_IMPLEMENTED。授权后通常需要重新打开应用才生效。
+     */
+    openPermissionSettings(target: PermissionTarget): Promise<Result<null>>;
   };
   // 转写和生成是后台任务：调用立即返回，进度走 onJobProgress，完成走 onMeetingUpdated
   transcription: {
@@ -324,6 +332,7 @@ export const invokeChannels = {
     stop: 'recording:stop',
     cancel: 'recording:cancel',
     fail: 'recording:fail',
+    openPermissionSettings: 'recording:open-permission-settings',
   },
   transcription: {
     start: 'transcription:start',

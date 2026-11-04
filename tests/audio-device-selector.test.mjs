@@ -389,3 +389,74 @@ test('controls are disabled while a save is pending and re-enabled once Main con
   assert.equal(view.checkbox().disabled, false);
   assert.equal(view.select().value, 'mic-a');
 });
+
+const SCREEN_NOTICE = /屏幕与系统音频录制/;
+
+test('screen recording denied: a notice explains system audio, and its button opens the settings page', async (t) => {
+  const { api } = apiWith({ permissions: { microphone: 'granted', screen: 'denied' } });
+  const opened = [];
+  api.recording.openPermissionSettings = async (target) => {
+    opened.push(target);
+    return { ok: true, value: null };
+  };
+  const view = await mount(t, api, fakeMediaDevices([mic('mic-a', 'USB Mic')]));
+
+  assert.match(view.text(), SCREEN_NOTICE);
+  assert.match(view.text(), /重新打开 Turnnote/);
+  const notice = view.$('.device-option .permission-notice');
+  assert.ok(notice, 'the notice sits with the system-audio switch');
+  assert.equal(notice.getAttribute('role'), 'status');
+  await click([...notice.querySelectorAll('button')].find((b) => b.textContent === '打开系统设置'));
+  assert.deepEqual(opened, ['screen']);
+  assert.equal(view.has('.warning'), false, 'no failure message when it opened');
+});
+
+test('screen permission notice follows the switch and the real state: hidden when granted, unknown or switched off', async (t) => {
+  for (const screen of ['granted', 'unknown']) {
+    const { api } = apiWith({ permissions: { microphone: 'granted', screen } });
+    const view = await mount(t, api, fakeMediaDevices([mic('mic-a', 'USB Mic')]));
+    assert.doesNotMatch(view.text(), SCREEN_NOTICE, screen);
+    await view.unmount();
+  }
+  // 系统音频本来就关着：不需要这项权限，不提示
+  const { api, base } = apiWith({ permissions: { microphone: 'granted', screen: 'denied' } });
+  const view = await mount(t, api, fakeMediaDevices([mic('mic-a', 'USB Mic')]));
+  assert.match(view.text(), SCREEN_NOTICE);
+  await act(async () => {
+    view.checkbox().click();
+  });
+  await settle();
+  assert.equal((await base.settings.get()).value.includeSystemAudio, false);
+  assert.doesNotMatch(view.text(), SCREEN_NOTICE);
+});
+
+test('opening the settings page fails safely and tells the user where to look', async (t) => {
+  const { api } = apiWith({ permissions: { microphone: 'granted', screen: 'denied' } });
+  // 浏览器 mock 和不支持的平台都会返回 NOT_IMPLEMENTED；Promise 拒绝也不能让界面崩
+  for (const behavior of [
+    async () => ({ ok: false, error: { code: 'NOT_IMPLEMENTED', message: 'x' } }),
+    async () => {
+      throw new Error('/private/path');
+    },
+  ]) {
+    api.recording.openPermissionSettings = behavior;
+    const view = await mount(t, api, fakeMediaDevices([mic('mic-a', 'USB Mic')]));
+    await click(view.$('.device-option .permission-notice button'));
+    assert.match(view.$('.warning').textContent, /手动前往：系统设置/);
+    assert.equal(view.text().includes('/private/path'), false);
+    await view.unmount();
+  }
+});
+
+test('microphone denied also offers to open its settings page', async (t) => {
+  const { api } = apiWith({ permissions: { microphone: 'denied', screen: 'granted' } });
+  const opened = [];
+  api.recording.openPermissionSettings = async (target) => {
+    opened.push(target);
+    return { ok: true, value: null };
+  };
+  const view = await mount(t, api, fakeMediaDevices([]));
+  assert.match(view.text(), /麦克风权限被拒绝/);
+  await click(view.$('.permission-notice button'));
+  assert.deepEqual(opened, ['microphone']);
+});

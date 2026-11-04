@@ -32,6 +32,26 @@ test('system permission denial disables loopback, warns, and explicitly falls ba
   assert.ok(env.tracks.every((track) => track.stopped));
 });
 
+test('a permission lookup that fails in any way never breaks the fallback to the microphone', async (t) => {
+  for (const lookup of [
+    undefined, // 接口缺失：同步抛出 TypeError
+    async () => {
+      throw new Error('/private/path');
+    },
+    async () => ({ ok: false, error: { code: 'INTERNAL', message: 'x' } }),
+  ]) {
+    const env = environment(t, { systemDenied: true });
+    env.api.recording.getPermissions = lookup;
+    const warnings = [];
+    const session = await startCapture(
+      { ...options, onWarning: (warning) => warnings.push(warning) },
+      env.api,
+    );
+    assert.deepEqual(warnings, ['系统音频不可用，本次只录制麦克风。']);
+    await session.cancel();
+  }
+});
+
 test('microphone permission denial releases previously acquired system stream and reports failure', async (t) => {
   const env = environment(t, { micDenied: true });
   await assert.rejects(startCapture(options, env.api), { code: 'PERMISSION_DENIED' });

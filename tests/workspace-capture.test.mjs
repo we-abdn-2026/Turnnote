@@ -22,7 +22,7 @@ import {
   isRecording,
 } from '../out/tests/runtime.mjs';
 
-function backend(t, mediaOptions = {}) {
+function backend(t, mediaOptions = {}, permissions = {}) {
   const env = captureEnvironment(t, mediaOptions);
   const directory = mkdtempSync(join(tmpdir(), 'turnnote-workspace-capture-'));
   const store = new MeetingStore(join(directory, 'db.sqlite'), directory);
@@ -33,6 +33,7 @@ function backend(t, mediaOptions = {}) {
   const recording = createRecordingHandlers(store, directory, emit, () => ({
     microphone: 'granted',
     screen: 'granted',
+    ...permissions,
   }));
   const dispatcher = createDispatcher({
     ...createStorageHandlers(store, directory, emit),
@@ -62,8 +63,8 @@ function backend(t, mediaOptions = {}) {
   return { env, api, store, listeners, recording, databasePath: join(directory, 'db.sqlite') };
 }
 
-async function connected(t, options) {
-  const fixture = backend(t, options);
+async function connected(t, options, permissions) {
+  const fixture = backend(t, options, permissions);
   const session = createMeetingSession(fixture.api, createCaptureRecording(fixture.api));
   const disconnect = session.connect();
   t.after(disconnect);
@@ -204,6 +205,32 @@ test('default microphone setting is captured; system denial remains a visible wa
   assert.equal(await session.start(), true);
   assert.equal(env.mediaCalls[1][1].audio.deviceId.exact, 'default');
   assert.match(session.getState().warning, /只录制麦克风/);
+  assert.equal(await session.stop(), true);
+});
+
+test('when macOS denies screen recording the warning says so, still records the microphone, and tells how to fix it', async (t) => {
+  const { api, env, session } = await connected(t, { systemDenied: true }, { screen: 'denied' });
+  await api.settings.update({ microphoneDeviceId: null, includeSystemAudio: true });
+  assert.equal(await session.start(), true);
+  const { warning } = session.getState();
+  assert.match(warning, /屏幕与系统音频录制/);
+  assert.match(warning, /只录制麦克风/);
+  assert.match(warning, /重新打开/);
+  // 麦克风照常录：失败的只是系统音频
+  assert.deepEqual(
+    env.mediaCalls.map((call) => call[0]),
+    ['system', 'microphone'],
+  );
+  assert.equal(await session.stop(), true);
+});
+
+test('a system-audio failure that is not about permission keeps the generic warning', async (t) => {
+  const { api, session } = await connected(t, { systemDenied: true }, { screen: 'granted' });
+  await api.settings.update({ microphoneDeviceId: null, includeSystemAudio: true });
+  assert.equal(await session.start(), true);
+  const { warning } = session.getState();
+  assert.match(warning, /系统音频不可用/);
+  assert.doesNotMatch(warning, /屏幕与系统音频录制/);
   assert.equal(await session.stop(), true);
 });
 

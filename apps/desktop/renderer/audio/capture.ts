@@ -1,5 +1,6 @@
-import type { CaptureErrorCode, TurnnoteApi } from '@shared/contracts';
+import type { CaptureErrorCode, CapturePermissions, TurnnoteApi } from '@shared/contracts';
 import { TurnnoteError } from '@shared/result';
+import { systemAudioWarning } from './permissions';
 import workletUrl from './pcm-worklet.ts?worker&url';
 
 export interface CaptureOptions {
@@ -28,6 +29,16 @@ function captureCode(error: unknown): CaptureErrorCode {
       return 'DEVICE_NOT_FOUND';
   }
   return 'CAPTURE_FAILED';
+}
+
+/** 只用来把提示说得更准确：查询本身失败（含同步抛出）时当作未知，绝不能让降级流程失败 */
+async function queryPermissions(api: TurnnoteApi): Promise<CapturePermissions | null> {
+  try {
+    const result = await api.recording.getPermissions();
+    return result.ok ? result.value : null;
+  } catch {
+    return null;
+  }
 }
 
 let capturing = false;
@@ -148,7 +159,9 @@ export async function startCapture(
             endedListeners.delete(track);
           }
         }
-        options.onWarning?.('系统音频不可用，本次只录制麦克风。');
+        // 失败本身没有原因可看（浏览器只给 AbortError/NotAllowedError）；
+        // 回头查一次系统权限，能确定是权限问题就明说，并指出怎么办
+        options.onWarning?.(systemAudioWarning(await queryPermissions(api)));
       }
     }
     if (options.microphoneDeviceId !== null) {

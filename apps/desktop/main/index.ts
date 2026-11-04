@@ -4,6 +4,7 @@ import {
   dialog,
   nativeTheme,
   safeStorage,
+  shell,
   systemPreferences,
   type OpenDialogOptions,
   type SaveDialogOptions,
@@ -20,6 +21,7 @@ import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 import { SafeLogger, safeLogPath } from './safe-logger';
 import { CredentialStore } from './platform/credentials';
+import { permissionSettingsUrl } from './platform/permission-settings';
 import { createModelManager } from './services/model-manager';
 
 // The package probe does not initialize capture IPC or acquire media permissions.
@@ -159,6 +161,12 @@ void app
           });
           return result.canceled || !result.filePath ? null : result.filePath;
         },
+      },
+      openPermissionSettings: async (target) => {
+        const url = permissionSettingsUrl(process.platform, target);
+        if (!url) return false;
+        await shell.openExternal(url);
+        return true;
       },
       importAudio: {
         chooseFile: async () => {
