@@ -91,3 +91,16 @@
     width: 100%;
   }
 }
+
+/* 系统音频权限提示：和麦克风提示同一个外观，放在开关下面，按钮另起一行 */
+.device-option .permission-notice {
+  margin-top: var(--s-3);
+}
+
+.permission-notice p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}

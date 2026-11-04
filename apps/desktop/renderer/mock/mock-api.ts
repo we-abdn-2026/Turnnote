@@ -7,6 +7,7 @@ import type {
   JobProgress,
   MeetingDetail,
   AiProviderInfo,
+  CapturePermissions,
   CustomProviderInput,
   MeetingNote,
   ModelStatus,
@@ -82,6 +83,8 @@ interface MockOptions {
   generationError?: ErrorCode;
   /** 转写模型初始状态；缺省为已就绪，使既有界面测试不受影响 */
   model?: 'ready' | 'missing';
+  /** 采集权限；缺省全部已授权 */
+  permissions?: Partial<CapturePermissions>;
 }
 
 export function createMockApi({
@@ -90,6 +93,7 @@ export function createMockApi({
   transcriptionError,
   generationError,
   model: initialModel = 'ready',
+  permissions: permissionOverrides,
 }: MockOptions = {}): TurnnoteApi {
   const meetings = new Map<string, MeetingDetail>();
   const segments = new Map<string, TranscriptSegment[]>();
@@ -412,7 +416,10 @@ export function createMockApi({
       },
     },
     recording: {
-      getPermissions: async () => ok({ microphone: 'granted', screen: 'granted' }),
+      getPermissions: async () =>
+        ok({ microphone: 'granted', screen: 'granted', ...permissionOverrides }),
+      // 浏览器里没有系统设置页
+      openPermissionSettings: async () => fail('NOT_IMPLEMENTED'),
       start: async (id) =>
         withMeeting(id, (meeting) => {
           if (!canStartJob(meeting, 'recording', false)) return fail('INVALID_STATE');

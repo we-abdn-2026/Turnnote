@@ -1,4 +1,4 @@
-import type { CapturePermissions } from '@shared/contracts';
+import type { CapturePermissions, PermissionTarget } from '@shared/contracts';
 import type { InvokeHandlers } from '@shared/invoke';
 import { ok, requireCondition } from '@shared/result';
 import type { MeetingStore } from '../storage/database';
@@ -25,6 +25,8 @@ export function createSessionServices(
       exports?: ExportOptions;
       /** 未提供时 meetings.importAudio 返回 NOT_IMPLEMENTED（例如无窗口的测试环境） */
       importAudio?: Pick<ImportOptions, 'chooseFile'>;
+      /** 打开系统的权限设置页；返回是否真的打开了。未提供时 recording.openPermissionSettings 返回 NOT_IMPLEMENTED */
+      openPermissionSettings?: (target: PermissionTarget) => Promise<boolean>;
       /** 转写模型管理；未提供时不设闸门，models.* 返回 NOT_IMPLEMENTED（例如 fake sidecar 的测试环境） */
       models?: ModelManager;
     },
@@ -77,6 +79,14 @@ export function createSessionServices(
   const handlers: InvokeHandlers = {
     ...storage,
     ...recording.handlers,
+    recording: {
+      ...recording.handlers.recording,
+      openPermissionSettings: async (target) => {
+        requireCondition(options.openPermissionSettings, 'NOT_IMPLEMENTED');
+        requireCondition(await options.openPermissionSettings(target), 'NOT_IMPLEMENTED');
+        return ok(null);
+      },
+    },
     transcription: transcription.handlers,
     notes: { ...storage.notes, ...generation.handlers },
     providers: createProviderHandlers(catalog, options.credentials, { provider: options.provider }),

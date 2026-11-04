@@ -119,6 +119,7 @@ function realFakeWorker(root) {
  *   providerTimeoutMs?: number,
  *   permissions?: () => { microphone: string, screen: string },
  *   models?: object | ((ctx: { root: string, store: object }) => object),
+ *   openPermissionSettings?: (target: string) => Promise<boolean>,
  *   root?: string,
  *   recover?: boolean,
  *   shared?: object,
@@ -202,6 +203,7 @@ export async function createMainSession(t, opts = {}) {
         return fetch(url, { ...init, headers });
       },
     },
+    openPermissionSettings: opts.openPermissionSettings,
     importAudio: { chooseFile: (...args) => chooseFile(...args) },
     exports: { chooseSavePath: (...args) => chooseSavePath(...args), timeZone: 'UTC' },
   });
