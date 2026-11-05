@@ -380,26 +380,30 @@ test('Cmd/Ctrl+Enter confirms the send dialog but never a destructive one', asyn
 test('sidebar width: keyboard resize, persisted, double-click resets', async () => {
   const page = await browser.open();
   const width = `Math.round(document.querySelector('.library').getBoundingClientRect().width)`;
-  assert.equal(await page.eval(width), 264);
+  assert.equal(await page.eval(width), 240);
   await page.eval(`document.querySelector('.sidebar-resizer').focus()`);
   for (let i = 0; i < 3; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 312`);
-  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '312');
+  await page.waitFor(`${width} === 288`);
+  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '288');
   assert.equal(
     await page.eval(`document.querySelector('.sidebar-resizer').getAttribute('aria-valuenow')`),
-    '312',
+    '288',
   );
   for (let i = 0; i < 20; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 420`);
+  await page.waitFor(`${width} === 320`);
   await page.eval(
     `document.querySelector('.sidebar-resizer').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
   );
-  await page.waitFor(`${width} === 264`);
+  await page.waitFor(`${width} === 240`);
   assert.deepEqual(page.errors, []);
 });
 
 test('dark colour scheme swaps the paper tokens without changing the DOM', async () => {
   const page = await browser.open();
+  // 系统主题可能是深色；先固定浅色，才能验证切换而不是假设宿主环境
+  await page.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-color-scheme', value: 'light' }],
+  });
   const paper = `getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()`;
   const light = await page.eval(paper);
   await page.send('Emulation.setEmulatedMedia', {

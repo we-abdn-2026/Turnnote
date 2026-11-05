@@ -1,14 +1,16 @@
 .field {
   width: 100%;
-  min-height: 34px;
-  padding: 6px var(--s-3);
+  min-height: 30px;
+  padding: 4px var(--s-2);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-s);
   background: var(--sheet);
   color: var(--ink);
   font-size: var(--t-ui);
   line-height: 1.4;
-  transition: border-color var(--t-fast) var(--ease-out);
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
 }
 
 .field::placeholder {
@@ -22,7 +24,7 @@
 .field:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-wash);
+  box-shadow: 0 0 0 2px var(--accent-wash);
 }
 
 .field:disabled {
@@ -34,7 +36,7 @@
 .field-bare,
 .field-bare:hover:not(:disabled),
 .field-bare:focus-visible {
-  min-height: 30px;
+  min-height: 26px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -42,37 +44,37 @@
 }
 
 .field-area {
-  min-height: 112px;
+  min-height: 96px;
   resize: vertical;
   field-sizing: content;
-  font-family: var(--font-serif);
-  font-size: var(--t-read);
-  line-height: 1.75;
+  font-family: var(--font-ui);
+  font-size: var(--t-ui);
+  line-height: 1.65;
 }
 
 .field-title {
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: var(--t-title);
-  font-weight: 500;
-  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .field-select {
   appearance: none;
-  padding-right: 32px;
+  padding-right: 28px;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
     linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
   background-position:
-    calc(100% - 17px) 50%,
-    calc(100% - 12px) 50%;
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
   background-size: 5px 5px;
   background-repeat: no-repeat;
   cursor: pointer;
 }
 
-/* 可定制 select：仍是原生 <select>（键盘、读屏、表单语义不变），只有收起态和弹层换成纸面样式。
-   不支持的环境保持上面的基础样式。 */
+/* 可定制 select：仍是原生 <select>，键盘、读屏和表单语义不变 */
 @supports (appearance: base-select) {
   .field-select,
   .field-select::picker(select) {
@@ -81,7 +83,7 @@
 
   .field-select {
     background-image: none;
-    padding-right: var(--s-3);
+    padding-right: var(--s-2);
   }
 
   .field-select::picker-icon {
@@ -123,8 +125,8 @@
     display: flex;
     align-items: center;
     gap: var(--s-2);
-    min-height: 32px;
-    padding: 0 var(--s-3);
+    min-height: 30px;
+    padding: 0 var(--s-2);
     border-radius: var(--r-s);
     background: transparent;
     color: var(--ink);
@@ -159,9 +161,9 @@ input[type='search']::-webkit-search-cancel-button {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: 34px;
+  min-height: 30px;
   color: var(--ink-2);
-  font-size: var(--t-ui);
+  font-size: var(--t-small);
   cursor: pointer;
   user-select: none;
 }
@@ -176,8 +178,8 @@ input[type='search']::-webkit-search-cancel-button {
 .switch-track {
   position: relative;
   flex: none;
-  width: 32px;
-  height: 18px;
+  width: 28px;
+  height: 16px;
   border-radius: var(--r-pill);
   background: var(--rule-strong);
   transition: background-color var(--t-base) var(--ease-out);
@@ -188,8 +190,8 @@ input[type='search']::-webkit-search-cancel-button {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--sheet);
   transition: transform var(--t-base) var(--ease-out);
@@ -200,7 +202,7 @@ input[type='search']::-webkit-search-cancel-button {
 }
 
 .switch input:checked + .switch-track::after {
-  transform: translateX(14px);
+  transform: translateX(12px);
 }
 
 .switch input:focus-visible + .switch-track {
@@ -232,23 +234,24 @@ input[type='search']::-webkit-search-cancel-button {
   cursor: not-allowed;
 }
 
-/* 关注词：纸面标签 */
+/* 关注词：无衬线小标签 */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  min-height: 28px;
-  padding: 0 2px 0 var(--s-3);
+  min-height: 24px;
+  padding: 0 2px 0 var(--s-2);
   border-radius: var(--r-s);
   background: var(--selected);
+  color: var(--ink-2);
   font-size: var(--t-small);
 }
 
 .chip-remove {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: 0;
   border-radius: 50%;
   background: transparent;

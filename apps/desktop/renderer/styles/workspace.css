@@ -1,36 +1,46 @@
-/* 工作区：文档画布 + 转写抽屉 */
+/* 工作区：文档画布 + 转写抽屉。平放，不用纸面卡片和纸纹 */
 .workspace {
   grid-area: workspace;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 0;
-  transition: grid-template-columns var(--t-slow) var(--ease-out);
   min-height: 0;
   overflow: hidden;
-  position: relative;
-  background: var(--sheet);
-  border-top-left-radius: var(--r-m);
-  box-shadow: var(--shadow-page);
-}
-
-/* 纸纹：极淡的噪点盖在整页上，不挡交互、不参与文字对比度（透明度只有几个百分点） */
-.workspace::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-image: var(--paper-grain);
-  opacity: var(--grain-opacity);
-  mix-blend-mode: multiply;
-  pointer-events: none;
-}
-
-.workspace > * {
-  position: relative;
-  z-index: 1;
+  background: var(--paper);
+  transition: grid-template-columns var(--t-slow) var(--ease-out);
 }
 
 .workspace[data-drawer='open'] {
   grid-template-columns: minmax(0, 1fr) var(--drawer-w);
+}
+
+/* 录音条悬浮在内容之上，底部留一层纸色渐隐，避免正文从按钮缝里穿过去 */
+.workspace::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 76px;
+  background: linear-gradient(
+    to top,
+    var(--paper) 0%,
+    color-mix(in oklch, var(--paper) 64%, transparent) 58%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base) var(--ease-out);
+}
+
+.workspace[data-drawer='open']::after {
+  right: var(--drawer-w);
+}
+
+.workspace:has(.dock[data-visible='true'])::after,
+.workspace:has(.dock-saving)::after {
+  opacity: 1;
 }
 
 .canvas {
@@ -39,6 +49,7 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .canvas > * {
@@ -54,39 +65,18 @@
 
 .bulletin {
   margin: 0;
-  padding: var(--s-3) var(--s-8);
+  padding: var(--s-2) var(--s-6);
+  border-bottom: 1px solid var(--rule);
   background: var(--accent-wash);
-  font-size: var(--t-ui);
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: 1.5;
 }
 
 .bulletin-warn {
+  border-bottom-color: var(--warn);
   background: var(--warn-wash);
   color: var(--warn);
-}
-
-.toast {
-  position: fixed;
-  z-index: 30;
-  bottom: var(--s-16);
-  left: 50%;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-4);
-  border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--paper);
-  font-size: var(--t-ui);
-  box-shadow: var(--shadow-float);
-  transform: translateX(-50%);
-  animation: toast-in var(--t-base) var(--ease-out);
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 8px);
-  }
 }
 
 .bulletin strong {
@@ -97,39 +87,65 @@
   display: inline;
 }
 
-/* 文档：一列正文，限制行宽 */
+.toast {
+  position: fixed;
+  z-index: 30;
+  bottom: 72px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border-radius: var(--r-s);
+  background: var(--solid);
+  color: var(--on-solid);
+  font-size: var(--t-small);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  animation: toast-in var(--t-base) var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+}
+
+/* 文档：一列正文，限制行宽；左边距和阅读节奏是唯一的结构 */
 .doc {
   width: 100%;
-  max-width: calc(var(--measure) + var(--s-16) * 2);
+  max-width: calc(var(--measure) + var(--s-12) * 2);
   margin: 0 auto;
-  padding: var(--s-12) var(--s-16) var(--s-8);
+  padding: var(--s-10) var(--s-12) 80px;
 }
 
 .doc-head {
   display: grid;
-  gap: var(--s-3);
-  margin-bottom: var(--s-8);
+  gap: var(--s-2);
+  margin-bottom: var(--s-6);
 }
 
 .doc-title {
   display: flex;
   align-items: flex-start;
-  gap: var(--s-2);
+  gap: var(--s-1);
 }
 
 .doc h2 {
   min-width: 0;
-  font-family: var(--font-serif);
+  color: var(--ink);
+  font-family: var(--font-ui);
   font-size: var(--t-title);
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
 
 .doc-title .key {
-  margin-top: 2px;
+  margin-top: 1px;
   opacity: 0;
   transition: opacity var(--t-fast) var(--ease-out);
 }
@@ -154,13 +170,10 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s-2) var(--s-3);
-  color: var(--ink-2);
-  font-size: var(--t-ui);
-}
-
-.meeting-status {
-  color: var(--ink-2);
+  gap: var(--s-1) var(--s-3);
+  min-height: 20px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
 }
 
 .doc-meta {
@@ -168,23 +181,19 @@
   gap: var(--s-3);
   color: var(--ink-3);
   font-size: var(--t-small);
-}
-
-.doc-meta {
   order: 1;
 }
 
 .doc-line .dot {
   order: 2;
+  width: 6px;
+  height: 6px;
 }
 
 .meeting-status {
   order: 3;
-}
-
-.doc-meta time,
-.reel-time {
-  font-family: var(--font-ui);
+  color: var(--ink-2);
+  font-size: var(--t-small);
 }
 
 .doc-gone {
@@ -194,18 +203,48 @@
   color: var(--ink-2);
 }
 
+/* 录音中的主视图：大号时间码，给空白画布一个明确的焦点 */
+.recording-stage {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--s-2);
+  min-height: 42vh;
+  padding: var(--s-8) 0;
+  text-align: center;
+}
+
+.recording-stage-time {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-timer);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.recording-stage-copy {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.workspace:has(.recording-stage) .dock-time {
+  display: none;
+}
+
 /* 生成：关注词 + 一个按钮，成一行 */
 .generate {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-3) var(--s-4);
-  margin-bottom: var(--s-8);
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-6);
 }
 
 /* 已有纪要时，生成区降级为纪要条下方的一行 */
 .generate-quiet {
-  margin: var(--s-3) 0 var(--s-6);
+  margin: var(--s-2) 0 var(--s-5);
 }
 
 .generate > .keywords {
@@ -226,15 +265,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-1);
 }
 
 .keyword-add form {
   display: flex;
   align-items: center;
   gap: var(--s-1);
-  min-height: 28px;
-  padding: 0 var(--s-3);
+  min-height: 26px;
+  padding: 0 var(--s-2);
   border: 1px dashed var(--rule-strong);
   border-radius: var(--r-s);
   color: var(--ink-3);
@@ -256,7 +295,9 @@
 
 .keyword-add .field {
   width: 7em;
-  min-height: 26px;
+  min-height: 24px;
+  padding: 2px 0;
+  font-size: var(--t-small);
 }
 
 .keyword-add .field::placeholder {
@@ -264,13 +305,13 @@
 }
 
 .keyword-save {
-  min-height: 28px;
-  padding: 0 var(--s-3);
+  min-height: 26px;
+  padding: 0 var(--s-2);
   font-size: var(--t-small);
 }
 
 .keyword-message {
-  margin-top: var(--s-2);
+  margin-top: var(--s-1);
   color: var(--ink-3);
   font-size: var(--t-small);
 }
@@ -286,13 +327,15 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-1) var(--s-3);
-  margin-bottom: var(--s-4);
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--rule);
 }
 
 .note-meta {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2);
   white-space: nowrap;
   color: var(--ink-3);
   font-size: var(--t-small);
@@ -305,7 +348,23 @@
 
 .note-actions {
   display: flex;
-  gap: var(--s-1);
+  gap: 2px;
+}
+
+.note-actions .key {
+  min-height: 26px;
+  padding: 0 var(--s-2);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.note-actions .key:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .note-blank {
@@ -317,11 +376,17 @@
 
 .note-message {
   color: var(--ink-2);
+  font-size: var(--t-ui);
 }
 
 .skeleton {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
+  padding: var(--s-2) 0 var(--s-4);
+}
+
+.skeleton > span {
+  height: 12px;
 }
 
 .skeleton > span:nth-child(odd) {
@@ -333,19 +398,24 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3);
-  padding: var(--s-3) var(--s-4);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule);
   border-radius: var(--r-s);
-  background: var(--sidebar);
-  font-size: var(--t-ui);
+  background: var(--sheet);
+  font-size: var(--t-small);
 }
 
 .callout-warn {
+  border-color: var(--warn);
   background: var(--warn-wash);
   color: var(--warn);
 }
 
 .note-review-notice {
-  margin-top: var(--s-8);
+  max-width: var(--measure);
+  margin-top: var(--s-6);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
   color: var(--ink-3);
   font-size: var(--t-small);
   line-height: 1.6;
@@ -355,35 +425,65 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: var(--s-10);
+  margin-top: var(--s-8);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--rule);
 }
 
 .empty-stage {
   display: grid;
-  place-items: center;
   align-content: center;
-  gap: var(--s-5);
-  min-height: 60vh;
-  padding: var(--s-12);
-}
-
-.empty-stage .key {
-  width: auto;
-  min-width: 132px;
+  justify-items: start;
+  gap: var(--s-2);
+  width: min(440px, 100% - var(--s-12));
+  min-height: calc(100vh - var(--topbar));
+  margin: 0 auto;
+  padding: var(--s-12) 0;
 }
 
 .empty-stage-title {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--t-large);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.empty-stage-copy {
+  max-width: 34ch;
+  margin-bottom: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-ui);
+  line-height: 1.6;
+}
+
+.empty-stage-action {
+  margin-bottom: var(--s-2);
+}
+
+.empty-stage-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
   color: var(--ink-3);
-  font-family: var(--font-serif);
-  font-size: var(--t-lede);
-  font-weight: 400;
+  font-size: var(--t-small);
+}
+
+.empty-stage-keys kbd {
+  margin-right: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-s);
+  background: var(--sheet);
+  color: var(--ink-2);
 }
 
 /* 处理进度：一根细线 */
 .processing-progress {
   display: grid;
-  gap: var(--s-2);
-  margin-bottom: var(--s-6);
+  gap: var(--s-1);
+  margin-bottom: var(--s-4);
 }
 
 .processing-progress-heading {
@@ -401,7 +501,7 @@
 
 .processing-progress progress {
   flex: 1;
-  height: 3px;
+  height: 2px;
   border: 0;
   border-radius: var(--r-pill);
   background: var(--selected);
@@ -440,16 +540,17 @@
 /* 录音条：画布底部居中的浮条 */
 .dock {
   position: sticky;
-  bottom: var(--s-6);
+  bottom: var(--s-4);
   z-index: 4;
   display: none;
   align-items: center;
   justify-content: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   width: max-content;
   max-width: calc(100% - var(--s-8));
-  margin: auto auto var(--s-6);
-  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-5);
+  margin: auto auto var(--s-4);
+  padding: 4px 4px 4px var(--s-3);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-pill);
   background: var(--sheet);
   box-shadow: var(--shadow-float);
@@ -461,35 +562,47 @@
 }
 
 .dock:not(:has(.recording-indicator, .dock-saving)) {
-  padding-left: var(--s-2);
+  padding-left: 4px;
 }
 
 .dock .recording-indicator {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
 }
 
 .dock-time {
-  font-size: var(--t-lede);
   color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .dock-saving {
   color: var(--ink-2);
-  font-size: var(--t-ui);
+  font-size: var(--t-small);
+}
+
+.dock-hint {
+  margin: 0;
+  padding: 0 var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
 }
 
 .transport {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2);
+  gap: var(--s-1);
 }
 
 .transport .key {
-  min-height: 40px;
+  min-height: 30px;
+  height: 30px;
   border-radius: var(--r-pill);
-  padding: 0 var(--s-5);
+  padding: 0 var(--s-3);
+  font-size: var(--t-small);
 }
 
 .transport:empty {
@@ -501,13 +614,25 @@
   display: flex;
   min-width: 0;
   min-height: 0;
-  background: var(--paper);
   overflow: hidden;
+  background: var(--sidebar);
 }
 
 .drawer .log {
   width: var(--drawer-w);
   border-left: 1px solid var(--rule);
+}
+
+/* 纪要过期提示：追加录音后，说明纪要缺什么并给出重新生成 */
+.note-stale {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+  margin-bottom: var(--s-5);
+}
+
+.note-stale p {
+  margin: 0;
 }
 
 @media (max-width: 899px) {
@@ -530,85 +655,14 @@
   }
 
   .doc {
-    padding: var(--s-6) var(--s-5) var(--s-6);
+    padding: var(--s-6) var(--s-5) var(--s-10);
   }
 
   .doc h2 {
-    font-size: 26px;
+    font-size: var(--t-title-sm);
   }
 
   .bulletin {
-    padding-inline: var(--s-5);
+    padding-inline: var(--s-4);
   }
-}
-
-/* 切换会议：文档轻轻淡入；纪要章节依次淡入，总时长不超过 400ms */
-.doc {
-  animation: fade-in var(--t-base) var(--ease-out);
-}
-
-.note-content > section {
-  animation: rise var(--t-slow) var(--ease-out) both;
-}
-
-.note-content > section:nth-child(2) {
-  animation-delay: 50ms;
-}
-
-.note-content > section:nth-child(3) {
-  animation-delay: 100ms;
-}
-
-.note-content > section:nth-child(4) {
-  animation-delay: 150ms;
-}
-
-.note-content > section:nth-child(5) {
-  animation-delay: 200ms;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-/* 录音条：圆点和时间码出现时轻弹一下，之后只有圆点呼吸 */
-.dock .recording-indicator,
-.dock .dock-time,
-.dock .dock-saving {
-  animation: dock-in var(--t-base) var(--ease-out);
-}
-
-@keyframes dock-in {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-}
-
-/* 继续录音：转写/生成中的说明 */
-.dock-hint {
-  margin: 0;
-  padding: 0 var(--s-3);
-  color: var(--ink-2);
-  font-size: var(--t-small);
-}
-
-/* 纪要过期提示：追加录音后，说明纪要缺什么并给出重新生成 */
-.note-stale {
-  display: grid;
-  gap: var(--s-3);
-  justify-items: start;
-}
-
-.note-stale p {
-  margin: 0;
 }

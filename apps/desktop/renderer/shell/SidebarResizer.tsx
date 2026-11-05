@@ -9,9 +9,9 @@ import {
   type ReactElement,
 } from 'react';
 
-export const SIDEBAR_DEFAULT = 264;
+export const SIDEBAR_DEFAULT = 240;
 export const SIDEBAR_MIN = 220;
-export const SIDEBAR_MAX = 420;
+export const SIDEBAR_MAX = 320;
 const STEP = 16;
 const STORAGE_KEY = 'turnnote.sidebarWidth';
 

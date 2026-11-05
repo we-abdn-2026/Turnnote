@@ -1,9 +1,9 @@
-/* 对话框：浮在纸面上的小卡片 */
+/* 对话框：浮在画布上的小卡片。只有需要打断或保护焦点时才用 */
 .dialog {
-  width: min(460px, calc(100vw - 32px));
+  width: min(440px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
   padding: 0;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-m);
   background: var(--sheet);
   box-shadow: var(--shadow-float);
@@ -19,18 +19,28 @@
   animation: dialog-in var(--t-base) var(--ease-out);
 }
 
+.dialog:focus-visible {
+  outline: none;
+}
+
+.settings-sheet .dialog-close {
+  width: 26px;
+  min-height: 26px;
+  height: 26px;
+}
+
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(4px) scale(0.99);
   }
 }
 
 .dialog-head {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-5) var(--s-4) 0 var(--s-6);
+  gap: var(--s-2);
+  padding: var(--s-4) var(--s-4) 0 var(--s-5);
 }
 
 .dialog-head .lamp {
@@ -39,32 +49,33 @@
 
 .dialog-head strong {
   flex: 1;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
   font-size: var(--t-lede);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1.4;
   text-wrap: balance;
 }
 
 .dialog-body {
   display: grid;
-  gap: var(--s-3);
-  padding: var(--s-3) var(--s-6) var(--s-5);
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-5) var(--s-4);
   color: var(--ink-2);
   font-size: var(--t-ui);
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .consent-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2);
+  gap: var(--s-1);
 }
 
 .consent-summary li {
-  padding: 2px var(--s-3);
+  padding: 2px var(--s-2);
   border-radius: var(--r-s);
-  background: var(--sidebar);
+  background: var(--hover);
   color: var(--ink);
   font-size: var(--t-small);
 }
@@ -78,21 +89,23 @@
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s-2);
-  padding: 0 var(--s-6) var(--s-6);
+  padding: var(--s-1) var(--s-5) var(--s-5);
 }
 
 .dialog-actions .key {
-  min-height: 40px;
+  min-height: 32px;
 }
 
 /* 设置：从右侧滑入的整高面板 */
 .settings-sheet {
-  width: min(460px, 100vw);
+  width: min(420px, 100vw);
   height: 100vh;
   max-height: 100vh;
   margin: 0 0 0 auto;
   border-width: 0 0 0 1px;
+  border-color: var(--rule);
   border-radius: 0;
   background: var(--paper);
 }
@@ -105,9 +118,13 @@
 
 @keyframes sheet-in {
   from {
-    transform: translateX(24px);
+    transform: translateX(16px);
     opacity: 0;
   }
+}
+
+.settings-sheet .dialog-head {
+  padding-top: var(--s-5);
 }
 
 .settings-sheet .dialog-head strong {
@@ -119,31 +136,33 @@
 .settings-sheet .dialog-body {
   flex: 1;
   align-content: start;
-  gap: var(--s-8);
+  gap: var(--s-6);
   overflow-y: auto;
 }
 
 .settings-sheet .dialog-actions {
-  padding-top: var(--s-4);
+  padding-top: var(--s-3);
   border-top: 1px solid var(--rule);
 }
 
 .settings-group {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 .settings-group h3 {
   color: var(--ink-3);
-  font-size: var(--t-small);
-  font-weight: 500;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .settings-row {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   align-items: start;
-  gap: var(--s-3);
+  gap: var(--s-2);
   font-size: var(--t-ui);
 }
 
@@ -151,14 +170,14 @@
 .settings-row > span {
   display: flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 30px;
   color: var(--ink-2);
 }
 
 .settings-inline {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2);
+  gap: var(--s-1);
 }
 
 .settings-inline .field {
@@ -169,7 +188,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin-left: calc(72px + var(--s-3));
+  margin-left: calc(72px + var(--s-2));
   color: var(--ink-2);
   font-size: var(--t-small);
 }

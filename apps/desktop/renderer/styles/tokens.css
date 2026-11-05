@@ -1,54 +1,56 @@
 /*
- * 暖纸面：界面退后，文档说话。
- * 层级靠位置、间距和字号，不靠颜色和粗体；字重只用 400 / 500 / 600。
- * 只有一个强调色（--accent），用于焦点、时间码和当前选中；红色只属于“正在录音”。
+ * Turnnote desktop：一间安静的工作室。
+ * 石墨色的外壳、近白的纸面、1px 发丝线；界面用系统无衬线，时间码用等宽。
+ * 只有一种强调色（信号蓝）用于主操作、焦点、当前定位和时间码；红色只属于“正在录音”。
+ * 层级靠面与面的亮度差、间距和字号，不靠渐变、阴影堆叠或装饰纹理。
  */
 :root {
-  /* 纸：画布、侧栏、抬起的面、凹下的槽 */
-  /* 相邻两层的亮度对比：侧栏/画布 1.26，侧栏/纸 1.16，选中/画布 1.47，各层读得出是不同的面 */
-  --paper: oklch(0.965 0.01 86);
-  --sidebar: oklch(0.915 0.013 82);
-  --sheet: oklch(0.992 0.004 90);
-  --hover: oklch(0.895 0.015 82);
-  --selected: oklch(0.865 0.018 80);
+  /* 面：外壳 / 画布 / 抬起的面 / 悬停 / 选中 */
+  --sidebar: oklch(0.955 0.004 95);
+  --paper: oklch(0.985 0.0025 95);
+  --sheet: oklch(0.998 0.001 95);
+  --hover: oklch(0.93 0.004 95);
+  --selected: oklch(0.9 0.006 95);
 
-  /* 发丝线 */
-  --rule: oklch(0.87 0.012 84);
-  --rule-strong: oklch(0.78 0.015 82);
+  /* 发丝线：正常分区用 rule，控件边界用 rule-strong */
+  --rule: oklch(0.905 0.003 95);
+  --rule-strong: oklch(0.8 0.005 95);
 
-  /* 墨：正文 ≥ 14:1，次要 ≥ 6:1，弱化 ≥ 4.6:1（相对 --paper） */
-  --ink: oklch(0.26 0.01 85);
-  --ink-2: oklch(0.45 0.012 85);
-  --ink-3: oklch(0.46 0.012 85);
+  /* 墨：正文 ≥ 15:1，次要 ≥ 7:1，弱化 ≥ 4.5:1（相对 --paper / --sidebar 均达标） */
+  --ink: oklch(0.225 0.004 95);
+  --ink-2: oklch(0.43 0.005 95);
+  --ink-3: oklch(0.535 0.005 95);
 
-  /* 强调：矿物蓝。焦点、时间码、当前定位 */
-  --accent: oklch(0.45 0.09 255);
-  --accent-wash: oklch(0.935 0.025 255);
-  --accent-ink: oklch(0.38 0.1 255);
-  --accent-wash-faded: oklch(0.935 0.025 255 / 0.45);
+  /* 信号蓝：主操作、焦点、当前定位、来源时间码 */
+  --accent: oklch(0.535 0.16 255);
+  --accent-ink: oklch(0.48 0.17 255);
+  --accent-wash: oklch(0.94 0.028 255);
+  --accent-wash-faded: oklch(0.94 0.028 255 / 0.45);
+  --on-accent: oklch(0.99 0.004 255);
 
-  /* 状态：录音红只用于正在录音；故障用褐橙 */
-  --rec: oklch(0.58 0.21 28);
-  --warn: oklch(0.5 0.1 62);
-  --warn-wash: oklch(0.95 0.035 80);
+  /* 状态：红只用于录音；故障用赭石 */
+  --rec: oklch(0.56 0.21 27);
+  --warn: oklch(0.5 0.105 62);
+  --warn-wash: oklch(0.955 0.03 80);
 
-  /* 字体：文档用衬线，界面用无衬线，时间码用等宽 */
-  --font-serif:
-    'Iowan Old Style', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'STSong',
-    'Palatino Linotype', Georgia, 'Times New Roman', serif;
+  /* 字体：界面用系统无衬线，时间码用等宽；没有衬线正文 */
   --font-ui:
     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
     'Microsoft YaHei', 'Noto Sans CJK SC', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: var(--font-ui);
   --font-mono:
     ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
 
-  /* 字号：固定刻度 */
-  --t-micro: 12px;
-  --t-small: 13px;
-  --t-ui: 14px;
-  --t-read: 16px;
-  --t-lede: 18px;
-  --t-title: 32px;
+  /* 字号：紧凑的固定刻度，偏 UI 而不偏阅读站点 */
+  --t-micro: 11px;
+  --t-small: 12px;
+  --t-ui: 13px;
+  --t-read: 15px;
+  --t-lede: 17px;
+  --t-title: 26px;
+  --t-title-sm: 24px;
+  --t-large: 20px;
+  --t-timer: 40px;
 
   /* 4px 模数 */
   --s-1: 4px;
@@ -62,79 +64,72 @@
   --s-12: 48px;
   --s-16: 64px;
 
-  --r-s: 6px;
-  --r-m: 10px;
+  --r-s: 4px;
+  --r-m: 8px;
   --r-pill: 999px;
 
-  --topbar: 52px;
-  --sidebar-w: 264px;
-  --drawer-w: 380px;
-  --measure: 44rem;
+  --topbar: 44px;
+  --sidebar-w: 240px;
+  --drawer-w: 340px;
+  --measure: 36rem;
 
-  /* 墨色实心按钮的悬停 / 按下、按钮上的反白字、遮罩 */
-  --ink-hover: oklch(0.34 0.012 85);
-  --ink-active: oklch(0.2 0.01 85);
-  --on-ink: var(--paper);
+  /* 深色也稳的“实心”色：录音按钮、自绘提示 */
+  --solid: oklch(0.235 0.004 95);
+  --on-solid: oklch(0.985 0.0025 95);
   --on-warn: oklch(0.99 0.005 80);
-  --scrim: oklch(0.26 0.01 85 / 0.32);
+  --scrim: oklch(0.2 0.004 95 / 0.32);
 
-  /* 质感：高光线、厚度、纸纹。浅色里高光是白，深色里改为更淡的亮线 */
-  --edge-light: oklch(1 0 0 / 0.7);
-  --edge-dark: oklch(0.26 0.01 85 / 0.1);
-  --shadow-page:
-    0 0 0 1px var(--rule), 0 1px 2px oklch(0.26 0.01 85 / 0.05),
-    0 12px 32px -8px oklch(0.26 0.01 85 / 0.12);
-  --shadow-key: 0 1px 0 var(--edge-light) inset, 0 1px 2px oklch(0.26 0.01 85 / 0.1);
-  --shadow-key-pressed: 0 1px 3px oklch(0.26 0.01 85 / 0.18) inset;
-  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .3 0 0 0 0 .22 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --grain-opacity: 0.06;
-
-  --shadow-float: 0 1px 2px oklch(0.26 0.01 85 / 0.06), 0 10px 30px oklch(0.26 0.01 85 / 0.12);
+  /* 阴影只属于会浮起来的东西：录音条、对话框、抽屉、提示 */
+  --edge-light: oklch(1 0 0 / 0.55);
+  --edge-dark: oklch(0.2 0.004 95 / 0.08);
+  --shadow-page: none;
+  --shadow-key: 0 1px 1px oklch(0.2 0.004 95 / 0.05);
+  --shadow-key-pressed: inset 0 1px 2px oklch(0.2 0.004 95 / 0.14);
+  --shadow-float:
+    0 1px 2px oklch(0.2 0.004 95 / 0.05), 0 12px 32px -12px oklch(0.2 0.004 95 / 0.22);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --t-fast: 120ms;
-  --t-base: 200ms;
-  --t-slow: 320ms;
+  --t-base: 180ms;
+  --t-slow: 240ms;
 
   color-scheme: light dark;
 }
 
-/* 深色：同一套暖色相（85），不用纯黑；层次靠亮度阶梯，对比度已逐项实测 ≥ 4.5:1 */
+/* 深色：石墨而不是纯黑，层次靠亮度阶梯，所有文字组合 ≥ 4.5:1 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: oklch(0.2 0.006 85);
-    --sidebar: oklch(0.17 0.006 85);
-    --sheet: oklch(0.225 0.006 85);
-    --hover: oklch(0.27 0.008 85);
-    --selected: oklch(0.31 0.01 85);
-    --rule: oklch(0.3 0.008 85);
-    --rule-strong: oklch(0.4 0.01 85);
+    --sidebar: oklch(0.15 0.003 95);
+    --paper: oklch(0.185 0.003 95);
+    --sheet: oklch(0.21 0.003 95);
+    --hover: oklch(0.245 0.004 95);
+    --selected: oklch(0.285 0.005 95);
+    --rule: oklch(0.285 0.004 95);
+    --rule-strong: oklch(0.4 0.005 95);
 
-    --ink: oklch(0.93 0.006 85);
-    --ink-2: oklch(0.76 0.01 85);
-    --ink-3: oklch(0.68 0.01 85);
+    --ink: oklch(0.94 0.002 95);
+    --ink-2: oklch(0.75 0.003 95);
+    --ink-3: oklch(0.63 0.003 95);
 
-    --accent: oklch(0.72 0.1 255);
-    --accent-wash: oklch(0.32 0.045 255);
-    --accent-ink: oklch(0.84 0.08 255);
-    --accent-wash-faded: oklch(0.32 0.045 255 / 0.45);
+    --accent: oklch(0.72 0.13 255);
+    --accent-ink: oklch(0.8 0.11 255);
+    --accent-wash: oklch(0.3 0.045 255);
+    --accent-wash-faded: oklch(0.3 0.045 255 / 0.45);
+    --on-accent: oklch(0.16 0.01 255);
 
     --rec: oklch(0.68 0.2 28);
     --warn: oklch(0.78 0.11 70);
     --warn-wash: oklch(0.3 0.045 70);
 
-    --ink-hover: oklch(0.86 0.008 85);
-    --ink-active: oklch(0.8 0.008 85);
-    --on-warn: oklch(0.2 0.006 85);
-    --scrim: oklch(0.08 0.004 85 / 0.55);
+    --solid: oklch(0.9 0.002 95);
+    --on-solid: oklch(0.18 0.003 95);
+    --on-warn: oklch(0.2 0.006 80);
+    --scrim: oklch(0.08 0.003 95 / 0.6);
 
-    --shadow-float: 0 1px 2px oklch(0 0 0 / 0.3), 0 10px 30px oklch(0 0 0 / 0.5);
-    --edge-light: oklch(1 0 0 / 0.07);
-    --edge-dark: oklch(0 0 0 / 0.3);
-    --shadow-page:
-      0 0 0 1px var(--rule), 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 32px -8px oklch(0 0 0 / 0.5);
-    --shadow-key: 0 1px 0 var(--edge-light) inset, 0 1px 2px oklch(0 0 0 / 0.35);
-    --shadow-key-pressed: 0 1px 3px oklch(0 0 0 / 0.5) inset;
-    --grain-opacity: 0.07;
+    --edge-light: oklch(1 0 0 / 0.06);
+    --edge-dark: oklch(0 0 0 / 0.35);
+    --shadow-key: 0 1px 1px oklch(0 0 0 / 0.35);
+    --shadow-key-pressed: inset 0 1px 2px oklch(0 0 0 / 0.45);
+    --shadow-float: 0 1px 2px oklch(0 0 0 / 0.35), 0 16px 40px -16px oklch(0 0 0 / 0.65);
   }
 }

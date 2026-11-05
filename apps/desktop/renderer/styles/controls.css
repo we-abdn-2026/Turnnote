@@ -1,17 +1,17 @@
-/* 按钮：纸面上的扁平控件。主操作 = 墨色实心；其余 = 描边或无框 */
+/* 按钮：紧凑的桌面控件。主操作 = 信号蓝实心；录音 = 实心墨色 + 红点；其余 = 描边或透明 */
 .key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s-2);
-  min-height: 34px;
-  padding: 0 var(--s-4);
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 var(--s-3);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-s);
-  background: linear-gradient(var(--sheet), color-mix(in oklch, var(--sheet) 88%, var(--sidebar)));
+  background: var(--sheet);
   box-shadow: var(--shadow-key);
   color: var(--ink);
-  font-size: var(--t-ui);
+  font-size: var(--t-small);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -19,62 +19,65 @@
   transition:
     background-color var(--t-fast) var(--ease-out),
     border-color var(--t-fast) var(--ease-out),
-    box-shadow var(--t-fast) var(--ease-out),
-    color var(--t-fast) var(--ease-out),
-    transform var(--t-fast) var(--ease-out);
+    color var(--t-fast) var(--ease-out);
 }
 
 .key:hover:not(:disabled) {
   border-color: var(--ink-3);
-  background: linear-gradient(var(--sheet), var(--hover));
+  background: var(--hover);
 }
 
 .key:active:not(:disabled) {
   background: var(--selected);
   box-shadow: var(--shadow-key-pressed);
-  transform: translateY(0.5px);
 }
 
 .key:disabled {
-  background: transparent;
-  box-shadow: none;
   border-style: dashed;
   border-color: var(--rule-strong);
+  background: transparent;
+  box-shadow: none;
   color: var(--ink-3);
   cursor: not-allowed;
 }
 
 .key-primary:not(:disabled) {
-  background: linear-gradient(color-mix(in oklch, var(--ink) 88%, white), var(--ink));
-  border-color: var(--ink);
-  box-shadow:
-    0 1px 0 oklch(1 0 0 / 0.18) inset,
-    0 1px 2px oklch(0.26 0.01 85 / 0.3);
-  color: var(--paper);
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--on-accent);
 }
 
 .key-primary:hover:not(:disabled) {
-  border-color: var(--ink);
-  background: linear-gradient(color-mix(in oklch, var(--ink-hover) 88%, white), var(--ink-hover));
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent), black 10%);
 }
 
 .key-primary:active:not(:disabled) {
-  background: var(--ink-active);
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.4) inset;
+  background: color-mix(in oklch, var(--accent), black 18%);
+  box-shadow: none;
+}
+
+.key-primary:disabled {
+  border-color: var(--rule-strong);
+  color: var(--ink-3);
 }
 
 .key-record:not(:disabled) {
-  background: linear-gradient(color-mix(in oklch, var(--ink) 88%, white), var(--ink));
-  border-color: var(--ink);
-  box-shadow:
-    0 1px 0 oklch(1 0 0 / 0.18) inset,
-    0 1px 2px oklch(0.26 0.01 85 / 0.3);
-  color: var(--paper);
+  border-color: var(--solid);
+  background: var(--solid);
+  box-shadow: none;
+  color: var(--on-solid);
 }
 
 .key-record:hover:not(:disabled) {
-  border-color: var(--ink);
-  background: linear-gradient(color-mix(in oklch, var(--ink-hover) 88%, white), var(--ink-hover));
+  border-color: var(--solid);
+  background: color-mix(in oklch, var(--solid), var(--paper) 12%);
+}
+
+.key-record:active:not(:disabled) {
+  background: color-mix(in oklch, var(--solid), var(--paper) 20%);
+  box-shadow: none;
 }
 
 .key-record .icon {
@@ -82,47 +85,57 @@
   fill: var(--rec);
 }
 
+.key-record:disabled .icon {
+  color: var(--ink-3);
+  fill: var(--ink-3);
+}
+
 .key-quiet {
-  border-color: var(--rule);
+  border-color: transparent;
   background: transparent;
   box-shadow: none;
   color: var(--ink-2);
 }
 
 .key-quiet:hover:not(:disabled) {
-  border-color: var(--rule-strong);
+  border-color: transparent;
   background: var(--hover);
   color: var(--ink);
 }
 
 .key-quiet:disabled {
-  background: none;
   border-color: transparent;
+  background: none;
 }
 
 .key-icon {
-  width: 34px;
+  width: 30px;
   padding: 0;
 }
 
 .key-danger:hover:not(:disabled) {
+  border-color: var(--warn);
   background: var(--warn-wash);
   color: var(--warn);
 }
 
 .key-caution:not(:disabled) {
-  background: linear-gradient(color-mix(in oklch, var(--warn) 88%, white), var(--warn));
   border-color: var(--warn);
-  box-shadow: 0 1px 0 oklch(1 0 0 / 0.2) inset;
+  background: var(--warn);
   color: var(--on-warn);
 }
 
-/* 状态点：圆点，没有渐变和光晕。红 = 正在录音，蓝 = 进行中，褐 = 故障 */
+.key-caution:hover:not(:disabled) {
+  border-color: var(--warn);
+  background: color-mix(in oklch, var(--warn), black 10%);
+}
+
+/* 状态点：圆点，没有渐变和光晕。红 = 正在录音，蓝 = 进行中，赭 = 故障 */
 .dot {
   display: inline-block;
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--rule-strong);
 }

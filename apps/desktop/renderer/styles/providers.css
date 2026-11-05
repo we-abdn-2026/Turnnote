@@ -95,7 +95,7 @@
   padding: 1px var(--s-2);
   border-radius: var(--r-pill);
   background: var(--accent);
-  color: var(--on-ink);
+  color: var(--on-accent);
   font-size: var(--t-micro);
 }
 

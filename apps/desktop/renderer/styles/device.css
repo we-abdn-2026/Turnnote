@@ -1,9 +1,7 @@
 /* 音频输入：两行，设备选择 + 系统音频开关。没有标题和解释 */
 .input-module {
   width: 100%;
-  max-width: calc(var(--measure) + var(--s-16) * 2);
-  margin: 0 auto;
-  padding: 0 var(--s-16);
+  margin: 0 0 var(--s-6);
 }
 
 .device-selector {
@@ -11,8 +9,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2) var(--s-5);
-  padding: var(--s-3) 0;
-  border-top: 1px solid var(--rule);
+  padding: 0 0 var(--s-3);
+  border-bottom: 1px solid var(--rule);
 }
 
 .device-selector > h3 {
