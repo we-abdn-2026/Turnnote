@@ -1,38 +1,36 @@
-/* 对话框：浮在画布上的小卡片。只有需要打断或保护焦点时才用 */
+/* 对话框：浮在淡蓝空气里的玻璃卡。只有需要打断或保护焦点时才用 */
 .dialog {
-  width: min(440px, calc(100vw - 32px));
+  width: min(480px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
   padding: 0;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r-m);
-  background: var(--sheet);
+  border: 1px solid oklch(1 0 0 / 0.95);
+  border-radius: var(--r-xxl);
+  background:
+    radial-gradient(110% 120% at 0% 0%, oklch(0.94 0.05 250 / 0.7), transparent 62%),
+    linear-gradient(160deg, oklch(1 0 0 / 0.92), oklch(0.985 0.015 250 / 0.9));
   box-shadow: var(--shadow-float);
   color: var(--ink);
   overflow: auto;
+  backdrop-filter: blur(28px) saturate(1.2);
 }
 
 .dialog::backdrop {
-  background: var(--scrim);
+  background: oklch(0.86 0.04 255 / 0.42);
+  backdrop-filter: blur(10px) saturate(1.1);
 }
 
 .dialog[open] {
-  animation: dialog-in var(--t-base) var(--ease-out);
+  animation: dialog-in 240ms var(--ease-spring);
 }
 
 .dialog:focus-visible {
   outline: none;
 }
 
-.settings-sheet .dialog-close {
-  width: 26px;
-  min-height: 26px;
-  height: 26px;
-}
-
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.99);
+    transform: translateY(10px) scale(0.96);
   }
 }
 
@@ -40,7 +38,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  padding: var(--s-4) var(--s-4) 0 var(--s-5);
+  padding: 22px 22px 0 26px;
 }
 
 .dialog-head .lamp {
@@ -50,17 +48,26 @@
 .dialog-head strong {
   flex: 1;
   font-family: var(--font-ui);
-  font-size: var(--t-lede);
+  font-size: var(--t-large);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.4;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
   text-wrap: balance;
+}
+
+.dialog-close {
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
+  border-color: oklch(1 0 0 / 0.9);
+  border-radius: 50%;
+  background: oklch(1 0 0 / 0.6);
 }
 
 .dialog-body {
   display: grid;
   gap: var(--s-2);
-  padding: var(--s-2) var(--s-5) var(--s-4);
+  padding: 10px 26px 20px;
   color: var(--ink-2);
   font-size: var(--t-ui);
   line-height: 1.65;
@@ -73,16 +80,17 @@
 }
 
 .consent-summary li {
-  padding: 2px var(--s-2);
-  border-radius: var(--r-s);
-  background: var(--hover);
+  padding: 3px 9px;
+  border: 1px solid oklch(1 0 0 / 0.9);
+  border-radius: var(--r-pill);
+  background: oklch(1 0 0 / 0.6);
   color: var(--ink);
   font-size: var(--t-small);
 }
 
 .consent-summary .consent-local {
+  border-color: oklch(0.8 0.06 255 / 0.35);
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--rule-strong);
   color: var(--ink-2);
 }
 
@@ -91,70 +99,75 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--s-2);
-  padding: var(--s-1) var(--s-5) var(--s-5);
+  padding: 4px 26px 24px;
 }
 
 .dialog-actions .key {
-  min-height: 32px;
+  min-height: 38px;
+  padding: 0 18px;
 }
 
-/* 设置：从右侧滑入的整高面板 */
+/* 设置：从右侧滑入的整高玻璃面板 */
 .settings-sheet {
-  width: min(420px, 100vw);
-  height: 100vh;
-  max-height: 100vh;
-  margin: 0 0 0 auto;
-  border-width: 0 0 0 1px;
-  border-color: var(--rule);
-  border-radius: 0;
-  background: var(--paper);
+  width: min(460px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
+  margin: 12px 12px 12px auto;
+  border-width: 1px;
+  border-color: var(--glass-border);
+  border-radius: var(--r-xxl);
+  background:
+    radial-gradient(100% 80% at 100% 0%, oklch(0.94 0.05 340 / 0.45), transparent 62%),
+    linear-gradient(170deg, oklch(1 0 0 / 0.88), oklch(0.98 0.015 250 / 0.86));
 }
 
 .settings-sheet[open] {
   display: flex;
   flex-direction: column;
-  animation: sheet-in var(--t-base) var(--ease-out);
+  animation: sheet-in 280ms var(--ease-spring);
 }
 
 @keyframes sheet-in {
   from {
-    transform: translateX(16px);
+    transform: translateX(26px) scale(0.985);
     opacity: 0;
   }
 }
 
 .settings-sheet .dialog-head {
-  padding-top: var(--s-5);
+  padding-top: 20px;
 }
 
 .settings-sheet .dialog-head strong {
   font-family: var(--font-ui);
-  font-size: var(--t-ui);
+  font-size: var(--t-lede);
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .settings-sheet .dialog-body {
   flex: 1;
   align-content: start;
   gap: var(--s-6);
+  padding-top: 12px;
   overflow-y: auto;
 }
 
 .settings-sheet .dialog-actions {
   padding-top: var(--s-3);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid oklch(1 0 0 / 0.7);
 }
 
 .settings-group {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 
 .settings-group h3 {
   color: var(--ink-3);
   font-size: var(--t-micro);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -170,7 +183,7 @@
 .settings-row > span {
   display: flex;
   align-items: center;
-  min-height: 30px;
+  min-height: 38px;
   color: var(--ink-2);
 }
 

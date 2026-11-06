@@ -6,30 +6,37 @@
 
 .provider-list {
   display: grid;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-m);
-  background: var(--sheet);
-  overflow: hidden;
 }
 
 .provider-row {
   display: flex;
   align-items: stretch;
-  border-top: 1px solid var(--rule);
+  overflow: hidden;
+  border: 1px solid oklch(1 0 0 / 0.9);
+  border-radius: var(--r-l);
+  background: oklch(1 0 0 / 0.58);
+  box-shadow: var(--shadow-card);
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
 }
 
-.provider-row:first-child {
-  border-top: 0;
+.provider-row:hover {
+  box-shadow: var(--shadow-float);
+  transform: translateY(-1px);
 }
 
 .provider-row[data-active] {
-  background: var(--accent-wash);
+  border-color: oklch(0.8 0.08 250 / 0.5);
+  background: linear-gradient(135deg, oklch(0.92 0.06 250 / 0.9), oklch(0.96 0.04 330 / 0.55));
 }
 
 .provider-row[data-pending] {
+  border-color: oklch(0.82 0.1 60 / 0.45);
   background: var(--warn-wash);
 }
 
@@ -40,7 +47,7 @@
   justify-content: space-between;
   gap: var(--s-3);
   min-width: 0;
-  padding: var(--s-3) var(--s-4);
+  padding: 12px 14px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -51,12 +58,12 @@
 }
 
 .provider-pick:hover:not(:disabled) {
-  background: var(--hover);
+  background: oklch(1 0 0 / 0.45);
 }
 
 .provider-pick:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: -3px;
 }
 
 .provider-main {
@@ -92,11 +99,13 @@
 }
 
 .provider-current {
-  padding: 1px var(--s-2);
+  padding: 2px 9px;
   border-radius: var(--r-pill);
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
   font-size: var(--t-micro);
+  font-weight: 600;
+  box-shadow: 0 4px 12px -6px oklch(0.56 0.18 255 / 0.6);
 }
 
 .provider-tools {
@@ -120,9 +129,10 @@
   display: grid;
   gap: var(--s-3);
   padding: var(--s-4);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r-m);
-  background: var(--sheet);
+  border: 1px solid oklch(1 0 0 / 0.9);
+  border-radius: var(--r-l);
+  background: oklch(1 0 0 / 0.58);
+  box-shadow: var(--shadow-card);
 }
 
 .provider-field {

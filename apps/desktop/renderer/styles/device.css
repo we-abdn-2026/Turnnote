@@ -1,18 +1,4 @@
-/* 音频输入：两行，设备选择 + 系统音频开关。没有标题和解释 */
-.input-module {
-  width: 100%;
-  margin: 0 0 var(--s-6);
-}
-
-.device-selector {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-5);
-  padding: 0 0 var(--s-3);
-  border-bottom: 1px solid var(--rule);
-}
-
+/* 音频输入：玻璃条里的设备选择 + 系统音频开关 */
 .device-selector > h3 {
   display: none;
 }
@@ -64,11 +50,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-1) var(--s-3);
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-s);
+  margin-top: var(--s-1);
+  padding: 10px 12px;
+  border: 1px solid oklch(0.8 0.1 60 / 0.35);
+  border-radius: var(--r-m);
   background: var(--warn-wash);
   color: var(--warn);
-  font-size: var(--t-ui);
+  font-size: var(--t-small);
 }
 
 .permission-notice strong,
@@ -81,10 +69,6 @@
 }
 
 @media (max-width: 899px) {
-  .input-module {
-    padding-inline: var(--s-5);
-  }
-
   .device-select-wrapper .field {
     width: 100%;
   }
@@ -92,7 +76,7 @@
 
 /* 系统音频权限提示：和麦克风提示同一个外观，放在开关下面，按钮另起一行 */
 .device-option .permission-notice {
-  margin-top: var(--s-3);
+  margin-top: var(--s-2);
 }
 
 .permission-notice p {

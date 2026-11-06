@@ -1,88 +1,102 @@
-/* 按钮：紧凑的桌面控件。主操作 = 信号蓝实心；录音 = 实心墨色 + 红点；其余 = 描边或透明 */
+/* 按钮：圆、轻、会浮起来。主操作是一条蓝色渐变，录音是红粉渐变。 */
 .key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 0 var(--s-3);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r-s);
-  background: var(--sheet);
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid oklch(1 0 0 / 0.9);
+  border-radius: var(--r-pill);
+  background: oklch(1 0 0 / 0.62);
   box-shadow: var(--shadow-key);
   color: var(--ink);
   font-size: var(--t-small);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out),
     border-color var(--t-fast) var(--ease-out),
-    color var(--t-fast) var(--ease-out);
+    box-shadow var(--t-fast) var(--ease-out);
 }
 
 .key:hover:not(:disabled) {
-  border-color: var(--ink-3);
-  background: var(--hover);
+  border-color: oklch(1 0 0 / 0.95);
+  background: oklch(1 0 0 / 0.92);
+  box-shadow: var(--shadow-float);
+  transform: translateY(-1px);
 }
 
 .key:active:not(:disabled) {
-  background: var(--selected);
-  box-shadow: var(--shadow-key-pressed);
+  box-shadow: var(--shadow-key);
+  transform: translateY(0) scale(0.985);
 }
 
 .key:disabled {
   border-style: dashed;
-  border-color: var(--rule-strong);
-  background: transparent;
+  border-color: oklch(0.82 0.03 255 / 0.5);
+  background: oklch(1 0 0 / 0.35);
   box-shadow: none;
   color: var(--ink-3);
   cursor: not-allowed;
 }
 
 .key-primary:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: none;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: var(--shadow-glow);
   color: var(--on-accent);
 }
 
 .key-primary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: color-mix(in oklch, var(--accent), black 10%);
+  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--accent), black 6%),
+    color-mix(in oklch, var(--accent-2), black 6%)
+  );
+  box-shadow: 0 14px 34px -12px oklch(0.56 0.18 255 / 0.65);
 }
 
 .key-primary:active:not(:disabled) {
-  background: color-mix(in oklch, var(--accent), black 18%);
-  box-shadow: none;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--accent), black 12%),
+    color-mix(in oklch, var(--accent-2), black 12%)
+  );
+  box-shadow: var(--shadow-glow);
 }
 
 .key-primary:disabled {
-  border-color: var(--rule-strong);
-  color: var(--ink-3);
+  border-color: transparent;
+  background: oklch(0.86 0.05 255 / 0.5);
+  color: oklch(1 0 0 / 0.85);
 }
 
 .key-record:not(:disabled) {
-  border-color: var(--solid);
-  background: var(--solid);
-  box-shadow: none;
-  color: var(--on-solid);
+  border-color: transparent;
+  background: linear-gradient(135deg, oklch(0.56 0.21 10), oklch(0.54 0.2 345));
+  box-shadow: var(--shadow-rec);
+  color: var(--on-accent);
 }
 
 .key-record:hover:not(:disabled) {
-  border-color: var(--solid);
-  background: color-mix(in oklch, var(--solid), var(--paper) 12%);
+  border-color: transparent;
+  background: linear-gradient(135deg, oklch(0.58 0.22 10), oklch(0.56 0.21 345));
+  box-shadow: 0 14px 34px -12px oklch(0.58 0.21 10 / 0.6);
 }
 
 .key-record:active:not(:disabled) {
-  background: color-mix(in oklch, var(--solid), var(--paper) 20%);
-  box-shadow: none;
+  background: linear-gradient(135deg, oklch(0.5 0.19 10), oklch(0.48 0.18 345));
+  box-shadow: var(--shadow-rec);
 }
 
 .key-record .icon {
-  color: var(--rec);
-  fill: var(--rec);
+  color: var(--on-accent);
+  fill: var(--on-accent);
 }
 
 .key-record:disabled .icon {
@@ -90,17 +104,33 @@
   fill: var(--ink-3);
 }
 
+.key-primary:focus-visible {
+  outline-color: oklch(0.56 0.18 255 / 0.45);
+  outline-offset: 3px;
+}
+
+.key-record:focus-visible {
+  outline-color: oklch(0.58 0.21 10 / 0.4);
+  outline-offset: 3px;
+}
+
+.key-caution:focus-visible {
+  outline-color: oklch(0.55 0.13 60 / 0.4);
+  outline-offset: 3px;
+}
+
 .key-quiet {
   border-color: transparent;
-  background: transparent;
+  background: oklch(1 0 0 / 0.36);
   box-shadow: none;
   color: var(--ink-2);
 }
 
 .key-quiet:hover:not(:disabled) {
   border-color: transparent;
-  background: var(--hover);
+  background: oklch(1 0 0 / 0.8);
   color: var(--ink);
+  box-shadow: var(--shadow-card);
 }
 
 .key-quiet:disabled {
@@ -109,52 +139,64 @@
 }
 
 .key-icon {
-  width: 30px;
+  width: 34px;
   padding: 0;
+  border-radius: 50%;
 }
 
 .key-danger:hover:not(:disabled) {
-  border-color: var(--warn);
+  border-color: oklch(0.8 0.1 60 / 0.4);
   background: var(--warn-wash);
   color: var(--warn);
 }
 
 .key-caution:not(:disabled) {
-  border-color: var(--warn);
-  background: var(--warn);
+  border-color: transparent;
+  background: linear-gradient(135deg, oklch(0.56 0.15 55), oklch(0.54 0.17 25));
+  box-shadow: 0 10px 24px -12px oklch(0.6 0.15 45 / 0.55);
   color: var(--on-warn);
 }
 
 .key-caution:hover:not(:disabled) {
-  border-color: var(--warn);
-  background: color-mix(in oklch, var(--warn), black 10%);
+  border-color: transparent;
+  background: linear-gradient(135deg, oklch(0.58 0.15 55), oklch(0.56 0.17 25));
 }
 
-/* 状态点：圆点，没有渐变和光晕。红 = 正在录音，蓝 = 进行中，赭 = 故障 */
+/* 状态点：红 = 录音（带扩散圈），蓝 = 进行中，赭 = 故障 */
 .dot {
+  position: relative;
   display: inline-block;
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--rule-strong);
 }
 
 .dot-rec {
   background: var(--rec);
-  animation: breathe 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 4px oklch(0.58 0.21 10 / 0.12);
+}
+
+.dot-rec::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1px solid oklch(0.58 0.21 10 / 0.45);
+  border-radius: 50%;
+  animation: rec-pulse 1.8s ease-out infinite;
 }
 
 .dot-busy {
   background: var(--accent);
+  box-shadow: 0 0 0 4px oklch(0.56 0.18 255 / 0.14);
   animation: breathe 1.6s ease-in-out infinite;
 }
 
 .dot-done {
-  background: var(--ink);
+  background: oklch(0.62 0.16 165);
 }
 
-/* 空闲：空心圈，和“已完成”的实心点区分开 */
 .dot-idle {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--rule-strong);
@@ -164,6 +206,17 @@
   background: var(--warn);
 }
 
+@keyframes rec-pulse {
+  from {
+    opacity: 0.9;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
 @keyframes breathe {
   50% {
     opacity: 0.35;
@@ -171,7 +224,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot-rec,
+  .dot-rec::after,
   .dot-busy {
     animation: none;
   }

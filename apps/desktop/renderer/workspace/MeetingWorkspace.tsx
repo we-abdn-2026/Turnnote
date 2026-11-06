@@ -346,6 +346,18 @@ export function MeetingWorkspace({
                   </div>
                 )}
 
+                {meeting.status === 'created' && !note && (
+                  <div className="ready-stage">
+                    <span className="ready-orb" aria-hidden="true">
+                      <Icon name="mic" size={26} />
+                    </span>
+                    <p className="ready-title">准备开始这场会议</p>
+                    <p className="ready-copy">
+                      选好输入设备并确认已告知参会者，然后用底部按钮开始录音。停止后会在本机转写。
+                    </p>
+                  </div>
+                )}
+
                 {meeting.status === 'recording' &&
                   !note &&
                   state.transcriptSegments.length === 0 && (
@@ -690,11 +702,11 @@ export function MeetingWorkspace({
             )}
           </article>
         )}
-
-        {meeting && !gone && (
-          <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
-        )}
       </div>
+
+      {meeting && !gone && (
+        <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
+      )}
 
       {meeting && !gone && (
         <aside id="transcript-drawer" className="drawer" aria-label="转写" inert={!drawerOpen}>

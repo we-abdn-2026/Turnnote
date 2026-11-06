@@ -13,7 +13,7 @@ body {
   text-autospace: normal;
   line-break: strict;
   hanging-punctuation: first last;
-  background: var(--sidebar);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--t-ui);
@@ -51,13 +51,13 @@ textarea {
 }
 
 ::selection {
-  background: var(--accent-wash);
+  background: oklch(0.86 0.09 255 / 0.55);
   color: var(--ink);
 }
 
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 :focus:not(:focus-visible) {
@@ -71,24 +71,24 @@ textarea {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
+  scrollbar-color: oklch(0.8 0.04 255 / 0.6) transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
-  border: 2px solid transparent;
-  border-radius: var(--r-s);
+  background: oklch(0.78 0.05 255 / 0.55);
+  border: 3px solid transparent;
+  border-radius: var(--r-pill);
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-3);
-  border: 2px solid transparent;
+  background: oklch(0.68 0.06 255 / 0.7);
+  border: 3px solid transparent;
   background-clip: padding-box;
 }
 
@@ -101,7 +101,8 @@ textarea {
 .cue time,
 .dock-time,
 .reel-time,
-.doc-meta time {
+.doc-meta time,
+.recording-stage-time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums slashed-zero;
   letter-spacing: 0;
@@ -126,7 +127,7 @@ time {
 .hint {
   color: var(--ink-3);
   font-size: var(--t-small);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .icon {
@@ -136,7 +137,7 @@ time {
 kbd {
   font-family: var(--font-ui);
   font-size: var(--t-micro);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 

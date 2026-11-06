@@ -1,4 +1,4 @@
-/* 转写抽屉：时间码在左，原话在右，没有行线和时长条 */
+/* 转写抽屉：一张轻玻璃卡，时间码在左，原话在右 */
 .log {
   display: flex;
   flex-direction: column;
@@ -12,14 +12,20 @@
   align-items: center;
   justify-content: space-between;
   min-height: var(--topbar);
-  padding: 0 var(--s-2) 0 var(--s-4);
-  border-bottom: 1px solid var(--rule);
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid oklch(1 0 0 / 0.7);
 }
 
 .drawer-head h3 {
   color: var(--ink-2);
   font-size: var(--t-small);
   font-weight: 600;
+}
+
+.drawer-head .key-icon {
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
 }
 
 .log-empty,
@@ -44,7 +50,12 @@
   width: 100%;
   height: 10px;
   border-radius: var(--r-pill);
-  background: linear-gradient(90deg, var(--selected) 0%, var(--hover) 50%, var(--selected) 100%);
+  background: linear-gradient(
+    90deg,
+    oklch(0.93 0.03 250) 0%,
+    oklch(0.98 0.01 250) 50%,
+    oklch(0.93 0.03 250) 100%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
@@ -67,7 +78,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--s-2) 0 var(--s-10);
+  padding: 6px 0 var(--s-10);
 }
 
 .transcript-segment {
@@ -75,13 +86,18 @@
   display: grid;
   grid-template-columns: 60px minmax(0, 1fr);
   column-gap: var(--s-4);
-  padding: 6px var(--s-4);
+  margin: 2px 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-m);
   scroll-margin-block: var(--s-12);
-  transition: background-color var(--t-fast) var(--ease-out);
+  transition:
+    background-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
 }
 
 .transcript-segment:hover {
-  background: var(--hover);
+  background: oklch(1 0 0 / 0.6);
+  box-shadow: 0 4px 14px -12px oklch(0.5 0.1 255 / 0.4);
 }
 
 .transcript-segment:focus-visible {
@@ -107,20 +123,21 @@
 
 /* 定位：整行淡蓝底，时间码变成强调色，淡出一次 */
 .transcript-segment.is-cued {
-  background: var(--accent-wash);
+  background: linear-gradient(135deg, oklch(0.9 0.07 250 / 0.9), oklch(0.95 0.045 330 / 0.5));
+  box-shadow: 0 8px 20px -16px oklch(0.5 0.12 255 / 0.5);
   animation: cue-fade 1.8s var(--ease-out) forwards;
 }
 
 .transcript-segment.is-cued .transcript-time {
   color: var(--accent-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 @keyframes cue-fade {
   60% {
-    background: var(--accent-wash);
+    background: oklch(0.92 0.05 250 / 0.85);
   }
   to {
-    background: var(--accent-wash-faded);
+    background: oklch(0.94 0.045 252 / 0.5);
   }
 }

@@ -1,39 +1,59 @@
 /*
- * Turnnote desktop：一间安静的工作室。
- * 石墨色的外壳、近白的纸面、1px 发丝线；界面用系统无衬线，时间码用等宽。
- * 只有一种强调色（信号蓝）用于主操作、焦点、当前定位和时间码；红色只属于“正在录音”。
- * 层级靠面与面的亮度差、间距和字号，不靠渐变、阴影堆叠或装饰纹理。
+ * Soft desk：淡蓝纸面、白色玻璃和一组糖果色卡片。
+ * 界面整体是浅色的；没有暗色主题，系统深色也保持这里的世界。
+ * 文字用深海军蓝，蓝色渐变只给主操作和焦点；卡片色调由内容类型决定，不随机。
  */
 :root {
-  /* 面：外壳 / 画布 / 抬起的面 / 悬停 / 选中 */
-  --sidebar: oklch(0.955 0.004 95);
-  --paper: oklch(0.985 0.0025 95);
-  --sheet: oklch(0.998 0.001 95);
-  --hover: oklch(0.93 0.004 95);
-  --selected: oklch(0.9 0.006 95);
+  color-scheme: light;
 
-  /* 发丝线：正常分区用 rule，控件边界用 rule-strong */
-  --rule: oklch(0.905 0.003 95);
-  --rule-strong: oklch(0.8 0.005 95);
+  /* 窗外的空气：淡蓝底 + 三团很淡的光 */
+  --bg: oklch(0.975 0.018 255);
+  --bg-2: oklch(0.988 0.012 235);
+  --paper: oklch(0.995 0.004 250);
 
-  /* 墨：正文 ≥ 15:1，次要 ≥ 7:1，弱化 ≥ 4.5:1（相对 --paper / --sidebar 均达标） */
-  --ink: oklch(0.225 0.004 95);
-  --ink-2: oklch(0.43 0.005 95);
-  --ink-3: oklch(0.535 0.005 95);
+  /* 玻璃面板 */
+  --glass: oklch(1 0 0 / 0.64);
+  --glass-strong: oklch(1 0 0 / 0.82);
+  --glass-border: oklch(1 0 0 / 0.82);
+  --glass-blur: blur(26px) saturate(1.25);
 
-  /* 信号蓝：主操作、焦点、当前定位、来源时间码 */
-  --accent: oklch(0.535 0.16 255);
-  --accent-ink: oklch(0.48 0.17 255);
-  --accent-wash: oklch(0.94 0.028 255);
-  --accent-wash-faded: oklch(0.94 0.028 255 / 0.45);
-  --on-accent: oklch(0.99 0.004 255);
+  /* 面与线 */
+  --hover: oklch(0.96 0.025 250);
+  --selected: oklch(0.925 0.055 250);
+  --rule: oklch(0.9 0.02 255);
+  --rule-strong: oklch(0.82 0.04 255);
 
-  /* 状态：红只用于录音；故障用赭石 */
-  --rec: oklch(0.56 0.21 27);
-  --warn: oklch(0.5 0.105 62);
-  --warn-wash: oklch(0.955 0.03 80);
+  /* 墨：正文 14.4:1，次要 7:1，弱化 4.8:1（相对 --paper） */
+  --ink: oklch(0.28 0.04 262);
+  --ink-2: oklch(0.46 0.035 262);
+  --ink-3: oklch(0.55 0.03 262);
 
-  /* 字体：界面用系统无衬线，时间码用等宽；没有衬线正文 */
+  /* 主色：蓝色渐变。白字在两端都 ≥ 4.7:1 */
+  --accent: oklch(0.56 0.18 255);
+  --accent-2: oklch(0.54 0.17 268);
+  --accent-ink: oklch(0.5 0.18 255);
+  --accent-wash: oklch(0.94 0.045 252);
+  --accent-wash-faded: oklch(0.94 0.045 252 / 0.5);
+  --on-accent: oklch(0.995 0.004 255);
+
+  /* 状态 */
+  --rec: oklch(0.58 0.21 10);
+  --warn: oklch(0.55 0.13 60);
+  --warn-wash: oklch(0.96 0.045 75);
+
+  /* 卡片糖果色：每一种都有明确的用途，正文/次要文字仍用 --ink 系列 */
+  --tint-blue: oklch(0.94 0.05 250);
+  --tint-blue-ink: oklch(0.48 0.13 255);
+  --tint-mint: oklch(0.95 0.045 170);
+  --tint-mint-ink: oklch(0.45 0.1 170);
+  --tint-peach: oklch(0.955 0.045 70);
+  --tint-peach-ink: oklch(0.52 0.12 60);
+  --tint-rose: oklch(0.95 0.04 345);
+  --tint-rose-ink: oklch(0.5 0.12 350);
+  --tint-sand: oklch(0.96 0.03 95);
+  --tint-sand-ink: oklch(0.5 0.08 85);
+
+  /* 字体：系统无衬线；等宽只给时间码和模型标识 */
   --font-ui:
     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
     'Microsoft YaHei', 'Noto Sans CJK SC', 'Segoe UI', system-ui, sans-serif;
@@ -41,16 +61,16 @@
   --font-mono:
     ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
 
-  /* 字号：紧凑的固定刻度，偏 UI 而不偏阅读站点 */
+  /* 字号：桌面密度，标题比上一版更大 */
   --t-micro: 11px;
   --t-small: 12px;
   --t-ui: 13px;
   --t-read: 15px;
   --t-lede: 17px;
-  --t-title: 26px;
-  --t-title-sm: 24px;
   --t-large: 20px;
-  --t-timer: 40px;
+  --t-title-sm: 28px;
+  --t-title: 34px;
+  --t-timer: 56px;
 
   /* 4px 模数 */
   --s-1: 4px;
@@ -64,72 +84,41 @@
   --s-12: 48px;
   --s-16: 64px;
 
-  --r-s: 4px;
-  --r-m: 8px;
+  /* 圆角：控件 10，卡片 18，面板 24 */
+  --r-xs: 6px;
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 18px;
+  --r-xl: 24px;
+  --r-xxl: 28px;
   --r-pill: 999px;
 
-  --topbar: 44px;
-  --sidebar-w: 240px;
+  --topbar: 52px;
+  --sidebar-w: 280px;
   --drawer-w: 340px;
-  --measure: 36rem;
+  --measure: 42rem;
 
-  /* 深色也稳的“实心”色：录音按钮、自绘提示 */
-  --solid: oklch(0.235 0.004 95);
-  --on-solid: oklch(0.985 0.0025 95);
+  /* 深色提示与录音按钮的实心色 */
+  --solid: oklch(0.3 0.04 262);
+  --on-solid: oklch(0.995 0.004 255);
   --on-warn: oklch(0.99 0.005 80);
-  --scrim: oklch(0.2 0.004 95 / 0.32);
+  --scrim: oklch(0.75 0.04 255 / 0.35);
 
-  /* 阴影只属于会浮起来的东西：录音条、对话框、抽屉、提示 */
-  --edge-light: oklch(1 0 0 / 0.55);
-  --edge-dark: oklch(0.2 0.004 95 / 0.08);
-  --shadow-page: none;
-  --shadow-key: 0 1px 1px oklch(0.2 0.004 95 / 0.05);
-  --shadow-key-pressed: inset 0 1px 2px oklch(0.2 0.004 95 / 0.14);
+  /* 阴影：蓝灰调，柔和但拉得开 */
+  --shadow-panel:
+    0 30px 80px -44px oklch(0.55 0.12 255 / 0.5), 0 2px 10px oklch(0.55 0.08 255 / 0.06);
+  --shadow-card: 0 14px 34px -22px oklch(0.55 0.1 255 / 0.34), 0 1px 0 oklch(1 0 0 / 0.9) inset;
   --shadow-float:
-    0 1px 2px oklch(0.2 0.004 95 / 0.05), 0 12px 32px -12px oklch(0.2 0.004 95 / 0.22);
+    0 24px 64px -26px oklch(0.5 0.12 255 / 0.42), 0 2px 10px oklch(0.5 0.08 255 / 0.08);
+  --shadow-key: 0 1px 2px oklch(0.5 0.08 255 / 0.1), 0 1px 0 oklch(1 0 0 / 0.9) inset;
+  --shadow-glow: 0 10px 28px -12px oklch(0.56 0.18 255 / 0.55);
+  --shadow-rec: 0 10px 28px -12px oklch(0.58 0.21 10 / 0.5);
+  --edge-light: oklch(1 0 0 / 0.85);
+  --edge-dark: oklch(0.5 0.06 255 / 0.12);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --t-fast: 120ms;
-  --t-base: 180ms;
-  --t-slow: 240ms;
-
-  color-scheme: light dark;
-}
-
-/* 深色：石墨而不是纯黑，层次靠亮度阶梯，所有文字组合 ≥ 4.5:1 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sidebar: oklch(0.15 0.003 95);
-    --paper: oklch(0.185 0.003 95);
-    --sheet: oklch(0.21 0.003 95);
-    --hover: oklch(0.245 0.004 95);
-    --selected: oklch(0.285 0.005 95);
-    --rule: oklch(0.285 0.004 95);
-    --rule-strong: oklch(0.4 0.005 95);
-
-    --ink: oklch(0.94 0.002 95);
-    --ink-2: oklch(0.75 0.003 95);
-    --ink-3: oklch(0.63 0.003 95);
-
-    --accent: oklch(0.72 0.13 255);
-    --accent-ink: oklch(0.8 0.11 255);
-    --accent-wash: oklch(0.3 0.045 255);
-    --accent-wash-faded: oklch(0.3 0.045 255 / 0.45);
-    --on-accent: oklch(0.16 0.01 255);
-
-    --rec: oklch(0.68 0.2 28);
-    --warn: oklch(0.78 0.11 70);
-    --warn-wash: oklch(0.3 0.045 70);
-
-    --solid: oklch(0.9 0.002 95);
-    --on-solid: oklch(0.18 0.003 95);
-    --on-warn: oklch(0.2 0.006 80);
-    --scrim: oklch(0.08 0.003 95 / 0.6);
-
-    --edge-light: oklch(1 0 0 / 0.06);
-    --edge-dark: oklch(0 0 0 / 0.35);
-    --shadow-key: 0 1px 1px oklch(0 0 0 / 0.35);
-    --shadow-key-pressed: inset 0 1px 2px oklch(0 0 0 / 0.45);
-    --shadow-float: 0 1px 2px oklch(0 0 0 / 0.35), 0 16px 40px -16px oklch(0 0 0 / 0.65);
-  }
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-base: 220ms;
+  --t-slow: 320ms;
 }

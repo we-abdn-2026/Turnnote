@@ -380,37 +380,35 @@ test('Cmd/Ctrl+Enter confirms the send dialog but never a destructive one', asyn
 test('sidebar width: keyboard resize, persisted, double-click resets', async () => {
   const page = await browser.open();
   const width = `Math.round(document.querySelector('.library').getBoundingClientRect().width)`;
-  assert.equal(await page.eval(width), 240);
+  assert.equal(await page.eval(width), 280);
   await page.eval(`document.querySelector('.sidebar-resizer').focus()`);
   for (let i = 0; i < 3; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 288`);
-  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '288');
+  await page.waitFor(`${width} === 328`);
+  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '328');
   assert.equal(
     await page.eval(`document.querySelector('.sidebar-resizer').getAttribute('aria-valuenow')`),
-    '288',
+    '328',
   );
   for (let i = 0; i < 20; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 320`);
+  await page.waitFor(`${width} === 360`);
   await page.eval(
     `document.querySelector('.sidebar-resizer').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
   );
-  await page.waitFor(`${width} === 240`);
+  await page.waitFor(`${width} === 280`);
   assert.deepEqual(page.errors, []);
 });
 
-test('dark colour scheme swaps the paper tokens without changing the DOM', async () => {
+test('stays light under a dark system preference', async () => {
   const page = await browser.open();
-  // 系统主题可能是深色；先固定浅色，才能验证切换而不是假设宿主环境
-  await page.send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-color-scheme', value: 'light' }],
-  });
   const paper = `getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()`;
   const light = await page.eval(paper);
   await page.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-color-scheme', value: 'dark' }],
   });
-  await page.waitFor(`${paper} !== ${JSON.stringify(light)}`);
   assert.equal(await page.eval(`matchMedia('(prefers-color-scheme: dark)').matches`), true);
+  // Soft desk 是浅色世界：系统深色不切换 token，界面保持同一套淡蓝纸面
+  assert.equal(await page.eval(paper), light);
+  assert.equal(await page.eval(`getComputedStyle(document.documentElement).colorScheme`), 'light');
   assert.deepEqual(page.errors, []);
 });
 
