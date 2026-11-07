@@ -20,6 +20,7 @@ import { createSessionServices } from './services/session';
 import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 import { SafeLogger, safeLogPath } from './safe-logger';
+import { focusMainWindow } from './window-focus';
 import { CredentialStore } from './platform/credentials';
 import { permissionSettingsUrl } from './platform/permission-settings';
 import { createModelManager } from './services/model-manager';
@@ -28,6 +29,8 @@ import { createModelManager } from './services/model-manager';
 if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
 let services: ReturnType<typeof createSessionServices> | undefined;
 let shuttingDown = false;
+// 启动流程走完、窗口已经建好之后，second-instance / activate 才能重建窗口
+let started = false;
 
 let window: BrowserWindow | undefined;
 let store: MeetingStore | undefined;
@@ -35,8 +38,13 @@ let logger: SafeLogger | undefined;
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 app.on('second-instance', () => {
-  if (window?.isMinimized()) window.restore();
-  window?.focus();
+  // macOS 关掉窗口后应用还在跑；再次唤起时窗口已经销毁，不能再去操作它
+  focusMainWindow({
+    ready: started,
+    quitting: shuttingDown,
+    window,
+    createWindow,
+  });
 });
 
 // 有可用窗口时作为模态对话框，否则独立弹出
@@ -70,7 +78,7 @@ function windowTheme(): { paper: string; ink: string } {
 
 function createWindow(): void {
   const theme = windowTheme();
-  window = new BrowserWindow({
+  const created = new BrowserWindow({
     width: 1280,
     height: 800,
     // 380px 是开会时贴在视频会议旁的监看窗口宽度；背景色与 Renderer 底色一致，避免启动白屏。
@@ -89,12 +97,10 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
-  nativeTheme.on('updated', () => {
-    const next = windowTheme();
-    window?.setBackgroundColor(next.paper);
-    if (process.platform !== 'darwin') {
-      window?.setTitleBarOverlay({ color: next.paper, symbolColor: next.ink, height: 48 });
-    }
+  window = created;
+  // 窗口销毁后不要再持有它：关窗后主题变化、二次唤醒都会走到这里
+  created.on('closed', () => {
+    if (window === created) window = undefined;
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -223,7 +229,16 @@ void app
       },
       logger,
     );
+    // 主题变化只监听一次；窗口重建后仍然作用在当前的 window 上
+    nativeTheme.on('updated', () => {
+      const next = windowTheme();
+      window?.setBackgroundColor(next.paper);
+      if (process.platform !== 'darwin') {
+        window?.setTitleBarOverlay({ color: next.paper, symbolColor: next.ink, height: 48 });
+      }
+    });
     createWindow();
+    started = true;
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
