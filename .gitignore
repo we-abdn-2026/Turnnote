@@ -12,3 +12,7 @@ __pycache__/
 *.log
 .DS_Store
 artifacts/local-audio/
+
+# 本地演示视频工程与临时素材
+video/
+.cache/

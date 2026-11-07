@@ -1,54 +1,77 @@
 /*
- * 暖纸面：界面退后，文档说话。
- * 层级靠位置、间距和字号，不靠颜色和粗体；字重只用 400 / 500 / 600。
- * 只有一个强调色（--accent），用于焦点、时间码和当前选中；红色只属于“正在录音”。
+ * Soft desk：淡蓝纸面、白色玻璃和一组糖果色卡片。
+ * 界面整体是浅色的；没有暗色主题，系统深色也保持这里的世界。
+ * 文字用深海军蓝，蓝色渐变只给主操作和焦点；卡片色调由内容类型决定，不随机。
  */
 :root {
-  /* 纸：画布、侧栏、抬起的面、凹下的槽 */
-  /* 相邻两层的亮度对比：侧栏/画布 1.26，侧栏/纸 1.16，选中/画布 1.47，各层读得出是不同的面 */
-  --paper: oklch(0.965 0.01 86);
-  --sidebar: oklch(0.915 0.013 82);
-  --sheet: oklch(0.992 0.004 90);
-  --hover: oklch(0.895 0.015 82);
-  --selected: oklch(0.865 0.018 80);
+  color-scheme: light;
 
-  /* 发丝线 */
-  --rule: oklch(0.87 0.012 84);
-  --rule-strong: oklch(0.78 0.015 82);
+  /* 窗外的空气：淡蓝底 + 三团很淡的光 */
+  --bg: oklch(0.975 0.018 255);
+  --bg-2: oklch(0.988 0.012 235);
+  --paper: oklch(0.995 0.004 250);
 
-  /* 墨：正文 ≥ 14:1，次要 ≥ 6:1，弱化 ≥ 4.6:1（相对 --paper） */
-  --ink: oklch(0.26 0.01 85);
-  --ink-2: oklch(0.45 0.012 85);
-  --ink-3: oklch(0.46 0.012 85);
+  /* 玻璃面板 */
+  --glass: oklch(1 0 0 / 0.64);
+  --glass-strong: oklch(1 0 0 / 0.82);
+  --glass-border: oklch(1 0 0 / 0.82);
+  --glass-blur: blur(26px) saturate(1.25);
 
-  /* 强调：矿物蓝。焦点、时间码、当前定位 */
-  --accent: oklch(0.45 0.09 255);
-  --accent-wash: oklch(0.935 0.025 255);
-  --accent-ink: oklch(0.38 0.1 255);
-  --accent-wash-faded: oklch(0.935 0.025 255 / 0.45);
+  /* 面与线 */
+  --hover: oklch(0.96 0.025 250);
+  --selected: oklch(0.925 0.055 250);
+  --rule: oklch(0.9 0.02 255);
+  --rule-strong: oklch(0.82 0.04 255);
 
-  /* 状态：录音红只用于正在录音；故障用褐橙 */
-  --rec: oklch(0.58 0.21 28);
-  --warn: oklch(0.5 0.1 62);
-  --warn-wash: oklch(0.95 0.035 80);
+  /* 墨：正文 14.4:1，次要 7:1，弱化 4.8:1（相对 --paper） */
+  --ink: oklch(0.28 0.04 262);
+  --ink-2: oklch(0.46 0.035 262);
+  --ink-3: oklch(0.55 0.03 262);
 
-  /* 字体：文档用衬线，界面用无衬线，时间码用等宽 */
-  --font-serif:
-    'Iowan Old Style', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Songti SC', 'STSong',
-    'Palatino Linotype', Georgia, 'Times New Roman', serif;
+  /* 主色：蓝色渐变。白字在两端都 ≥ 4.7:1 */
+  --accent: oklch(0.56 0.18 255);
+  --accent-2: oklch(0.54 0.17 268);
+  --accent-ink: oklch(0.5 0.18 255);
+  --accent-wash: oklch(0.94 0.045 252);
+  --accent-wash-faded: oklch(0.94 0.045 252 / 0.5);
+  --on-accent: oklch(0.995 0.004 255);
+
+  /* 状态 */
+  --rec: oklch(0.58 0.21 10);
+  --warn: oklch(0.55 0.13 60);
+  --warn-wash: oklch(0.96 0.045 75);
+
+  /* 卡片糖果色：每一种都有明确的用途，正文/次要文字仍用 --ink 系列。
+     比上一版再浓一点点，仍停在淡色卡片的范围内，不抢正文。 */
+  --tint-blue: oklch(0.932 0.068 250);
+  --tint-blue-ink: oklch(0.48 0.13 255);
+  --tint-mint: oklch(0.941 0.062 170);
+  --tint-mint-ink: oklch(0.45 0.1 170);
+  --tint-peach: oklch(0.946 0.062 70);
+  --tint-peach-ink: oklch(0.52 0.12 60);
+  --tint-rose: oklch(0.941 0.058 345);
+  --tint-rose-ink: oklch(0.5 0.12 350);
+  --tint-sand: oklch(0.951 0.05 95);
+  --tint-sand-ink: oklch(0.5 0.08 85);
+
+  /* 字体：系统无衬线；等宽只给时间码和模型标识 */
   --font-ui:
     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI',
     'Microsoft YaHei', 'Noto Sans CJK SC', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: var(--font-ui);
   --font-mono:
     ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
 
-  /* 字号：固定刻度 */
-  --t-micro: 12px;
-  --t-small: 13px;
-  --t-ui: 14px;
-  --t-read: 16px;
-  --t-lede: 18px;
-  --t-title: 32px;
+  /* 字号：桌面密度，标题比上一版更大 */
+  --t-micro: 11px;
+  --t-small: 12px;
+  --t-ui: 13px;
+  --t-read: 15px;
+  --t-lede: 17px;
+  --t-large: 20px;
+  --t-title-sm: 28px;
+  --t-title: 34px;
+  --t-timer: 56px;
 
   /* 4px 模数 */
   --s-1: 4px;
@@ -62,79 +85,53 @@
   --s-12: 48px;
   --s-16: 64px;
 
-  --r-s: 6px;
-  --r-m: 10px;
+  /* 圆角：控件 10，卡片 18，面板 24 */
+  --r-xs: 6px;
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 18px;
+  --r-xl: 24px;
+  --r-xxl: 28px;
   --r-pill: 999px;
 
   --topbar: 52px;
-  --sidebar-w: 264px;
-  --drawer-w: 380px;
-  --measure: 44rem;
+  --sidebar-w: 280px;
+  --drawer-w: 340px;
+  --measure: 42rem;
 
-  /* 墨色实心按钮的悬停 / 按下、按钮上的反白字、遮罩 */
-  --ink-hover: oklch(0.34 0.012 85);
-  --ink-active: oklch(0.2 0.01 85);
-  --on-ink: var(--paper);
+  /* 深色提示与录音按钮的实心色 */
+  --solid: oklch(0.3 0.04 262);
+  --on-solid: oklch(0.995 0.004 255);
   --on-warn: oklch(0.99 0.005 80);
-  --scrim: oklch(0.26 0.01 85 / 0.32);
+  --scrim: oklch(0.75 0.04 255 / 0.35);
 
-  /* 质感：高光线、厚度、纸纹。浅色里高光是白，深色里改为更淡的亮线 */
-  --edge-light: oklch(1 0 0 / 0.7);
-  --edge-dark: oklch(0.26 0.01 85 / 0.1);
-  --shadow-page:
-    0 0 0 1px var(--rule), 0 1px 2px oklch(0.26 0.01 85 / 0.05),
-    0 12px 32px -8px oklch(0.26 0.01 85 / 0.12);
-  --shadow-key: 0 1px 0 var(--edge-light) inset, 0 1px 2px oklch(0.26 0.01 85 / 0.1);
-  --shadow-key-pressed: 0 1px 3px oklch(0.26 0.01 85 / 0.18) inset;
-  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .3 0 0 0 0 .22 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --grain-opacity: 0.06;
+  /* 阴影：蓝灰调，柔和但拉得开 */
+  --shadow-panel:
+    0 30px 80px -44px oklch(0.55 0.12 255 / 0.5), 0 2px 10px oklch(0.55 0.08 255 / 0.06);
+  --shadow-card: 0 14px 34px -22px oklch(0.55 0.1 255 / 0.34), 0 1px 0 oklch(1 0 0 / 0.9) inset;
+  /* 白边在浅底上看不见，设置里的卡片改用蓝灰描边把边界画出来 */
+  --edge-line: oklch(0.56 0.07 255 / 0.38);
+  --shadow-lift:
+    0 1px 2px oklch(0.5 0.07 255 / 0.1), 0 14px 30px -20px oklch(0.5 0.16 255 / 0.55),
+    0 1px 0 oklch(1 0 0 / 0.95) inset;
+  --shadow-float:
+    0 24px 64px -26px oklch(0.5 0.12 255 / 0.42), 0 2px 10px oklch(0.5 0.08 255 / 0.08);
+  --shadow-key: 0 1px 2px oklch(0.5 0.08 255 / 0.1), 0 1px 0 oklch(1 0 0 / 0.9) inset;
+  --shadow-glow: 0 10px 28px -12px oklch(0.56 0.18 255 / 0.55);
+  /* 弹层（模型候选、转写语言）：和卡片同一块淡蓝玻璃，带一点上亮下柔的渐变 */
+  --menu-bg:
+    radial-gradient(120% 90% at 12% 0%, oklch(0.955 0.05 250 / 0.7), transparent 68%),
+    linear-gradient(165deg, oklch(1 0 0 / 0.92), oklch(0.968 0.022 250 / 0.84));
+  --menu-shadow:
+    var(--shadow-float), 0 1px 0 oklch(1 0 0 / 0.9) inset, 0 0 0 1px oklch(1 0 0 / 0.28) inset;
 
-  --shadow-float: 0 1px 2px oklch(0.26 0.01 85 / 0.06), 0 10px 30px oklch(0.26 0.01 85 / 0.12);
+  --shadow-rec: 0 10px 28px -12px oklch(0.58 0.21 10 / 0.5);
+  --edge-light: oklch(1 0 0 / 0.85);
+  --edge-dark: oklch(0.5 0.06 255 / 0.12);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --t-fast: 120ms;
-  --t-base: 200ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-base: 220ms;
   --t-slow: 320ms;
-
-  color-scheme: light dark;
-}
-
-/* 深色：同一套暖色相（85），不用纯黑；层次靠亮度阶梯，对比度已逐项实测 ≥ 4.5:1 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: oklch(0.2 0.006 85);
-    --sidebar: oklch(0.17 0.006 85);
-    --sheet: oklch(0.225 0.006 85);
-    --hover: oklch(0.27 0.008 85);
-    --selected: oklch(0.31 0.01 85);
-    --rule: oklch(0.3 0.008 85);
-    --rule-strong: oklch(0.4 0.01 85);
-
-    --ink: oklch(0.93 0.006 85);
-    --ink-2: oklch(0.76 0.01 85);
-    --ink-3: oklch(0.68 0.01 85);
-
-    --accent: oklch(0.72 0.1 255);
-    --accent-wash: oklch(0.32 0.045 255);
-    --accent-ink: oklch(0.84 0.08 255);
-    --accent-wash-faded: oklch(0.32 0.045 255 / 0.45);
-
-    --rec: oklch(0.68 0.2 28);
-    --warn: oklch(0.78 0.11 70);
-    --warn-wash: oklch(0.3 0.045 70);
-
-    --ink-hover: oklch(0.86 0.008 85);
-    --ink-active: oklch(0.8 0.008 85);
-    --on-warn: oklch(0.2 0.006 85);
-    --scrim: oklch(0.08 0.004 85 / 0.55);
-
-    --shadow-float: 0 1px 2px oklch(0 0 0 / 0.3), 0 10px 30px oklch(0 0 0 / 0.5);
-    --edge-light: oklch(1 0 0 / 0.07);
-    --edge-dark: oklch(0 0 0 / 0.3);
-    --shadow-page:
-      0 0 0 1px var(--rule), 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 32px -8px oklch(0 0 0 / 0.5);
-    --shadow-key: 0 1px 0 var(--edge-light) inset, 0 1px 2px oklch(0 0 0 / 0.35);
-    --shadow-key-pressed: 0 1px 3px oklch(0 0 0 / 0.5) inset;
-    --grain-opacity: 0.07;
-  }
 }

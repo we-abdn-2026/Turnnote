@@ -64,7 +64,12 @@ export function NoteView({
   return (
     <article className="note-content">
       <section className="note-summary" aria-labelledby="note-summary-heading">
-        <h4 id="note-summary-heading">摘要</h4>
+        <h4 id="note-summary-heading">
+          <span className="note-badge" aria-hidden="true">
+            <Icon name="sparkles" size={14} />
+          </span>
+          摘要
+        </h4>
         <p>
           {(note.summary.trim() || '未填写').split('\n').map((paragraph, index) => (
             <Fragment key={index}>
@@ -76,7 +81,12 @@ export function NoteView({
       </section>
 
       <section className="note-section" aria-labelledby="note-topics-heading">
-        <h4 id="note-topics-heading">关键主题</h4>
+        <h4 id="note-topics-heading">
+          <span className="note-badge" aria-hidden="true">
+            <Icon name="tag" size={14} />
+          </span>
+          关键主题
+        </h4>
         {note.keyTopics.length > 0 ? (
           <ul className="note-topics" aria-label="关键主题">
             {note.keyTopics.map((topic, index) => (
@@ -89,7 +99,12 @@ export function NoteView({
       </section>
 
       <section className="note-section" aria-labelledby="note-decisions-heading">
-        <h4 id="note-decisions-heading">决策</h4>
+        <h4 id="note-decisions-heading">
+          <span className="note-badge" aria-hidden="true">
+            <Icon name="check" size={14} />
+          </span>
+          决策
+        </h4>
         {note.decisions.length > 0 ? (
           <ol className="note-list edl" aria-label="决策">
             {note.decisions.map((decision, index) => (
@@ -109,7 +124,12 @@ export function NoteView({
       </section>
 
       <section className="note-section" aria-labelledby="note-questions-heading">
-        <h4 id="note-questions-heading">未决问题</h4>
+        <h4 id="note-questions-heading">
+          <span className="note-badge" aria-hidden="true">
+            <Icon name="help" size={14} />
+          </span>
+          未决问题
+        </h4>
         {note.openQuestions.length > 0 ? (
           <ol className="note-list edl" aria-label="未决问题">
             {note.openQuestions.map((question, index) => (
@@ -124,7 +144,12 @@ export function NoteView({
       </section>
 
       <section className="note-section" aria-labelledby="note-actions-heading">
-        <h4 id="note-actions-heading">行动项</h4>
+        <h4 id="note-actions-heading">
+          <span className="note-badge" aria-hidden="true">
+            <Icon name="list" size={14} />
+          </span>
+          行动项
+        </h4>
         {note.actionItems.length > 0 ? (
           <ol className="note-list note-action-list edl" aria-label="行动项">
             {note.actionItems.map((item, index) => (

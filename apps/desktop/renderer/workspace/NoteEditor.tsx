@@ -258,7 +258,6 @@ export function NoteEditor({ session, base, latest, onDone }: NoteEditorProps): 
         <button type="button" className="key" onClick={cancel} disabled={saving}>
           取消编辑
         </button>
-        <span className="hint">保存后生成新的版本，原版本保留。</span>
       </div>
 
       {confirmDiscard && (
