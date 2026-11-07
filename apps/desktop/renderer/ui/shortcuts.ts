@@ -5,12 +5,6 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 
 export type ShortcutKey = 'n' | 'k' | '\\' | 'j' | ',';
 
-/** 提示文字，例如 ⌘K / Ctrl+K */
-export function shortcutLabel(key: ShortcutKey): string {
-  const shown = key === '\\' ? '\\' : key.toUpperCase();
-  return isMac ? `⌘${shown}` : `Ctrl+${shown}`;
-}
-
 /** 给 aria-keyshortcuts 用的写法 */
 export function shortcutAria(key: ShortcutKey): string {
   return `${isMac ? 'Meta' : 'Control'}+${key === '\\' ? 'Backslash' : key.toUpperCase()}`;

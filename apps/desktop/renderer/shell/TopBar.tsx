@@ -2,7 +2,7 @@
 // 会议标题在文档里，不在顶栏重复。
 import type { ReactElement } from 'react';
 import { Icon } from '../ui/icons';
-import { shortcutAria, shortcutLabel } from '../ui/shortcuts';
+import { shortcutAria } from '../ui/shortcuts';
 
 interface TopBarProps {
   libraryOpen: boolean;
@@ -31,7 +31,7 @@ export function TopBar({
         aria-expanded={libraryOpen}
         aria-controls="meeting-library"
         aria-keyshortcuts={shortcutAria('\\')}
-        data-tip={`会议库（${shortcutLabel('\\')}）`}
+        data-tip="会议库"
         onClick={onToggleLibrary}
       >
         <Icon name="sidebar" />
@@ -45,7 +45,7 @@ export function TopBar({
             aria-pressed={drawerOpen}
             aria-controls="transcript-drawer"
             aria-keyshortcuts={shortcutAria('j')}
-            data-tip={`转写（${shortcutLabel('j')}）`}
+            data-tip="转写"
             data-tip-align="end"
             onClick={onToggleDrawer}
           >
@@ -57,7 +57,7 @@ export function TopBar({
           className="key key-icon key-quiet"
           aria-label="设置"
           aria-keyshortcuts={shortcutAria(',')}
-          data-tip={`设置（${shortcutLabel(',')}）`}
+          data-tip="设置"
           data-tip-align="end"
           onClick={onOpenSettings}
         >

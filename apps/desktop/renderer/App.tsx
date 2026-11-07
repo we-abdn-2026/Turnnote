@@ -131,6 +131,7 @@ export function App({
         provider={provider}
         drawerOpen={drawerOpen}
         onDrawer={setDrawerOpen}
+        onCreateMeeting={() => focusLibrary('meeting-title')}
       />
       <ModelBanner api={window.turnnote} status={modelStatus} />
       {settingsOpen && (

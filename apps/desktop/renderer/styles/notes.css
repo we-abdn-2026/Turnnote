@@ -32,15 +32,15 @@
 .note-content > section {
   position: relative;
   padding: 18px 20px 19px;
-  border: 1px solid color-mix(in oklch, var(--card-tint) 62%, white);
+  border: 1px solid color-mix(in oklch, var(--card-tint) 70%, white);
   border-radius: var(--r-xl);
   background:
     radial-gradient(
       100% 130% at 100% 0%,
-      color-mix(in oklch, var(--card-tint) 70%, white) 0%,
-      transparent 58%
+      color-mix(in oklch, var(--card-tint) 78%, white) 0%,
+      transparent 60%
     ),
-    linear-gradient(135deg, color-mix(in oklch, var(--card-tint) 38%, white), white 78%);
+    linear-gradient(135deg, color-mix(in oklch, var(--card-tint) 46%, white), white 74%);
   box-shadow: var(--shadow-card);
   overflow: hidden;
   animation: note-in 380ms var(--ease-out) both;
@@ -151,8 +151,9 @@
   box-shadow: 0 1px 0 oklch(1 0 0 / 0.8) inset;
 }
 
+/* 卡片上的次要文字用 --ink-2：更浓的卡片底色下仍保持 6:1 以上 */
 .note-empty {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: var(--t-ui);
 }
 
@@ -271,7 +272,7 @@
 }
 
 .note-action-meta dt {
-  color: color-mix(in oklch, var(--ink-2) 75%, white);
+  color: var(--ink-2);
 }
 
 .note-action-meta dd {
@@ -280,7 +281,7 @@
 }
 
 .note-action-meta dd[data-unspecified='true'] {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-weight: 400;
 }
 

@@ -124,7 +124,8 @@ time {
   border: 0;
 }
 
-.hint {
+/* 等待中的状态行：次要，不抢视觉重心 */
+.status-line {
   color: var(--ink-3);
   font-size: var(--t-small);
   line-height: 1.55;
@@ -132,13 +133,6 @@ time {
 
 .icon {
   flex: none;
-}
-
-kbd {
-  font-family: var(--font-ui);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

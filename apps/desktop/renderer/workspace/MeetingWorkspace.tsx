@@ -67,6 +67,8 @@ interface WorkspaceProps {
   provider: NoteService;
   drawerOpen: boolean;
   onDrawer(open: boolean): void;
+  /** 空态里的新建动作：打开会议库并聚焦标题输入 */
+  onCreateMeeting(): void;
 }
 
 interface KeywordState extends KeywordDraft {
@@ -80,6 +82,7 @@ export function MeetingWorkspace({
   provider,
   drawerOpen,
   onDrawer,
+  onCreateMeeting,
 }: WorkspaceProps): ReactElement {
   const { meeting } = state;
   const actions = availableActions(state);
@@ -242,7 +245,7 @@ export function MeetingWorkspace({
           </p>
         )}
 
-        {!meeting && <EmptyStage />}
+        {!meeting && <EmptyStage onCreate={onCreateMeeting} />}
 
         {meeting && (
           <article className="doc" key={meeting.id}>
@@ -346,24 +349,11 @@ export function MeetingWorkspace({
                   </div>
                 )}
 
-                {meeting.status === 'created' && !note && (
-                  <div className="ready-stage">
-                    <span className="ready-orb" aria-hidden="true">
-                      <Icon name="mic" size={26} />
-                    </span>
-                    <p className="ready-title">准备开始这场会议</p>
-                    <p className="ready-copy">
-                      选好输入设备并确认已告知参会者，然后用底部按钮开始录音。停止后会在本机转写。
-                    </p>
-                  </div>
-                )}
-
                 {meeting.status === 'recording' &&
                   !note &&
                   state.transcriptSegments.length === 0 && (
                     <div className="recording-stage" aria-hidden="true">
                       <span className="recording-stage-time">{formatTimecode(elapsedMs ?? 0)}</span>
-                      <span className="recording-stage-copy">正在录音。停止后会在本机转写。</span>
                     </div>
                   )}
 

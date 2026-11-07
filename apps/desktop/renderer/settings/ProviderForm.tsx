@@ -46,9 +46,6 @@ export function ProviderForm({
   return (
     <form className="provider-form" onSubmit={(e) => void submit(e)} aria-label="自定义 AI 服务">
       <strong>{editing ? `编辑 ${editing.label}` : '添加自己的服务'}</strong>
-      <p className="hint">
-        适用于 Ollama、LM Studio，或任何兼容 OpenAI 接口（/chat/completions）的网关。
-      </p>
 
       <div className="settings-row">
         <label htmlFor="provider-label">名称</label>
@@ -87,11 +84,6 @@ export function ProviderForm({
           {check.urlProblem && (
             <p className="field-problem" role="alert">
               {check.urlProblem}
-            </p>
-          )}
-          {check.destination && (
-            <p className="hint" role="status">
-              生成纪要时，转写文本会发送到 {check.destination}。
             </p>
           )}
         </div>

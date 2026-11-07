@@ -41,16 +41,17 @@
   --warn: oklch(0.55 0.13 60);
   --warn-wash: oklch(0.96 0.045 75);
 
-  /* 卡片糖果色：每一种都有明确的用途，正文/次要文字仍用 --ink 系列 */
-  --tint-blue: oklch(0.94 0.05 250);
+  /* 卡片糖果色：每一种都有明确的用途，正文/次要文字仍用 --ink 系列。
+     比上一版再浓一点点，仍停在淡色卡片的范围内，不抢正文。 */
+  --tint-blue: oklch(0.932 0.068 250);
   --tint-blue-ink: oklch(0.48 0.13 255);
-  --tint-mint: oklch(0.95 0.045 170);
+  --tint-mint: oklch(0.941 0.062 170);
   --tint-mint-ink: oklch(0.45 0.1 170);
-  --tint-peach: oklch(0.955 0.045 70);
+  --tint-peach: oklch(0.946 0.062 70);
   --tint-peach-ink: oklch(0.52 0.12 60);
-  --tint-rose: oklch(0.95 0.04 345);
+  --tint-rose: oklch(0.941 0.058 345);
   --tint-rose-ink: oklch(0.5 0.12 350);
-  --tint-sand: oklch(0.96 0.03 95);
+  --tint-sand: oklch(0.951 0.05 95);
   --tint-sand-ink: oklch(0.5 0.08 85);
 
   /* 字体：系统无衬线；等宽只给时间码和模型标识 */
@@ -108,10 +109,22 @@
   --shadow-panel:
     0 30px 80px -44px oklch(0.55 0.12 255 / 0.5), 0 2px 10px oklch(0.55 0.08 255 / 0.06);
   --shadow-card: 0 14px 34px -22px oklch(0.55 0.1 255 / 0.34), 0 1px 0 oklch(1 0 0 / 0.9) inset;
+  /* 白边在浅底上看不见，设置里的卡片改用蓝灰描边把边界画出来 */
+  --edge-line: oklch(0.56 0.07 255 / 0.38);
+  --shadow-lift:
+    0 1px 2px oklch(0.5 0.07 255 / 0.1), 0 14px 30px -20px oklch(0.5 0.16 255 / 0.55),
+    0 1px 0 oklch(1 0 0 / 0.95) inset;
   --shadow-float:
     0 24px 64px -26px oklch(0.5 0.12 255 / 0.42), 0 2px 10px oklch(0.5 0.08 255 / 0.08);
   --shadow-key: 0 1px 2px oklch(0.5 0.08 255 / 0.1), 0 1px 0 oklch(1 0 0 / 0.9) inset;
   --shadow-glow: 0 10px 28px -12px oklch(0.56 0.18 255 / 0.55);
+  /* 弹层（模型候选、转写语言）：和卡片同一块淡蓝玻璃，带一点上亮下柔的渐变 */
+  --menu-bg:
+    radial-gradient(120% 90% at 12% 0%, oklch(0.955 0.05 250 / 0.7), transparent 68%),
+    linear-gradient(165deg, oklch(1 0 0 / 0.92), oklch(0.968 0.022 250 / 0.84));
+  --menu-shadow:
+    var(--shadow-float), 0 1px 0 oklch(1 0 0 / 0.9) inset, 0 0 0 1px oklch(1 0 0 / 0.28) inset;
+
   --shadow-rec: 0 10px 28px -12px oklch(0.58 0.21 10 / 0.5);
   --edge-light: oklch(1 0 0 / 0.85);
   --edge-dark: oklch(0.5 0.06 255 / 0.12);

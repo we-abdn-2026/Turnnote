@@ -135,7 +135,7 @@
 }
 
 .settings-sheet .dialog-head {
-  padding-top: 20px;
+  padding-top: 24px;
 }
 
 .settings-sheet .dialog-head strong {
@@ -147,9 +147,9 @@
 
 .settings-sheet .dialog-body {
   flex: 1;
-  align-content: start;
-  gap: var(--s-6);
-  padding-top: 12px;
+  align-content: space-between;
+  gap: 40px;
+  padding: 20px 26px 24px;
   overflow-y: auto;
 }
 
@@ -160,15 +160,13 @@
 
 .settings-group {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-5);
 }
 
-.settings-group h3 {
-  color: var(--ink-3);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* 分组之间用一条细线分开，不用小标签 */
+.settings-group + .settings-group {
+  padding-top: 28px;
+  border-top: 1px solid oklch(0.5 0.06 255 / 0.1);
 }
 
 .settings-row {
@@ -183,8 +181,17 @@
 .settings-row > span {
   display: flex;
   align-items: center;
-  min-height: 38px;
+  min-height: 44px;
   color: var(--ink-2);
+}
+
+/* 设置里的输入框同样换掉白边 */
+.settings-sheet .field {
+  border-color: oklch(0.58 0.06 255 / 0.26);
+}
+
+.settings-sheet .field:hover:not(:disabled) {
+  border-color: oklch(0.56 0.08 255 / 0.4);
 }
 
 .settings-inline {

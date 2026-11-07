@@ -101,7 +101,7 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
     return (
       <div className="device-selector loading" aria-busy="true">
         <h3>音频输入</h3>
-        <p className="hint">加载设备设置...</p>
+        <p className="status-line">加载设备设置...</p>
       </div>
     );
   }
@@ -204,7 +204,9 @@ export function AudioDeviceSelector({ locked = false }: { locked?: boolean }): R
           )}
         </div>
 
-        {view.canSelectDevice && !view.scanned && <p className="hint">正在检测音频设备...</p>}
+        {view.canSelectDevice && !view.scanned && (
+          <p className="status-line">正在检测音频设备...</p>
+        )}
 
         {view.noDevices && (
           <p className="warning" role="status">

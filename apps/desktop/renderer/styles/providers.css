@@ -1,12 +1,7 @@
 /* 设置里的 AI 服务商列表、表单和当前服务详情 */
-.provider-lede strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-
 .provider-list {
   display: grid;
-  gap: 8px;
+  gap: var(--s-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -16,22 +11,23 @@
   display: flex;
   align-items: stretch;
   overflow: hidden;
-  border: 1px solid oklch(1 0 0 / 0.9);
+  border: 1px solid var(--edge-line);
   border-radius: var(--r-l);
   background: oklch(1 0 0 / 0.58);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-lift);
   transition:
     transform var(--t-fast) var(--ease-out),
     box-shadow var(--t-fast) var(--ease-out);
 }
 
 .provider-row:hover {
+  border-color: oklch(0.6 0.12 255 / 0.5);
   box-shadow: var(--shadow-float);
   transform: translateY(-1px);
 }
 
 .provider-row[data-active] {
-  border-color: oklch(0.8 0.08 250 / 0.5);
+  border-color: oklch(0.64 0.11 255 / 0.5);
   background: linear-gradient(135deg, oklch(0.92 0.06 250 / 0.9), oklch(0.96 0.04 330 / 0.55));
 }
 
@@ -47,7 +43,7 @@
   justify-content: space-between;
   gap: var(--s-3);
   min-width: 0;
-  padding: 12px 14px;
+  padding: 16px 18px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -119,20 +115,35 @@
   justify-self: start;
 }
 
+/* 虚线框是“新增”的语义：和上面的卡片区分开，hover 时变实线 */
+.key-quiet.provider-add {
+  border: 1px dashed oklch(0.52 0.09 255 / 0.5);
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.key-quiet.provider-add:hover:not(:disabled) {
+  border-style: solid;
+  border-color: oklch(0.6 0.14 255 / 0.6);
+  background: oklch(1 0 0 / 0.6);
+  color: var(--ink);
+  box-shadow: var(--shadow-key);
+}
+
 .provider-detail {
   display: grid;
-  gap: var(--s-3);
-  padding-top: var(--s-2);
+  gap: var(--s-5);
+  padding-top: var(--s-3);
 }
 
 .provider-form {
   display: grid;
   gap: var(--s-3);
   padding: var(--s-4);
-  border: 1px solid oklch(1 0 0 / 0.9);
+  border: 1px solid var(--edge-line);
   border-radius: var(--r-l);
   background: oklch(1 0 0 / 0.58);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-lift);
 }
 
 .provider-field {

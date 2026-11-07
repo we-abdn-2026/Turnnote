@@ -225,21 +225,6 @@
   box-shadow: 0 0 0 4px oklch(0.56 0.18 255 / 0.12);
 }
 
-.library-search kbd {
-  flex: none;
-  padding: 2px 6px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-xs);
-  background: oklch(1 0 0 / 0.6);
-  color: var(--ink-3);
-  line-height: 1.4;
-}
-
-.library-search:focus-within kbd,
-.library-search:has(input:not(:placeholder-shown)) kbd {
-  display: none;
-}
-
 .library-search .field {
   height: 28px;
   min-height: 28px;
@@ -560,12 +545,6 @@ body:has(.sidebar-resizer[data-dragging='true']) {
     transition:
       transform var(--t-base) var(--ease-out),
       visibility 0s linear var(--t-base);
-  }
-
-  .library.is-prompted {
-    box-shadow:
-      0 0 0 3px oklch(0.56 0.18 255 / 0.35),
-      var(--shadow-float);
   }
 
   .shell[data-library='open'] .library {

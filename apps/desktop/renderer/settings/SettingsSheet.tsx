@@ -6,8 +6,9 @@ import type { AiProviderInfo, AppSettings, Result, TranscriptionLanguage } from 
 import { Dialog } from '../ui/Dialog';
 import { REQUEST_FAILED_MESSAGE, describeError } from '../ui/errors';
 import { Icon } from '../ui/icons';
+import { ModelPicker } from './ModelPicker';
 import { ProviderForm } from './ProviderForm';
-import { deriveProviderRows, describeSelection, formatService } from './provider-view';
+import { deriveProviderRows, formatService } from './provider-view';
 
 const LANGUAGES: { value: TranscriptionLanguage; label: string }[] = [
   { value: 'auto', label: '自动识别' },
@@ -241,15 +242,9 @@ export function SettingsSheet({
         </p>
       )}
 
-      <section className="settings-group" aria-labelledby="settings-notes">
-        <h3 id="settings-notes">纪要服务</h3>
+      <section className="settings-group" aria-label="纪要服务">
         {settings && providers && current ? (
           <>
-            <p className="hint provider-lede">
-              当前使用：<strong>{formatService(current.label, settings.noteModel)}</strong>
-              。点选一行切换服务商，每家服务商的 Key 分别保存。
-            </p>
-
             <ul className="provider-list" aria-label="可用的纪要服务">
               {rows.map((row) => (
                 <li
@@ -331,36 +326,21 @@ export function SettingsSheet({
             )}
 
             <div className="provider-detail" aria-label={`${current.label} 设置`}>
-              <p className="hint">{describeSelection(current)}</p>
-
               <div className="settings-row">
                 <label htmlFor="note-model">模型</label>
                 <div className="settings-inline">
-                  <input
+                  <ModelPicker
                     id="note-model"
-                    className="field"
-                    list="note-model-options"
                     value={model}
+                    options={current.models}
                     placeholder={
                       current.models.length ? current.models[0] : '填写该服务支持的模型名'
                     }
-                    spellCheck={false}
-                    autoComplete="off"
                     disabled={saving}
-                    aria-invalid={modelInvalid || undefined}
-                    onChange={(e) => setModelDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void saveModel();
-                      }
-                    }}
+                    invalid={modelInvalid}
+                    onChange={setModelDraft}
+                    onCommit={() => void saveModel()}
                   />
-                  <datalist id="note-model-options">
-                    {current.models.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
                   {modelDirty && (
                     <button
                       type="button"
@@ -442,7 +422,6 @@ export function SettingsSheet({
                     <Icon name="refresh" />
                     {testing ? '正在测试...' : '测试连接'}
                   </button>
-                  <span className="hint">只发一条很短的测试消息，不含会议内容。</span>
                 </div>
               </div>
             </div>
@@ -457,15 +436,14 @@ export function SettingsSheet({
             )}
           </>
         ) : (
-          !loadError && <p className="hint">正在读取设置...</p>
+          !loadError && <p className="status-line">正在读取设置...</p>
         )}
       </section>
 
-      <section className="settings-group" aria-labelledby="settings-transcription">
-        <h3 id="settings-transcription">本机转写</h3>
+      <section className="settings-group" aria-label="本机转写">
         {settings && (
           <div className="settings-row">
-            <label htmlFor="transcription-language">语言</label>
+            <label htmlFor="transcription-language">转写语言</label>
             <select
               id="transcription-language"
               className="field field-select"
@@ -483,7 +461,6 @@ export function SettingsSheet({
             </select>
           </div>
         )}
-        <p className="hint">转写在这台电脑上完成，音频不会上传。</p>
       </section>
 
       {confirmRemove && (
