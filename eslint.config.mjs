@@ -5,7 +5,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'node_modules/', '.venv/', '.impeccable/'] },
+  // video 和 .cache 是本地的视频工程与临时素材，不属于应用代码
+  { ignores: ['out/', 'dist/', 'node_modules/', '.venv/', '.impeccable/', 'video/', '.cache/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

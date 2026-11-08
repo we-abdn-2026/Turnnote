@@ -2,6 +2,7 @@
 // 业务状态只来自 Main 的快照；provider 名称取自设置，不写死任何服务商。
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import type { MeetingDetail } from '@shared/contracts';
+import { formatTimecode } from '@shared/timecode';
 import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 import { Dialog } from '../ui/Dialog';
 import { describeError } from '../ui/errors';
@@ -66,6 +67,8 @@ interface WorkspaceProps {
   provider: NoteService;
   drawerOpen: boolean;
   onDrawer(open: boolean): void;
+  /** 空态里的新建动作：打开会议库并聚焦标题输入 */
+  onCreateMeeting(): void;
 }
 
 interface KeywordState extends KeywordDraft {
@@ -79,6 +82,7 @@ export function MeetingWorkspace({
   provider,
   drawerOpen,
   onDrawer,
+  onCreateMeeting,
 }: WorkspaceProps): ReactElement {
   const { meeting } = state;
   const actions = availableActions(state);
@@ -241,7 +245,7 @@ export function MeetingWorkspace({
           </p>
         )}
 
-        {!meeting && <EmptyStage />}
+        {!meeting && <EmptyStage onCreate={onCreateMeeting} />}
 
         {meeting && (
           <article className="doc" key={meeting.id}>
@@ -339,6 +343,20 @@ export function MeetingWorkspace({
               </div>
             ) : (
               <>
+                {inputVisible && (
+                  <div className="input-module">
+                    <AudioDeviceSelector locked={isRecording(state)} />
+                  </div>
+                )}
+
+                {meeting.status === 'recording' &&
+                  !note &&
+                  state.transcriptSegments.length === 0 && (
+                    <div className="recording-stage" aria-hidden="true">
+                      <span className="recording-stage-time">{formatTimecode(elapsedMs ?? 0)}</span>
+                    </div>
+                  )}
+
                 {meeting.status === 'generating' && <ProcessingProgress state={state} />}
 
                 {canShowGenerationAction(meeting) && !regenerate && (
@@ -674,15 +692,11 @@ export function MeetingWorkspace({
             )}
           </article>
         )}
-
-        <div className="input-module" hidden={!inputVisible}>
-          <AudioDeviceSelector locked={isRecording(state)} />
-        </div>
-
-        {meeting && !gone && (
-          <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
-        )}
       </div>
+
+      {meeting && !gone && (
+        <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
+      )}
 
       {meeting && !gone && (
         <aside id="transcript-drawer" className="drawer" aria-label="转写" inert={!drawerOpen}>

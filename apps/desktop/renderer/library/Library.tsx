@@ -9,7 +9,6 @@ import {
   type ReactElement,
 } from 'react';
 import { Icon } from '../ui/icons';
-import { shortcutLabel } from '../ui/shortcuts';
 import { SHORT_STATUS, STATUS_DOT } from '../ui/timecode';
 import {
   availableActions,
@@ -58,6 +57,18 @@ function groupByDay(items: LibraryItem[]): { label: string; items: LibraryItem[]
     else groups.push({ label, items: [item] });
   }
   return groups;
+}
+
+/** 头像色调只由会议 id 决定，列表刷新时不会跳色 */
+function meetingTone(id: string): number {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return hash % 5;
+}
+
+function meetingInitial(title: string): string {
+  const first = Array.from(title.trim())[0] ?? '·';
+  return first.toUpperCase();
 }
 
 export function Library({ session, state, library, open, onClose }: LibraryProps): ReactElement {
@@ -127,7 +138,7 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
               ? savePending
                 ? '录音已结束，保存完成后才能新建会议。'
                 : '正在录音，停止录音后才能新建会议。'
-              : `新建会议（${shortcutLabel('n')} 聚焦标题）`
+              : '新建会议'
           }
         >
           <Icon name="plus" />
@@ -157,7 +168,6 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
             value={view.query}
             onChange={(e) => library.search(e.target.value)}
           />
-          <kbd aria-hidden="true">{shortcutLabel('k')}</kbd>
         </label>
         <button
           type="button"
@@ -218,23 +228,30 @@ export function Library({ session, state, library, open, onClose }: LibraryProps
                       title={disabled && blocked ? '录音中不能切换会议' : undefined}
                       onClick={() => void handleOpen(item.id)}
                     >
-                      <span className={`dot dot-${STATUS_DOT[item.status]}`} aria-hidden="true" />
-                      <span className="reel-title">{item.title}</span>
+                      <span className="reel-leading" aria-hidden="true">
+                        <span className="reel-avatar" data-tone={meetingTone(item.id)}>
+                          {meetingInitial(item.title)}
+                        </span>
+                        <span className={`dot dot-${STATUS_DOT[item.status]}`} />
+                      </span>
+                      <span className="reel-main">
+                        <span className="reel-title">{item.title}</span>
+                        {item.snippet && (
+                          <span className="reel-snippet">
+                            {item.snippet.before}
+                            <mark>{item.snippet.match}</mark>
+                            {item.snippet.after}
+                          </span>
+                        )}
+                        {item.status === 'ready' && item.noteStale && (
+                          <span className="reel-stale" title="纪要写成之后又追加了新的录音">
+                            待更新
+                          </span>
+                        )}
+                      </span>
                       <time className="reel-time" dateTime={item.createdAt}>
                         {clock.format(new Date(item.createdAt))}
                       </time>
-                      {item.snippet && (
-                        <span className="reel-snippet">
-                          {item.snippet.before}
-                          <mark>{item.snippet.match}</mark>
-                          {item.snippet.after}
-                        </span>
-                      )}
-                      {item.status === 'ready' && item.noteStale && (
-                        <span className="reel-stale" title="纪要写成之后又追加了新的录音">
-                          待更新
-                        </span>
-                      )}
                       <span className="visually-hidden">
                         {SHORT_STATUS[item.status]}
                         {item.status === 'ready' && item.noteStale ? '，纪要待更新' : ''}

@@ -135,3 +135,4 @@ export {
   systemAudioWarning,
 } from '../../apps/desktop/renderer/audio/permissions';
 export { permissionSettingsUrl } from '../../apps/desktop/main/platform/permission-settings';
+export { focusMainWindow } from '../../apps/desktop/main/window-focus';

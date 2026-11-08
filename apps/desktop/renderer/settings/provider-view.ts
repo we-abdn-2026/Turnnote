@@ -37,16 +37,6 @@ export function deriveProviderRows(
   }));
 }
 
-/** 选中服务商下的一句话说明：能不能直接用，数据会去哪里 */
-export function describeSelection(provider: AiProviderInfo): string {
-  if (provider.local) {
-    return `请求只发往这台电脑上的 ${provider.host}，数据不会离开本机。`;
-  }
-  return provider.ready
-    ? `生成纪要时，转写文本会发送到 ${provider.host}。不含音频。`
-    : `还需要 ${provider.label} 的 API Key 才能使用。生成时转写文本会发送到 ${provider.host}，不含音频。`;
-}
-
 export interface CustomDraft {
   label: string;
   baseUrl: string;
@@ -59,8 +49,6 @@ export interface CustomDraftCheck {
   /** 只在用户已经输入内容后才给出，避免一打开表单就报错 */
   labelProblem: string | null;
   urlProblem: string | null;
-  /** 网址有效时，提示数据会发往哪里 */
-  destination: string | null;
 }
 
 export function checkCustomDraft(
@@ -88,8 +76,6 @@ export function checkCustomDraft(
     valid: !!label && !labelProblem && !!parsed && parsed.ok,
     labelProblem,
     urlProblem,
-    destination:
-      parsed && parsed.ok ? (parsed.local ? `本机（${parsed.host}）` : parsed.host) : null,
   };
 }
 
