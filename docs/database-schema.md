@@ -97,7 +97,7 @@ SQLite 数据库，使用 `better-sqlite3`，存储路径 `userData/turnnote.db`
 
 索引：`CREATE INDEX idx_jobs_meeting_kind ON processing_jobs(meeting_id, kind)`
 
-部分唯一索引 `idx_jobs_one_active` 保证每个会议最多一个 pending/running 任务。只有 failed job 可以有 error_code/error_message，错误信息来自共享安全目录。音频用 `idx_audio_part` 保证同一会议的段号唯一，`idx_audio_one_owner` 禁止不同会议共享同一个文件路径。
+部分唯一索引 `idx_jobs_one_active` 保证每个会议最多一个 pending/running 任务。只有 failed job 可以有 error_code/error_message，错误信息来自共享安全目录。迁移 6 将历史 `DEEPSEEK_*` 码转换为 `AI_*`，不改变任务状态或会议内容；读取任务和会议失败信息时均按当前安全目录重建文案，不直接信任历史 `error_message`，未知码统一为 `INTERNAL`。音频用 `idx_audio_part` 保证同一会议的段号唯一，`idx_audio_one_owner` 禁止不同会议共享同一个文件路径。
 
 ### app_settings
 

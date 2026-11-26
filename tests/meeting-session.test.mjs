@@ -517,7 +517,7 @@ test('job progress is scoped to the active meeting and job, monotonic, and clear
     lastError: {
       kind: 'generating',
       jobId: 'generation-current',
-      code: 'DEEPSEEK_UNAVAILABLE',
+      code: 'AI_UNAVAILABLE',
       message: 'DeepSeek is unavailable.',
     },
     updatedAt: new Date(generationAt + 1000).toISOString(),
@@ -572,7 +572,7 @@ test('supported recovery events move failed meetings to ready or deleted', async
   const api = createMockApi({
     seed: false,
     delayMs: 1,
-    generationError: 'DEEPSEEK_UNAVAILABLE',
+    generationError: 'AI_UNAVAILABLE',
   });
   const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
@@ -840,7 +840,7 @@ test('generation failure keeps the transcript and can be retried', async () => {
           return {
             ok: false,
             error: {
-              code: 'DEEPSEEK_UNAVAILABLE',
+              code: 'AI_UNAVAILABLE',
               message: 'DeepSeek is currently unavailable.',
             },
           };
@@ -945,6 +945,7 @@ test('failed Result and rejection report a safe error and keep the last confirme
     meeting: created,
     pending: null,
     error: '当前版本尚未提供这个功能。',
+    failure: { code: 'NOT_IMPLEMENTED', action: 'start' },
     notice: null,
     attempt: 2,
     warning: null,

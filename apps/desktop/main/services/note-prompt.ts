@@ -1,5 +1,5 @@
 // DeepSeek 纪要生成的 prompt 模板与输出校验。说明见 docs/note-generation.md。
-// 本模块不发请求、不写数据库：请求层（services/deepseek.ts）发送 buildNoteMessages 的结果，
+// 本模块不发请求、不写数据库：请求层（services/ai-client.ts）发送 buildNoteMessages 的结果，
 // 拿到 assistant content 后交给 parseNoteResponse，校验通过才可提交 completeGeneration。
 // schema 只校验结构，不核验内容是否符合转写事实；事实确认依赖转写回看和用户编辑。
 import type { MeetingNote, TranscriptSegment } from '@shared/contracts';
@@ -167,20 +167,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * 解析 assistant content。无效 JSON、字段缺失/多余、类型错误、空 summary 统一抛出
- * DEEPSEEK_INVALID_RESPONSE；错误中不携带模型输出或转写正文。
+ * AI_INVALID_RESPONSE；错误中不携带模型输出或转写正文。
  */
 export function parseNoteResponse(content: unknown): MeetingNote {
-  if (typeof content !== 'string') throw new TurnnoteError('DEEPSEEK_INVALID_RESPONSE');
+  if (typeof content !== 'string') throw new TurnnoteError('AI_INVALID_RESPONSE');
   let raw: unknown;
   try {
     raw = JSON.parse(content);
   } catch {
-    throw new TurnnoteError('DEEPSEEK_INVALID_RESPONSE');
+    throw new TurnnoteError('AI_INVALID_RESPONSE');
   }
   const result = meetingNoteSchema.safeParse(normalizeActionItems(raw));
   // 用户编辑可以清空 summary，模型生成的纪要不可以
   if (!result.success || !result.data.summary.trim()) {
-    throw new TurnnoteError('DEEPSEEK_INVALID_RESPONSE');
+    throw new TurnnoteError('AI_INVALID_RESPONSE');
   }
   return result.data;
 }

@@ -174,8 +174,8 @@ test('provider failures keep transcript and edits; retry and regeneration add ne
   assert.equal(edited.version, 2);
 
   for (const [mode, code] of [
-    ['rate-limit', 'DEEPSEEK_RATE_LIMITED'],
-    ['invalid-json', 'DEEPSEEK_INVALID_RESPONSE'],
+    ['rate-limit', 'AI_RATE_LIMITED'],
+    ['invalid-json', 'AI_INVALID_RESPONSE'],
   ]) {
     env.setMode(mode);
     const job = value(await env.api.notes.generate(id)).activeJobId;

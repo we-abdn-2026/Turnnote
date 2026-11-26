@@ -44,13 +44,18 @@ export type ErrorCode =
   | 'INTERRUPTED'
   // 纪要生成
   | 'API_KEY_MISSING'
-  | 'DEEPSEEK_UNAUTHORIZED'
-  | 'DEEPSEEK_RATE_LIMITED'
-  | 'DEEPSEEK_TIMEOUT'
-  | 'DEEPSEEK_INVALID_RESPONSE'
-  | 'DEEPSEEK_UNAVAILABLE'
+  | 'AI_PROVIDER_NOT_CONFIGURED'
+  | 'AI_PAYMENT_REQUIRED'
+  | 'AI_UNAUTHORIZED'
+  | 'AI_RATE_LIMITED'
+  | 'AI_TIMEOUT'
+  | 'AI_INVALID_RESPONSE'
+  | 'AI_UNAVAILABLE'
   | 'AI_REQUEST_REJECTED'
   | 'TRANSCRIPT_TOO_LONG';
+
+/** 错误恢复指引；重试仍须满足任务状态，生成仍须经用户确认发送。 */
+export type ErrorRecovery = 'retry' | 'settings' | 'permissions' | 'reload' | 'none';
 
 export interface AppError {
   code: ErrorCode;

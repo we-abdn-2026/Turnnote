@@ -8,7 +8,7 @@ import {
   BUILTIN_PROVIDERS,
   BUILTIN_PROVIDER_PRESETS,
   DEEPSEEK_PROFILE,
-  DeepSeekError,
+  AiRequestError,
   MAX_CUSTOM_PROVIDERS,
   MeetingStore,
   PROVIDER_URL_PROBLEMS,
@@ -199,19 +199,16 @@ test('a rejected request is reported as fixable, not as an unexpected error', as
     ).catch((error) => error);
   for (const status of [400, 404, 422]) {
     const error = await attempt(status);
-    assert.ok(error instanceof DeepSeekError);
+    assert.ok(error instanceof AiRequestError);
     assert.equal(error.code, 'AI_REQUEST_REJECTED', String(status));
     assert.equal(error.retryable, false);
   }
-  assert.equal((await attempt(401)).code, 'DEEPSEEK_UNAUTHORIZED');
-  assert.equal((await attempt(403)).code, 'DEEPSEEK_UNAUTHORIZED');
-  assert.equal((await attempt(429)).code, 'DEEPSEEK_RATE_LIMITED');
+  assert.equal((await attempt(401)).code, 'AI_UNAUTHORIZED');
+  assert.equal((await attempt(403)).code, 'AI_UNAUTHORIZED');
+  assert.equal((await attempt(429)).code, 'AI_RATE_LIMITED');
   const unavailable = await attempt(503);
-  assert.deepEqual([unavailable.code, unavailable.retryable], ['DEEPSEEK_UNAVAILABLE', true]);
-  assert.doesNotMatch(
-    errorMessages.API_KEY_MISSING + errorMessages.DEEPSEEK_UNAUTHORIZED,
-    /DeepSeek/,
-  );
+  assert.deepEqual([unavailable.code, unavailable.retryable], ['AI_UNAVAILABLE', true]);
+  assert.doesNotMatch(errorMessages.API_KEY_MISSING + errorMessages.AI_UNAUTHORIZED, /DeepSeek/);
 });
 
 test('no user-facing safe message names a specific vendor', () => {
@@ -318,9 +315,12 @@ test('IPC rejects unknown services for settings and keys, and validates argument
   const f = fixture(t);
   assert.equal(
     failureCode(await f.api.settings.update({ noteProvider: 'no-such' })),
-    'INVALID_INPUT',
+    'AI_PROVIDER_NOT_CONFIGURED',
   );
-  assert.equal(failureCode(await f.api.settings.setApiKey('no-such', 'sk-x')), 'INVALID_INPUT');
+  assert.equal(
+    failureCode(await f.api.settings.setApiKey('no-such', 'sk-x')),
+    'AI_PROVIDER_NOT_CONFIGURED',
+  );
   assert.equal(f.credentials.has('no-such'), false, 'no orphan secret');
   for (const model of ['llama3.1:8b', 'openai/gpt-4o', 'Qwen/Qwen2.5-7B-Instruct', 'gpt-4o@2025']) {
     assert.equal(value(await f.api.settings.update({ noteModel: model })).noteModel, model);
@@ -490,25 +490,28 @@ test('connection test: success, wrong key, wrong model and unreachable are told 
 
   assert.equal(
     failureCode(await run('deepseek', 'deepseek-flash', respond(401))),
-    'DEEPSEEK_UNAUTHORIZED',
+    'AI_UNAUTHORIZED',
   );
   assert.equal(
     failureCode(await run('deepseek', 'no-such-model', respond(404))),
     'AI_REQUEST_REJECTED',
   );
-  assert.equal(failureCode(await run('deepseek', 'm', respond(503))), 'DEEPSEEK_UNAVAILABLE');
+  assert.equal(failureCode(await run('deepseek', 'm', respond(503))), 'AI_UNAVAILABLE');
   assert.equal(
     failureCode(
       await run('deepseek', 'm', async () => {
         throw new TypeError('fetch failed');
       }),
     ),
-    'DEEPSEEK_UNAVAILABLE',
+    'AI_UNAVAILABLE',
   );
-  // 没有 Key 的服务直接提示缺 Key，不发请求；不存在的服务是非法输入
+  // 没有 Key 的服务直接提示缺 Key，不发请求；不存在的服务明确提示未配置
   const before = sent.length;
   assert.equal(failureCode(await run('openai', 'gpt-4o', respond(200, okBody))), 'API_KEY_MISSING');
-  assert.equal(failureCode(await run('nope', 'm', respond(200, okBody))), 'INVALID_INPUT');
+  assert.equal(
+    failureCode(await run('nope', 'm', respond(200, okBody))),
+    'AI_PROVIDER_NOT_CONFIGURED',
+  );
   assert.equal(sent.length, before);
 });
 

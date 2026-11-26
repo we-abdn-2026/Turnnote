@@ -287,7 +287,7 @@ test('long transcripts are summarized per chunk and merged with sources from the
 test('a failed chunk or merge fails the whole generation without partial output', async () => {
   const limits = { chunkChars: 400, maxChunks: 20 };
   const chunkCount = chunkSegments(SEGMENTS, limits).length;
-  const failing = Object.assign(new Error('rate limited'), { code: 'DEEPSEEK_RATE_LIMITED' });
+  const failing = Object.assign(new Error('rate limited'), { code: 'AI_RATE_LIMITED' });
   const partialFailure = scripted([note(), failing]);
   await assert.rejects(
     generateNote({ segments: SEGMENTS, request: partialFailure.request, limits }),
@@ -298,7 +298,7 @@ test('a failed chunk or merge fails the whole generation without partial output'
   const badMerge = scripted([...Array.from({ length: chunkCount }, () => note()), 'not json']);
   await assert.rejects(
     generateNote({ segments: SEGMENTS, request: badMerge.request, limits }),
-    code('DEEPSEEK_INVALID_RESPONSE'),
+    code('AI_INVALID_RESPONSE'),
   );
   assert.equal(badMerge.calls.length, chunkCount + 1);
 
@@ -307,7 +307,7 @@ test('a failed chunk or merge fails the whole generation without partial output'
   ]);
   await assert.rejects(
     generateNote({ segments: SEGMENTS, request: badChunk.request, limits }),
-    code('DEEPSEEK_INVALID_RESPONSE'),
+    code('AI_INVALID_RESPONSE'),
   );
   assert.equal(badChunk.calls.length, 1);
 });

@@ -36,6 +36,36 @@
   flex: none;
 }
 
+/* 错误与恢复动作和文档正文对齐；长提示与按钮在窄窗口自然换行。 */
+.workspace-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  width: calc(100% - var(--s-12) * 2);
+  max-width: var(--measure);
+  margin: var(--s-6) auto 0;
+  padding: var(--s-4);
+  border: 1px solid var(--tint-peach);
+  border-radius: var(--r-m);
+  background: var(--warn-wash);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.workspace-error > strong {
+  flex-basis: 100%;
+  color: var(--warn);
+}
+
+.workspace-error > p {
+  flex: 1 1 14rem;
+}
+
+.workspace-error > .key {
+  margin-left: auto;
+}
+
 /* 文档列：宽一点，卡片需要呼吸 */
 .doc {
   width: 100%;
@@ -680,6 +710,10 @@
 
   .bulletin {
     padding-inline: 12px;
+  }
+
+  .workspace-error {
+    width: calc(100% - 40px);
   }
 
   .dock {

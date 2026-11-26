@@ -6,6 +6,7 @@ import { formatTimecode } from '@shared/timecode';
 import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 import { Dialog } from '../ui/Dialog';
 import { describeError } from '../ui/errors';
+import { ErrorRecoveryAction } from '../ui/ErrorRecoveryAction';
 import { Icon } from '../ui/icons';
 import {
   STATUS_DOT,
@@ -69,6 +70,7 @@ interface WorkspaceProps {
   onDrawer(open: boolean): void;
   /** 空态里的新建动作：打开会议库并聚焦标题输入 */
   onCreateMeeting(): void;
+  onOpenSettings(): void;
 }
 
 interface KeywordState extends KeywordDraft {
@@ -83,6 +85,7 @@ export function MeetingWorkspace({
   drawerOpen,
   onDrawer,
   onCreateMeeting,
+  onOpenSettings,
 }: WorkspaceProps): ReactElement {
   const { meeting } = state;
   const actions = availableActions(state);
@@ -217,6 +220,21 @@ export function MeetingWorkspace({
         ? '重新生成会议纪要'
         : '生成会议纪要';
 
+  function retryGeneration(): void {
+    if (actions.generate && !keywordsDirty) {
+      setPrompt({ revision: state.revision, attempt: state.attempt });
+    }
+  }
+  const retryOperation =
+    state.failure?.action === 'generate' && actions.generate && !keywordsDirty
+      ? retryGeneration
+      : state.failure?.action === 'stop' && actions.stop
+        ? () => void session.stop()
+        : state.failure?.action === 'transcribe' && manage.transcribe
+          ? () => void session.retryTranscription()
+          : undefined;
+  const jobError = meeting?.status === 'failed' ? meeting.lastError : null;
+
   return (
     <section
       className="workspace"
@@ -230,6 +248,40 @@ export function MeetingWorkspace({
             <div className="workspace-error bulletin bulletin-warn" role="alert">
               <strong>操作失败</strong>
               <p>{state.error}</p>
+              {state.failure && (
+                <ErrorRecoveryAction
+                  key={`${meeting?.id}-${state.attempt}-${state.failure.code}`}
+                  code={state.failure.code}
+                  disabled={state.pending !== null}
+                  onRetry={retryOperation}
+                  onSettings={onOpenSettings}
+                />
+              )}
+            </div>
+          )}
+          {jobError && !state.error && (
+            <div className="workspace-error bulletin bulletin-warn" role="alert">
+              <strong>
+                {jobError.kind === 'generating'
+                  ? '纪要生成失败'
+                  : jobError.kind === 'transcribing'
+                    ? '转写失败'
+                    : '录音失败'}
+              </strong>
+              <p>{describeError(jobError)}</p>
+              <ErrorRecoveryAction
+                key={jobError.jobId}
+                code={jobError.code}
+                disabled={state.pending !== null}
+                onRetry={
+                  jobError.kind === 'generating' && actions.generate && !keywordsDirty
+                    ? retryGeneration
+                    : jobError.kind === 'transcribing' && manage.transcribe
+                      ? () => void session.retryTranscription()
+                      : undefined
+                }
+                onSettings={onOpenSettings}
+              />
             </div>
           )}
           {state.warning && (

@@ -2,6 +2,7 @@
 // Renderer 不自行推导业务终态。不依赖 React，便于单元测试。
 import { canCancelRecording, canEditNote, canStartJob } from '@shared/lifecycle';
 import type {
+  ErrorCode,
   JobProgress,
   MeetingDetail,
   MeetingNote,
@@ -10,6 +11,7 @@ import type {
   TranscriptSegment,
   TurnnoteApi,
 } from '@shared/contracts';
+import { errorInfo } from '@shared/result';
 import { REQUEST_FAILED_MESSAGE, describeError } from '../ui/errors';
 
 type SessionApi = Pick<TurnnoteApi, 'meetings' | 'transcription' | 'notes' | 'events' | 'exports'>;
@@ -51,6 +53,8 @@ export interface SessionState {
   pending: SessionAction | null;
   /** 最近一次操作失败的安全信息；下一次操作开始时清除 */
   error: string | null;
+  /** 最近一次 IPC 操作失败的类别；用于恢复入口，不保存底层异常。 */
+  failure: { code: ErrorCode; action: SessionAction } | null;
   /** 最近一次操作成功后的简短确认，例如导出完成；下一次操作开始时清除 */
   notice: string | null;
   /** 每次发出受保护的操作时递增；界面确认绑定打开时的值，之后任何操作开始都会使其失效 */
@@ -169,6 +173,7 @@ const INITIAL: SessionState = {
   meeting: null,
   pending: null,
   error: null,
+  failure: null,
   notice: null,
   attempt: 0,
   revision: 0,
@@ -222,6 +227,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     eventSeq = 0;
     set({
       pending: null,
+      failure: null,
       meeting,
       captureStopped: false,
       jobProgress: null,
@@ -240,6 +246,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     eventSeq = 0;
     set({
       meeting: null,
+      failure: null,
       pending: null,
       captureStopped: false,
       jobProgress: null,
@@ -351,7 +358,14 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     if (!allowed(action)) return null;
     const token = generation;
     const seq = eventSeq;
-    set({ pending: action, error: null, warning: null, notice: null, attempt: state.attempt + 1 });
+    set({
+      pending: action,
+      error: null,
+      failure: null,
+      warning: null,
+      notice: null,
+      attempt: state.attempt + 1,
+    });
     let result: Result<T> | null;
     try {
       result = await request();
@@ -360,7 +374,11 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
     }
     if (token !== generation) return null;
     if (!result || !result.ok) {
-      set({ pending: null, error: result ? describeError(result.error) : REQUEST_FAILED_MESSAGE });
+      set({
+        pending: null,
+        error: result ? describeError(result.error) : REQUEST_FAILED_MESSAGE,
+        failure: { code: errorInfo(result?.error.code).code, action },
+      });
       return null;
     }
     return { value: result.value, fresh: eventSeq === seq };
@@ -475,7 +493,7 @@ export function createMeetingSession(api: SessionApi, recording: MeetingRecordin
             if (token === generation) set({ warning });
           },
           error: (error) => {
-            if (token === generation) set({ error });
+            if (token === generation) set({ error, failure: null });
           },
         });
       });

@@ -94,7 +94,10 @@ export function createSessionServices(
       ...storage.settings,
       update: async (patch) => {
         // 只能选择目录里存在的服务商
-        requireCondition(!patch.noteProvider || catalog.get(patch.noteProvider), 'INVALID_INPUT');
+        requireCondition(
+          !patch.noteProvider || catalog.get(patch.noteProvider),
+          'AI_PROVIDER_NOT_CONFIGURED',
+        );
         const result = await storage.settings!.update!(patch);
         // 切换转写模型后重新广播模型状态（界面据此显示新模型是否可用）
         if (result.ok && 'transcriptionModel' in patch) options.models?.refresh();
@@ -102,7 +105,7 @@ export function createSessionServices(
       },
       // Key 只能保存给目录里存在的服务商，避免给不存在的名字存下孤立的密钥
       setApiKey: async (provider, apiKey) => {
-        requireCondition(catalog.get(provider), 'INVALID_INPUT');
+        requireCondition(catalog.get(provider), 'AI_PROVIDER_NOT_CONFIGURED');
         return storage.settings!.setApiKey!(provider, apiKey);
       },
     },

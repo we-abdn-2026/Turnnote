@@ -459,7 +459,7 @@ test('generation failure is safe and retry requires confirmation', async () => {
       type: 'result',
       once: true,
       error: {
-        code: 'DEEPSEEK_UNAVAILABLE',
+        code: 'AI_UNAVAILABLE',
         message: 'DeepSeek is currently unavailable.'
       }
     }
@@ -647,7 +647,7 @@ test('failed regeneration keeps the existing note and requires confirmation to r
       type: 'result',
       once: true,
       error: {
-        code: 'DEEPSEEK_UNAVAILABLE',
+        code: 'AI_UNAVAILABLE',
         message: 'DeepSeek is currently unavailable.'
       }
     }

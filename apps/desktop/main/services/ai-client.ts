@@ -2,6 +2,8 @@
 // 网址和服务商之间的请求体差异由调用方通过 baseUrl 和 profile 传入（目录见 ai-providers.ts）。
 // 不读数据库、不发送音频、不写日志。错误只携带错误码，不包含响应正文、API Key 或会议内容。
 import type { ErrorCode } from '@shared/contracts';
+import { errorRecovery } from '@shared/result';
+import { parseProviderUrl } from '@shared/providers';
 import { z } from 'zod';
 import type { ChatMessage } from './note-prompt';
 import { NOTE_RESPONSE_FORMAT } from './note-prompt';
@@ -13,24 +15,26 @@ export const MAX_OUTPUT_TOKENS = 8_192;
 
 export type AiErrorCode = Extract<
   ErrorCode,
-  | 'DEEPSEEK_UNAUTHORIZED'
-  | 'DEEPSEEK_RATE_LIMITED'
-  | 'DEEPSEEK_TIMEOUT'
-  | 'DEEPSEEK_INVALID_RESPONSE'
-  | 'DEEPSEEK_UNAVAILABLE'
+  | 'AI_UNAUTHORIZED'
+  | 'AI_RATE_LIMITED'
+  | 'AI_TIMEOUT'
+  | 'AI_INVALID_RESPONSE'
+  | 'AI_UNAVAILABLE'
+  | 'AI_PAYMENT_REQUIRED'
+  | 'AI_PROVIDER_NOT_CONFIGURED'
   | 'AI_REQUEST_REJECTED'
   | 'INTERRUPTED'
   | 'INTERNAL'
 >;
 
-export class DeepSeekError extends Error {
-  constructor(
-    public readonly code: AiErrorCode,
-    /** 超时、限流和服务端临时错误可重试；认证失败和无效请求不可重试 */
-    public readonly retryable = false,
-  ) {
+export class AiRequestError extends Error {
+  readonly retryable: boolean;
+
+  constructor(public readonly code: AiErrorCode) {
     super(code);
-    this.name = 'DeepSeekError';
+    this.name = 'AiRequestError';
+    // 用户可以重新发起已中断的任务；取消当前请求不能触发客户端自动重试。
+    this.retryable = code !== 'INTERRUPTED' && errorRecovery[code] === 'retry';
   }
 }
 
@@ -65,15 +69,15 @@ const completionSchema = z.object({
     .min(1),
 });
 
-function statusError(status: number): DeepSeekError {
-  if (status === 401 || status === 403) return new DeepSeekError('DEEPSEEK_UNAUTHORIZED');
-  if (status === 429) return new DeepSeekError('DEEPSEEK_RATE_LIMITED', true);
-  if (status >= 500) return new DeepSeekError('DEEPSEEK_UNAVAILABLE', true);
-  if (status === 402) return new DeepSeekError('DEEPSEEK_UNAVAILABLE');
+function statusError(status: number): AiRequestError {
+  if (status === 401 || status === 403) return new AiRequestError('AI_UNAUTHORIZED');
+  if (status === 429) return new AiRequestError('AI_RATE_LIMITED');
+  if (status >= 500) return new AiRequestError('AI_UNAVAILABLE');
+  if (status === 402) return new AiRequestError('AI_PAYMENT_REQUIRED');
   // 400/404/422 等：请求本身被拒绝，最常见的原因是模型名或网址填错。
   // 用户能自己修正，所以不能落成"意外错误"
-  if (status >= 400 && status < 500) return new DeepSeekError('AI_REQUEST_REJECTED');
-  return new DeepSeekError('DEEPSEEK_UNAVAILABLE', true);
+  if (status >= 400 && status < 500) return new AiRequestError('AI_REQUEST_REJECTED');
+  return new AiRequestError('AI_UNAVAILABLE');
 }
 
 /** 请求体：公共字段 + 服务商配置。其他服务商不会收到 DeepSeek 专有的 thinking 字段 */
@@ -93,17 +97,19 @@ export async function requestChatCompletion(
   request: ChatRequest,
   options: AiProviderOptions = {},
 ): Promise<string> {
-  if (request.signal?.aborted) throw new DeepSeekError('INTERRUPTED');
+  if (request.signal?.aborted) throw new AiRequestError('INTERRUPTED');
+  const endpoint = parseProviderUrl(options.baseUrl ?? DEFAULT_PROVIDER.baseUrl);
+  if (!endpoint.ok) throw new AiRequestError('AI_PROVIDER_NOT_CONFIGURED');
   const timeout = AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS);
   const signal = request.signal ? AbortSignal.any([request.signal, timeout]) : timeout;
-  const failure = (): DeepSeekError =>
+  const failure = (): AiRequestError =>
     request.signal?.aborted
-      ? new DeepSeekError('INTERRUPTED')
+      ? new AiRequestError('INTERRUPTED')
       : timeout.aborted
-        ? new DeepSeekError('DEEPSEEK_TIMEOUT', true)
-        : new DeepSeekError('DEEPSEEK_UNAVAILABLE', true);
+        ? new AiRequestError('AI_TIMEOUT')
+        : new AiRequestError('AI_UNAVAILABLE');
 
-  const baseUrl = (options.baseUrl ?? DEFAULT_PROVIDER.baseUrl).replace(/\/+$/, '');
+  const baseUrl = endpoint.baseUrl;
   const profile = options.profile ?? DEEPSEEK_PROFILE;
 
   let body: unknown;
@@ -125,21 +131,21 @@ export async function requestChatCompletion(
     try {
       body = JSON.parse(text);
     } catch {
-      throw new DeepSeekError('DEEPSEEK_INVALID_RESPONSE');
+      throw new AiRequestError('AI_INVALID_RESPONSE');
     }
   } catch (error) {
-    if (error instanceof DeepSeekError) throw error;
+    if (error instanceof AiRequestError) throw error;
     throw failure();
   }
 
   const parsed = completionSchema.safeParse(body);
-  if (!parsed.success) throw new DeepSeekError('DEEPSEEK_INVALID_RESPONSE');
+  if (!parsed.success) throw new AiRequestError('AI_INVALID_RESPONSE');
   const [choice] = parsed.data.choices;
   if (choice.finish_reason === 'insufficient_system_resource') {
-    throw new DeepSeekError('DEEPSEEK_UNAVAILABLE', true);
+    throw new AiRequestError('AI_UNAVAILABLE');
   }
   if (choice.finish_reason !== 'stop' || !choice.message.content?.trim()) {
-    throw new DeepSeekError('DEEPSEEK_INVALID_RESPONSE');
+    throw new AiRequestError('AI_INVALID_RESPONSE');
   }
   return choice.message.content;
 }

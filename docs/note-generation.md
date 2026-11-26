@@ -1,11 +1,11 @@
 # 纪要生成
 
-DeepSeek 纪要生成的 Main 侧实现，按模块对应 issue：
+AI 服务商无关的纪要生成 Main 侧实现，按模块对应 issue：
 
 | 模块 | Issue | 职责 |
 | --- | --- | --- |
 | `services/note-prompt.ts` | #15 | prompt 模板、转写格式、模型输出解析和结构校验 |
-| `services/deepseek.ts` | #17 | 单次 Chat Completions 请求、超时、取消、HTTP 错误映射 |
+| `services/ai-client.ts` | #17 | 单次 Chat Completions 请求、超时、取消、HTTP 错误映射 |
 | `services/note-pipeline.ts` | #18、#20 | 长转写分段、中间纪要合并、关键词上下文、来源时间校验 |
 | `services/generation.ts` | #17 | `notes.generate` 编排：任务状态、进度事件、一次提交 |
 
@@ -13,7 +13,7 @@ DeepSeek 纪要生成的 Main 侧实现，按模块对应 issue：
 
 ## 流程
 
-1. 用户调用 `notes.generate`。Main 先检查状态和转写（`canStartJob`），再读取 API Key，缺少时返回 `API_KEY_MISSING`，不创建任务、不发请求。
+1. 用户调用 `notes.generate`。Main 先检查状态和转写（`canStartJob`），再从服务商目录解析 `settings.noteProvider`（不存在返回 `AI_PROVIDER_NOT_CONFIGURED`），读取该服务商的 API Key，需要但缺少时返回 `API_KEY_MISSING`，不创建任务、不发请求。
 2. `beginGeneration` 记录 `base_note_version`，会议进入 `generating`，返回快照，后台开始生成。
 3. 只发送已保存的转写片段和 `meeting.keywords`，不读取音频文件。
 4. 每个请求的输出经 `parseNoteResponse` 校验和来源时间核对。
@@ -27,33 +27,34 @@ DeepSeek 纪要生成的 Main 侧实现，按模块对应 issue：
 `requestChatCompletion` 固定发送：
 
 - `response_format: { type: 'json_object' }`，prompt 中包含 "json" 和示例结构（JSON Output 的要求）。
-- `thinking: { type: 'disabled' }`：纪要不需要思维链，content 中不混入推理过程。
-- `max_tokens: 8192`，显式设置以免输出截断。
-- 模型来自设置 `deepseekModel`，默认 `deepseek-flash`（`deepseek-chat` 已于 2026-07-24 停用）。
+- 请求参数按服务商目录配置：DeepSeek 使用 `thinking: { type: 'disabled' }`，其他服务商不接收该字段。
+- 输出上限 8192；OpenAI 使用 `max_completion_tokens`，其余兼容服务使用 `max_tokens`。
+- 模型来自设置 `noteModel`；服务商及地址来自目录中的 `noteProvider`。
 - 单次请求超时 120 秒。
 
 ## 错误映射
 
-错误只带错误码和 `retryable` 标记，不读取也不保存 DeepSeek 的错误正文（可能回显请求内容）。
+错误只带错误码和 `retryable` 标记，不读取也不保存 AI 服务商的错误正文（可能回显请求内容）。
 
 | 情况 | 错误码 | retryable |
 | --- | --- | --- |
-| 401、403 | `DEEPSEEK_UNAUTHORIZED` | 否 |
-| 429 | `DEEPSEEK_RATE_LIMITED` | 是 |
-| 500、503、网络错误、`insufficient_system_resource` | `DEEPSEEK_UNAVAILABLE` | 是 |
-| 402 余额不足 | `DEEPSEEK_UNAVAILABLE` | 否 |
-| 400、422（本地请求构造问题） | `INTERNAL` | 否 |
-| 超时 | `DEEPSEEK_TIMEOUT` | 是 |
-| 响应不是 JSON、结构不符、空 content、`finish_reason` 不是 `stop` | `DEEPSEEK_INVALID_RESPONSE` | 否 |
+| 401、403 | `AI_UNAUTHORIZED` | 否 |
+| 429 | `AI_RATE_LIMITED` | 是 |
+| 500、503、网络错误、`insufficient_system_resource` | `AI_UNAVAILABLE` | 是 |
+| 402 余额不足 | `AI_PAYMENT_REQUIRED` | 否 |
+| 400、404、422（模型或请求配置不符） | `AI_REQUEST_REJECTED` | 否 |
+| 服务商不存在或端点配置无效 | `AI_PROVIDER_NOT_CONFIGURED` | 否 |
+| 超时 | `AI_TIMEOUT` | 是 |
+| 响应不是 JSON、结构不符、空 content、`finish_reason` 不是 `stop` | `AI_INVALID_RESPONSE` | 否 |
 | 调用方中止（删除、退出） | `INTERRUPTED` | 否 |
 
-`retryable` 供 #19 的有界重试使用；当前请求层不自动重试。
+`retryable` 供有界重试策略使用；当前请求层不自动重试。用户恢复动作由共享 `errorRecovery` 分类决定：认证、配置、额度、响应格式问题先检查设置；限流、超时和暂时不可用允许重试。生成和重新生成始终先确认发送。详见 [错误处理](error-handling.md)。
 
 ## Prompt 与校验
 
 - `buildNoteMessages(segments, context)` 返回 system + user 两条消息。转写逐行写成 `[startMs] text`。
 - `owner`/`dueDate` 只有原文明确出现时填写，否则为 `unspecified`。
-- `parseNoteResponse(content)` 拒绝以下输出，统一抛出 `DEEPSEEK_INVALID_RESPONSE`：无效 JSON、代码块包裹、截断、字段缺失或多余、类型错误、`null` 或空串、负数或小数时间戳、空 `summary`。`Unspecified` 等大小写或空白变体统一成 `unspecified`。
+- `parseNoteResponse(content)` 拒绝以下输出，统一抛出 `AI_INVALID_RESPONSE`：无效 JSON、代码块包裹、截断、字段缺失或多余、类型错误、`null` 或空串、负数或小数时间戳、空 `summary`。`Unspecified` 等大小写或空白变体统一成 `unspecified`。
 - 转写、关键词和中间纪要都作为数据放在标签内，并说明其中的内容不是指令；数据中的 `<`、`>` 不能闭合标签。
 
 schema 只校验结构，不核验事实。内容是否忠于转写，由用户回看转写和编辑确认。

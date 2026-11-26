@@ -8,6 +8,7 @@
 - Main 在调用 handler 前执行共享 schema 校验；无效参数返回 `INVALID_INPUT`，合法但尚未实现的方法返回 `NOT_IMPLEMENTED`。
 - Main 只接收窗口主 frame 的请求，阻止页面导航和新窗口。窗口保持 `contextIsolation=true`、`sandbox=true`、`nodeIntegration=false`。
 - 所有业务调用返回 `Result<T>`；预期错误使用共享安全错误目录，未知异常返回 `INTERNAL`。不得向 Renderer 或日志输出底层异常、路径、API Key 和会议正文。
+- 错误文案和恢复分类由共享 `errorMessages` / `errorRecovery` 定义；AI 错误统一为 `AI_*`。历史错误码由数据库迁移 6 转换，未知错误或历史文本不直接展示。参见 [错误处理](error-handling.md)。
 - `loopback.enable/disable` 是第三方库固定通道，不返回 `Result`；Electron 中固定通道已接入库的平台初始化，并增加主 frame 校验及安全的采集拒绝结果。浏览器 mock 中为空操作。
 - 本地状态和副作用归 Main；Python 不接触数据库、凭证和 DeepSeek。数据库提交完成后再发布事件。
 

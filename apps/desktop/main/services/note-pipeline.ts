@@ -1,5 +1,5 @@
 // 纪要生成流水线：长转写分段（#18）、中间纪要合并、关键词上下文和来源校验（#20）。
-// 不发请求、不写数据库：request 由 deepseek.ts 提供，结果由调用方一次提交。策略见 docs/note-generation.md。
+// 不发请求、不写数据库：request 由 ai-client.ts 提供，结果由调用方一次提交。策略见 docs/note-generation.md。
 import type { MeetingNote, TranscriptSegment } from '@shared/contracts';
 import { requireCondition } from '@shared/result';
 import {
