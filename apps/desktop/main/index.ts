@@ -4,6 +4,7 @@ import {
   dialog,
   nativeTheme,
   safeStorage,
+  shell,
   systemPreferences,
   type OpenDialogOptions,
   type SaveDialogOptions,
@@ -19,12 +20,17 @@ import { createSessionServices } from './services/session';
 import { resolveSidecarCommand } from './services/sidecar-command';
 import { initializeLoopback } from './platform/loopback';
 import { SafeLogger, safeLogPath } from './safe-logger';
+import { focusMainWindow } from './window-focus';
 import { CredentialStore } from './platform/credentials';
+import { permissionSettingsUrl } from './platform/permission-settings';
+import { createModelManager } from './services/model-manager';
 
 // The package probe does not initialize capture IPC or acquire media permissions.
 if (!process.argv.includes('--packaging-smoke')) initializeLoopback();
 let services: ReturnType<typeof createSessionServices> | undefined;
 let shuttingDown = false;
+// 启动流程走完、窗口已经建好之后，second-instance / activate 才能重建窗口
+let started = false;
 
 let window: BrowserWindow | undefined;
 let store: MeetingStore | undefined;
@@ -32,8 +38,13 @@ let logger: SafeLogger | undefined;
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 app.on('second-instance', () => {
-  if (window?.isMinimized()) window.restore();
-  window?.focus();
+  // macOS 关掉窗口后应用还在跑；再次唤起时窗口已经销毁，不能再去操作它
+  focusMainWindow({
+    ready: started,
+    quitting: shuttingDown,
+    window,
+    createWindow,
+  });
 });
 
 // 有可用窗口时作为模态对话框，否则独立弹出
@@ -67,7 +78,7 @@ function windowTheme(): { paper: string; ink: string } {
 
 function createWindow(): void {
   const theme = windowTheme();
-  window = new BrowserWindow({
+  const created = new BrowserWindow({
     width: 1280,
     height: 800,
     // 380px 是开会时贴在视频会议旁的监看窗口宽度；背景色与 Renderer 底色一致，避免启动白屏。
@@ -86,12 +97,10 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
-  nativeTheme.on('updated', () => {
-    const next = windowTheme();
-    window?.setBackgroundColor(next.paper);
-    if (process.platform !== 'darwin') {
-      window?.setTitleBarOverlay({ color: next.paper, symbolColor: next.ink, height: 48 });
-    }
+  window = created;
+  // 窗口销毁后不要再持有它：关窗后主题变化、二次唤醒都会走到这里
+  created.on('closed', () => {
+    if (window === created) window = undefined;
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -133,8 +142,21 @@ void app
         }
       }
     };
+    const modelSources = process.env.TURNNOTE_MODEL_SOURCES?.split(',')
+      .map((source) => source.trim())
+      .filter(Boolean);
+    const models = createModelManager({
+      modelsDirectory: join(app.getPath('userData'), 'models'),
+      getModelName: () => store!.getSettings().transcriptionModel,
+      emit: (status) => publish(eventChannels.modelStatus, status),
+      // fake sidecar 不加载模型，不需要下载
+      required: process.env.TURNNOTE_ASR_FAKE !== '1',
+      sources: modelSources?.length ? modelSources : undefined,
+      logger,
+    });
     services = createSessionServices(store, {
       audioDirectory,
+      models,
       modelsDirectory: join(app.getPath('userData'), 'models'),
       exports: {
         chooseSavePath: async (defaultFileName) => {
@@ -145,6 +167,12 @@ void app
           });
           return result.canceled || !result.filePath ? null : result.filePath;
         },
+      },
+      openPermissionSettings: async (target) => {
+        const url = permissionSettingsUrl(process.platform, target);
+        if (!url) return false;
+        await shell.openExternal(url);
+        return true;
       },
       importAudio: {
         chooseFile: async () => {
@@ -183,6 +211,8 @@ void app
       }),
     });
     await services.recover();
+    // 模型缺失时在后台自动下载，不阻塞窗口；进度通过 events:model-status 推送
+    models.ensure();
     // 清理上次未完成的删除；失败时保留墓碑，下一次启动继续。
     for (const meeting of store.getDeleted()) await services.handlers.meetings!.delete!(meeting.id);
     registerIpc(
@@ -199,7 +229,16 @@ void app
       },
       logger,
     );
+    // 主题变化只监听一次；窗口重建后仍然作用在当前的 window 上
+    nativeTheme.on('updated', () => {
+      const next = windowTheme();
+      window?.setBackgroundColor(next.paper);
+      if (process.platform !== 'darwin') {
+        window?.setTitleBarOverlay({ color: next.paper, symbolColor: next.ink, height: 48 });
+      }
+    });
     createWindow();
+    started = true;
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

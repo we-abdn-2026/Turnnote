@@ -26,6 +26,11 @@ const PATHS = {
   sidebar: 'M2.5 3h11v10h-11zM6 3v10',
   transcript: 'M2.5 3h11v10h-11zM10 3v10M4.5 6h3M4.5 8.5h3',
   chevronRight: 'M6 3.5 10.5 8 6 12.5',
+  sparkles:
+    'M8 2.5l1.3 3.7L13 7.5l-3.7 1.3L8 12.5 6.7 8.8 3 7.5l3.7-1.3L8 2.5ZM12.5 10.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5Z',
+  tag: 'M2.5 2.5h5l6 6-5 5-6-6v-5ZM5 5h.01',
+  help: 'M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12ZM6 6.2a2 2 0 0 1 3.9.6c0 1.2-1.9 1.4-1.9 2.7M8 12v.01',
+  list: 'M3 4h10M3 8h10M3 12h6',
 } as const;
 
 export type IconName = keyof typeof PATHS;

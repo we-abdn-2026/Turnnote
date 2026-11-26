@@ -11,7 +11,8 @@ export type LogEvent =
   | 'recording_interrupt_failed'
   | 'request_failed'
   | 'transcription_failed'
-  | 'audio_cleanup_failed';
+  | 'audio_cleanup_failed'
+  | 'model_download_failed';
 
 export interface IpcFailure {
   channel: string;
@@ -27,6 +28,7 @@ const EVENTS = new Set<LogEvent>([
   'request_failed',
   'transcription_failed',
   'audio_cleanup_failed',
+  'model_download_failed',
 ]);
 const CODES = new Set<ErrorCode>(Object.keys(errorMessages) as ErrorCode[]);
 const OPERATIONS = new Set<string>(

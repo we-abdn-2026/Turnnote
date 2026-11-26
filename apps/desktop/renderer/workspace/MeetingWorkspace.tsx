@@ -2,9 +2,11 @@
 // 业务状态只来自 Main 的快照；provider 名称取自设置，不写死任何服务商。
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import type { MeetingDetail } from '@shared/contracts';
+import { formatTimecode } from '@shared/timecode';
 import { AudioDeviceSelector } from '../components/AudioDeviceSelector';
 import { Dialog } from '../ui/Dialog';
 import { describeError } from '../ui/errors';
+import { ErrorRecoveryAction } from '../ui/ErrorRecoveryAction';
 import { Icon } from '../ui/icons';
 import {
   STATUS_DOT,
@@ -28,6 +30,7 @@ import {
 import { NoteEditor } from './NoteEditor';
 import { NoteView } from './NoteView';
 import { ProcessingProgress } from './ProcessingProgress';
+import type { NoteService } from '../settings/provider-view';
 import { RecordingControls } from './RecordingControls';
 import { TranscriptLog, type Cue } from './TranscriptLog';
 
@@ -49,6 +52,8 @@ function statusText(state: SessionState): string {
   if (meeting.status === 'recording' && state.captureStopped) return '录音已结束，等待保存';
   if (state.cancelledKind === 'transcribing' && meeting.status === 'captured')
     return '转写已取消，录音已保存';
+  if (meeting.status === 'ready' && meeting.noteStale)
+    return '纪要待更新：转写里有纪要没有包含的新录音';
   const label = STATUS_LABELS[meeting.status];
   return meeting.status === 'failed' && meeting.lastError
     ? `${label}：${describeError(meeting.lastError)}`
@@ -59,10 +64,13 @@ interface WorkspaceProps {
   session: MeetingSession;
   state: SessionState;
   elapsedMs: number | null;
-  /** 当前纪要 provider 的展示名和模型，来自 settings.noteProvider / noteModel */
-  provider: { label: string; model: string };
+  /** 当前纪要服务的名称、模型和数据去向，来自 Main 的服务商目录 */
+  provider: NoteService;
   drawerOpen: boolean;
   onDrawer(open: boolean): void;
+  /** 空态里的新建动作：打开会议库并聚焦标题输入 */
+  onCreateMeeting(): void;
+  onOpenSettings(): void;
 }
 
 interface KeywordState extends KeywordDraft {
@@ -76,6 +84,8 @@ export function MeetingWorkspace({
   provider,
   drawerOpen,
   onDrawer,
+  onCreateMeeting,
+  onOpenSettings,
 }: WorkspaceProps): ReactElement {
   const { meeting } = state;
   const actions = availableActions(state);
@@ -111,6 +121,9 @@ export function MeetingWorkspace({
   };
   const keywordsDirty = !sameKeywords(keywordDraft.values, savedKeywords);
   const regenerate = note !== null;
+  // 这场会议的内容是否曾发给云端服务：看纪要实际由谁生成，而不是现在设置里选了谁
+  const sentElsewhere =
+    note?.generatedBy && !note.generatedBy.local ? note.generatedBy.label : null;
 
   // 确认绑定打开时的会议快照和操作序号；会议更新、关键词变化或其他操作开始后自动失效
   const promptOpen =
@@ -207,6 +220,21 @@ export function MeetingWorkspace({
         ? '重新生成会议纪要'
         : '生成会议纪要';
 
+  function retryGeneration(): void {
+    if (actions.generate && !keywordsDirty) {
+      setPrompt({ revision: state.revision, attempt: state.attempt });
+    }
+  }
+  const retryOperation =
+    state.failure?.action === 'generate' && actions.generate && !keywordsDirty
+      ? retryGeneration
+      : state.failure?.action === 'stop' && actions.stop
+        ? () => void session.stop()
+        : state.failure?.action === 'transcribe' && manage.transcribe
+          ? () => void session.retryTranscription()
+          : undefined;
+  const jobError = meeting?.status === 'failed' ? meeting.lastError : null;
+
   return (
     <section
       className="workspace"
@@ -220,6 +248,40 @@ export function MeetingWorkspace({
             <div className="workspace-error bulletin bulletin-warn" role="alert">
               <strong>操作失败</strong>
               <p>{state.error}</p>
+              {state.failure && (
+                <ErrorRecoveryAction
+                  key={`${meeting?.id}-${state.attempt}-${state.failure.code}`}
+                  code={state.failure.code}
+                  disabled={state.pending !== null}
+                  onRetry={retryOperation}
+                  onSettings={onOpenSettings}
+                />
+              )}
+            </div>
+          )}
+          {jobError && !state.error && (
+            <div className="workspace-error bulletin bulletin-warn" role="alert">
+              <strong>
+                {jobError.kind === 'generating'
+                  ? '纪要生成失败'
+                  : jobError.kind === 'transcribing'
+                    ? '转写失败'
+                    : '录音失败'}
+              </strong>
+              <p>{describeError(jobError)}</p>
+              <ErrorRecoveryAction
+                key={jobError.jobId}
+                code={jobError.code}
+                disabled={state.pending !== null}
+                onRetry={
+                  jobError.kind === 'generating' && actions.generate && !keywordsDirty
+                    ? retryGeneration
+                    : jobError.kind === 'transcribing' && manage.transcribe
+                      ? () => void session.retryTranscription()
+                      : undefined
+                }
+                onSettings={onOpenSettings}
+              />
             </div>
           )}
           {state.warning && (
@@ -235,7 +297,7 @@ export function MeetingWorkspace({
           </p>
         )}
 
-        {!meeting && <EmptyStage />}
+        {!meeting && <EmptyStage onCreate={onCreateMeeting} />}
 
         {meeting && (
           <article className="doc" key={meeting.id}>
@@ -290,7 +352,7 @@ export function MeetingWorkspace({
                     <button
                       type="button"
                       className="key key-icon key-quiet"
-                      title="重命名会议"
+                      data-tip="重命名会议"
                       disabled={!manage.rename}
                       onClick={() => {
                         setDraftTitle(meeting.title);
@@ -333,6 +395,20 @@ export function MeetingWorkspace({
               </div>
             ) : (
               <>
+                {inputVisible && (
+                  <div className="input-module">
+                    <AudioDeviceSelector locked={isRecording(state)} />
+                  </div>
+                )}
+
+                {meeting.status === 'recording' &&
+                  !note &&
+                  state.transcriptSegments.length === 0 && (
+                    <div className="recording-stage" aria-hidden="true">
+                      <span className="recording-stage-time">{formatTimecode(elapsedMs ?? 0)}</span>
+                    </div>
+                  )}
+
                 {meeting.status === 'generating' && <ProcessingProgress state={state} />}
 
                 {canShowGenerationAction(meeting) && !regenerate && (
@@ -414,9 +490,23 @@ export function MeetingWorkspace({
                 {note && (
                   <div className="note-bar">
                     <div className="note-meta">
-                      <span className={`note-source note-source-${note.source}`}>
-                        {note.source === 'generated' ? 'AI 生成' : '用户编辑'}
+                      <span
+                        className={`note-source note-source-${note.source}`}
+                        title={
+                          note.generatedBy
+                            ? `${note.generatedBy.label} · ${note.generatedBy.model}`
+                            : undefined
+                        }
+                      >
+                        {note.source === 'user'
+                          ? '用户编辑'
+                          : note.generatedBy
+                            ? `由 ${note.generatedBy.label} 生成`
+                            : 'AI 生成'}
                       </span>
+                      {note.generatedBy && (
+                        <span className="note-model">{note.generatedBy.model}</span>
+                      )}
                       <span className="numeric">版本 {note.version}</span>
                     </div>
                     <div className="note-actions">
@@ -436,12 +526,14 @@ export function MeetingWorkspace({
                         className="key key-quiet"
                         onClick={() => void session.exportMarkdown()}
                         disabled={!manage.export || editorOpen}
-                        title={editorOpen ? '保存或取消编辑后再导出' : '导出当前显示的纪要版本'}
+                        data-tip={editorOpen ? '保存或取消编辑后再导出' : '导出当前显示的纪要版本'}
+                        data-tip-align="end"
                       >
                         <Icon name="export" />
                         <span>{state.pending === 'export' ? '正在导出...' : '导出 Markdown'}</span>
                       </button>
-                      {canShowGenerationAction(meeting) && (
+                      {/* 纪要过期时，重新生成放在下方的提示框里作为主操作，这里不再重复 */}
+                      {canShowGenerationAction(meeting) && !meeting.noteStale && (
                         <button
                           type="button"
                           className="key key-quiet"
@@ -449,13 +541,35 @@ export function MeetingWorkspace({
                             setPrompt({ revision: state.revision, attempt: state.attempt })
                           }
                           disabled={!actions.generate || keywordsDirty}
-                          title="用当前转写与关注词新增一个纪要版本"
+                          data-tip="用当前转写与关注词新增一个纪要版本"
+                          data-tip-align="end"
                         >
                           <Icon name="send" />
                           <span>{generationLabel}</span>
                         </button>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {note && meeting.noteStale && !editorOpen && (
+                  <div className="note-stale callout callout-warn" role="status">
+                    <p>
+                      这份纪要写成之后，又追加了新的录音，下面的内容不包含新增部分。重新生成可以把新内容纳入纪要，当前版本会保留。
+                    </p>
+                    {canShowGenerationAction(meeting) && (
+                      <button
+                        type="button"
+                        className="key key-primary"
+                        onClick={() =>
+                          setPrompt({ revision: state.revision, attempt: state.attempt })
+                        }
+                        disabled={!actions.generate || keywordsDirty}
+                      >
+                        <Icon name="send" />
+                        {generationLabel}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -519,11 +633,13 @@ export function MeetingWorkspace({
                     />
                     <span className="switch-track" aria-hidden="true" />
                     <span>转写后保留音频</span>
+                    <span className="switch-state" aria-hidden="true" />
                   </label>
                   <button
                     type="button"
                     className="key key-icon key-quiet key-danger"
-                    title={meeting.status === 'recording' ? '停止录音后才能删除' : '删除会议'}
+                    data-tip={meeting.status === 'recording' ? '停止录音后才能删除' : '删除会议'}
+                    data-tip-align="end"
                     disabled={!manage.delete}
                     onClick={() => setConfirmDelete(true)}
                   >
@@ -540,11 +656,15 @@ export function MeetingWorkspace({
                 titleId="generation-consent-title"
                 descriptionId="generation-consent-description"
                 title={
-                  regenerate
-                    ? `重新生成会议内容并发送给 ${provider.label}？`
-                    : `发送会议内容给 ${provider.label}？`
+                  provider.local
+                    ? regenerate
+                      ? `用 ${provider.label} 重新生成会议纪要？`
+                      : `用 ${provider.label} 生成会议纪要？`
+                    : regenerate
+                      ? `重新生成会议内容并发送给 ${provider.label}？`
+                      : `发送会议内容给 ${provider.label}？`
                 }
-                tone="consent"
+                tone={provider.local ? 'neutral' : 'consent'}
                 closeLabel="关闭发送确认"
                 onClose={() => setPrompt(null)}
                 actions={
@@ -569,12 +689,19 @@ export function MeetingWorkspace({
                     {provider.label}
                     {provider.model ? ` · ${provider.model}` : ''}
                   </li>
+                  {provider.destination && (
+                    <li>
+                      {provider.local ? provider.destination : `发往 ${provider.destination}`}
+                    </li>
+                  )}
                   <li>{state.transcriptSegments.length} 个转写片段</li>
                   {savedKeywords.length > 0 && <li>{savedKeywords.length} 个关键词</li>}
                   <li className="consent-local">不含音频</li>
                 </ul>
                 <p>
-                  {`将向 ${provider.label}${provider.model ? `（${provider.model}）` : ''}发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。`}
+                  {provider.local
+                    ? `将使用本机的 ${provider.label}${provider.model ? `（${provider.model}）` : ''}处理本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。请求只发往这台电脑，数据不会离开本机。`
+                    : `将向 ${provider.label}${provider.destination ? `（${provider.destination}）` : ''}${provider.model ? `的 ${provider.model} 模型` : ''}发送本次会议已保存的转写文本，以及生成纪要所需的必要上下文，例如会议标题和关键词。原始音频不会发送。`}
                 </p>
                 {regenerate && note && (
                   <p>{`当前纪要版本 ${note.version} 会保留；重新生成成功后新增版本，失败时不会删除现有纪要。`}</p>
@@ -610,20 +737,18 @@ export function MeetingWorkspace({
                 }
               >
                 <p>「{meeting.title}」的转写、纪要和本机保留的音频将被删除，且无法恢复。</p>
-                <p>已发送给 {provider.label} 的转写文本不会因为本机删除而被删除。</p>
+                {sentElsewhere && (
+                  <p>已发送给 {sentElsewhere} 的转写文本不会因为本机删除而被删除。</p>
+                )}
               </Dialog>
             )}
           </article>
         )}
-
-        <div className="input-module" hidden={!inputVisible}>
-          <AudioDeviceSelector locked={isRecording(state)} />
-        </div>
-
-        {meeting && !gone && (
-          <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
-        )}
       </div>
+
+      {meeting && !gone && (
+        <RecordingControls session={session} state={state} elapsedMs={elapsedMs} />
+      )}
 
       {meeting && !gone && (
         <aside id="transcript-drawer" className="drawer" aria-label="转写" inert={!drawerOpen}>

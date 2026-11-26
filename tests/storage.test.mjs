@@ -80,10 +80,10 @@ function ready(store, audioPath) {
   return id;
 }
 
-test('new database has six tables, migration version, foreign keys and lifecycle indexes', (t) => {
+test('new database has seven tables, migration version, foreign keys and lifecycle indexes', (t) => {
   const { store, databasePath, audioPath } = fixture(t);
   const db = using(t, new Database(databasePath));
-  assert.equal(db.pragma('user_version', { simple: true }), 2);
+  assert.equal(db.pragma('user_version', { simple: true }), migrations.length);
   assert.deepEqual(
     db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
@@ -92,6 +92,7 @@ test('new database has six tables, migration version, foreign keys and lifecycle
     [
       'app_settings',
       'audio_assets',
+      'custom_providers',
       'meetings',
       'note_versions',
       'processing_jobs',
@@ -165,6 +166,10 @@ test('version 1 upgrades without losing meetings, audio, transcripts, note versi
     'transcriptionLanguage',
     JSON.stringify('zh'),
   );
+  db.prepare('INSERT INTO app_settings VALUES(?,?)').run(
+    'deepseekModel',
+    JSON.stringify('deepseek-chat'),
+  );
   db.close();
   store = new MeetingStore(path, join(directory, 'audio'));
   assert.equal(store.get('old-meeting').status, 'ready');
@@ -173,6 +178,12 @@ test('version 1 upgrades without losing meetings, audio, transcripts, note versi
   assert.deepEqual(store.getLatestNote('old-meeting').note, NOTE);
   assert.equal(store.getJob('old-job').status, 'completed');
   assert.equal(store.getSettings().transcriptionLanguage, 'zh');
+  // v3: deepseekModel → noteModel，并补默认 noteProvider
+  assert.equal(store.getSettings().noteModel, 'deepseek-chat');
+  assert.equal(store.getSettings().noteProvider, 'deepseek');
+  store.updateSettings({ noteProvider: 'openai', noteModel: 'gpt-4o-mini' });
+  assert.equal(store.getSettings().noteProvider, 'openai');
+  assert.equal(store.getSettings().noteModel, 'gpt-4o-mini');
 });
 
 test('failed multi-step migration rolls back schema, data and user_version; future versions are rejected', (t) => {
@@ -189,7 +200,10 @@ test('failed multi-step migration rolls back schema, data and user_version; futu
   assert.throws(() =>
     migrate(db, [
       ...migrations,
-      { version: 3, sql: 'CREATE TABLE should_rollback(value TEXT); INVALID SQL;' },
+      {
+        version: migrations.length + 1,
+        sql: 'CREATE TABLE should_rollback(value TEXT); INVALID SQL;',
+      },
     ]),
   );
   assert.equal(db.pragma('user_version', { simple: true }), 1);
@@ -347,7 +361,7 @@ test('cancel/retry invalidates old job results and progress identity, and retrie
   const retry = store.beginTranscription(id);
   store.completeTranscription(retry.id, SEGMENTS);
   const generation = store.beginGeneration(id);
-  store.failJob(generation.id, 'DEEPSEEK_TIMEOUT');
+  store.failJob(generation.id, 'AI_TIMEOUT');
   assert.throws(() => store.beginTranscription(id), errorCode('INVALID_STATE'));
   assert.deepEqual(store.getSegments(id), SEGMENTS);
   assert.equal(store.beginGeneration(id).attempt, 2);
@@ -389,8 +403,8 @@ test('note generation rollback, failure and retry preserve all previous user ver
   assert.equal(store.getJob(job.id).status, 'running');
   assert.equal(store.get(id).status, 'generating');
   db.exec('DROP TRIGGER reject_note');
-  store.failJob(job.id, 'DEEPSEEK_INVALID_RESPONSE');
-  assert.equal(store.get(id).lastError.code, 'DEEPSEEK_INVALID_RESPONSE');
+  store.failJob(job.id, 'AI_INVALID_RESPONSE');
+  assert.equal(store.get(id).lastError.code, 'AI_INVALID_RESPONSE');
   assert.equal(store.getLatestNote(id).note.summary, 'Reviewed');
   const retry = store.beginGeneration(id);
   store.completeGeneration(retry.id, NOTE);

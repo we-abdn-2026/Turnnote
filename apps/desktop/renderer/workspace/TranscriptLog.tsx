@@ -56,7 +56,13 @@ export function TranscriptLog({
     <section className="transcript log" aria-labelledby="transcript-heading">
       <div className="transcript-heading drawer-head">
         <h3 id="transcript-heading">转写</h3>
-        <button type="button" className="key key-icon key-quiet" title="收起转写" onClick={onClose}>
+        <button
+          type="button"
+          className="key key-icon key-quiet"
+          data-tip="收起转写"
+          data-tip-align="end"
+          onClick={onClose}
+        >
           <Icon name="close" />
           <span className="visually-hidden">收起转写</span>
         </button>

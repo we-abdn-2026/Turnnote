@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { startServer } from './support/deepseek-mock-server.mjs';
 import {
-  DeepSeekError,
+  AiRequestError,
   MAX_OUTPUT_TOKENS,
   NOTE_RESPONSE_FORMAT,
   buildNoteMessages,
@@ -19,7 +19,7 @@ const request = (overrides = {}) => ({
   ...overrides,
 });
 const deepseekError = (code, retryable) => (error) =>
-  error instanceof DeepSeekError &&
+  error instanceof AiRequestError &&
   error.code === code &&
   error.retryable === retryable &&
   !error.message.includes(API_KEY) &&
@@ -73,30 +73,32 @@ test('mock rate limit, invalid JSON and timeout map to stable codes', async (t) 
   const { baseUrl, withMode } = await mock(t);
   await assert.rejects(
     requestChatCompletion(request(), { baseUrl, fetch: withMode('rate-limit') }),
-    deepseekError('DEEPSEEK_RATE_LIMITED', true),
+    deepseekError('AI_RATE_LIMITED', true),
   );
   await assert.rejects(
     requestChatCompletion(request(), { baseUrl, fetch: withMode('invalid-json') }),
-    deepseekError('DEEPSEEK_INVALID_RESPONSE', false),
+    deepseekError('AI_INVALID_RESPONSE', false),
   );
   const started = Date.now();
   await assert.rejects(
     requestChatCompletion(request(), { baseUrl, fetch: withMode('timeout'), timeoutMs: 100 }),
-    deepseekError('DEEPSEEK_TIMEOUT', true),
+    deepseekError('AI_TIMEOUT', true),
   );
   assert.ok(Date.now() - started < 5_000);
 });
 
 test('HTTP status codes map to stable codes without reading the error body', async () => {
   const cases = [
-    [401, 'DEEPSEEK_UNAUTHORIZED', false],
-    [403, 'DEEPSEEK_UNAUTHORIZED', false],
-    [402, 'DEEPSEEK_UNAVAILABLE', false],
-    [400, 'INTERNAL', false],
-    [422, 'INTERNAL', false],
-    [429, 'DEEPSEEK_RATE_LIMITED', true],
-    [500, 'DEEPSEEK_UNAVAILABLE', true],
-    [503, 'DEEPSEEK_UNAVAILABLE', true],
+    [401, 'AI_UNAUTHORIZED', false],
+    [403, 'AI_UNAUTHORIZED', false],
+    [402, 'AI_PAYMENT_REQUIRED', false],
+    // 请求被拒绝（模型名或网址填错）：用户能自己修，不再落成意外错误
+    [400, 'AI_REQUEST_REJECTED', false],
+    [404, 'AI_REQUEST_REJECTED', false],
+    [422, 'AI_REQUEST_REJECTED', false],
+    [429, 'AI_RATE_LIMITED', true],
+    [500, 'AI_UNAVAILABLE', true],
+    [503, 'AI_UNAVAILABLE', true],
   ];
   for (const [status, code, retryable] of cases) {
     const fetchStub = async () =>
@@ -123,14 +125,14 @@ test('truncated, empty, filtered and malformed completions are invalid responses
   for (const response of cases) {
     await assert.rejects(
       requestChatCompletion(request(), { fetch: async () => response }),
-      deepseekError('DEEPSEEK_INVALID_RESPONSE', false),
+      deepseekError('AI_INVALID_RESPONSE', false),
     );
   }
   await assert.rejects(
     requestChatCompletion(request(), {
       fetch: async () => completion('{}', 'insufficient_system_resource'),
     }),
-    deepseekError('DEEPSEEK_UNAVAILABLE', true),
+    deepseekError('AI_UNAVAILABLE', true),
   );
 });
 
@@ -141,7 +143,7 @@ test('network failure is retryable; caller abort is INTERRUPTED, before or durin
         throw new TypeError(`fetch failed for ${API_KEY}`);
       },
     }),
-    deepseekError('DEEPSEEK_UNAVAILABLE', true),
+    deepseekError('AI_UNAVAILABLE', true),
   );
 
   let called = false;

@@ -12,13 +12,18 @@ export function createAudioRetention(
   audioDirectory: string,
   logger?: SafeLogger,
 ) {
-  /** 清理可清理的音频；返回是否移除了引用。文件系统失败时抛出 WRITE_FAILED，引用保持不变。 */
+  /**
+   * 清理可清理的音频（会议已转写的各段）；返回是否移除了引用。
+   * 逐段「删文件 → 清引用」：中途失败时已清理的保持清理，剩下的引用保持不变，下次继续。
+   * 文件系统失败时抛出 WRITE_FAILED。
+   */
   function release(id: string): boolean {
-    const audio = store.getReleasableAudio(id);
-    if (!audio) return false;
-    removeManagedFile(audioDirectory, audio.filePath);
-    store.removeAudioReference(id, audio.id);
-    return true;
+    const assets = store.getReleasableAudio(id);
+    for (const asset of assets) {
+      removeManagedFile(audioDirectory, asset.filePath);
+      store.removeAudioReference(id, asset.id);
+    }
+    return assets.length > 0;
   }
 
   /** 失败只记录稳定错误码；转写结果已提交，清理失败不能反向改变会议状态。 */

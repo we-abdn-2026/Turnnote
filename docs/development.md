@@ -59,6 +59,8 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 `npm run lint` 和 `npm run format` 需要先激活 `.venv`。
 
+测试和 `dev:web` 会继承 shell 里的 `NODE_ENV`。如果环境已经导出 `NODE_ENV=production`，Vite 会加载 React 生产构建，`act`、StrictMode 双挂载等开发期断言会失败；这种情况下用 `NODE_ENV=development npm test` 和 `NODE_ENV=development npm run test:ui` 运行。
+
 测试中的 Python 解释器按顺序选择：环境变量 `TURNNOTE_PYTHON`、`.venv`、系统 `python3`。
 
 `TURNNOTE_ASR_FAKE=1 npm run dev` 使用不加载模型的真实 Python sidecar，录音停止后自动转写。Main 使用相同的 Python 选择顺序，Windows 系统命令为 python；安装包改用 resources/asr-worker/asr-worker[.exe]。`npm test -- tests/transcription-integration.test.mjs` 验证正式 Main 的 PCM/WAV/fake sidecar/SQLite 链路，不需要麦克风、API Key 或模型。

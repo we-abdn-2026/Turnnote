@@ -58,7 +58,14 @@ export function Dialog({
       // jsdom 等环境没有 showModal；仍保持可见和可操作
       dialog.setAttribute('open', '');
     }
-    dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    // 没有指定初始焦点时，把焦点放到对话框本身：读屏会播报标题，又不会让关闭按钮
+    // 一打开就套着焦点环。对话框没有 tabindex，这里补上并去掉轮廓。
+    const first = dialog.querySelector<HTMLElement>('[data-autofocus]');
+    if (first) first.focus();
+    else {
+      if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+      dialog.focus();
+    }
 
     // 原生 cancel 只在真实 Escape 按键时触发；窗口级监听同时覆盖合成事件和非模态回退
     const onKeyDown = (event: KeyboardEvent): void => {

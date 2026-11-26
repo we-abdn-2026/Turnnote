@@ -31,7 +31,7 @@ test('safe logger keeps codes and diagnostic categories without credential, path
   const { logger, path } = fixture(t);
   const secret = Object.values(PRIVATE).join(' | ');
   logger.error('main', 'startup_failed', 'INTERNAL', new Error(secret));
-  logger.error('deepseek', 'request_failed', 'DEEPSEEK_UNAUTHORIZED', new Error(secret));
+  logger.error('deepseek', 'request_failed', 'AI_UNAUTHORIZED', new Error(secret));
   logger.sidecarFailure(
     'SIDECAR_CRASHED',
     `[asr-worker] decode failed: InvalidDataError\n${secret}`,
@@ -67,7 +67,7 @@ test('safe logger keeps codes and diagnostic categories without credential, path
       {
         source: 'deepseek',
         event: 'request_failed',
-        code: 'DEEPSEEK_UNAUTHORIZED',
+        code: 'AI_UNAUTHORIZED',
         operation: undefined,
         exceptionType: 'Error',
         diagnosticStage: undefined,

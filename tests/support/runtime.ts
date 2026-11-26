@@ -13,6 +13,31 @@ export { createAudioRetention } from '../../apps/desktop/main/services/audio-ret
 export { removeManagedFile } from '../../apps/desktop/main/storage/managed-file';
 export { createExportHandlers } from '../../apps/desktop/main/services/export';
 export {
+  BUILTIN_PROVIDERS,
+  DEEPSEEK_PROFILE,
+  DEFAULT_PROVIDER,
+  MAX_CUSTOM_PROVIDERS,
+  createProviderCatalog,
+  profileFor,
+} from '../../apps/desktop/main/services/ai-providers';
+export { createProviderHandlers } from '../../apps/desktop/main/services/providers';
+export {
+  BUILTIN_PROVIDER_PRESETS,
+  PROVIDER_URL_PROBLEMS,
+  parseProviderUrl,
+} from '../../packages/contracts/src/providers';
+export {
+  createModelHandlers,
+  createModelManager,
+} from '../../apps/desktop/main/services/model-manager';
+export {
+  DEFAULT_MODEL_SOURCES,
+  MODEL_MANIFEST,
+  SIDECAR_MODEL_FILES,
+  modelSizeBytes,
+} from '../../apps/desktop/main/services/model-manifest';
+export { deriveModelBanner, formatBytes } from '../../apps/desktop/renderer/shell/model-status';
+export {
   markdownFileName,
   renderMeetingMarkdown,
 } from '../../apps/desktop/main/services/markdown-export';
@@ -61,7 +86,17 @@ export {
   settingsPatchSchema,
   transcriptSegmentsSchema,
 } from '../../packages/contracts/src/schemas';
-export { errorMessages, ok, fail, TurnnoteError } from '../../packages/contracts/src/result';
+export {
+  errorMessages,
+  errorRecovery,
+  errorInfo,
+  isErrorCode,
+  ok,
+  fail,
+  TurnnoteError,
+} from '../../packages/contracts/src/result';
+export { ErrorRecoveryAction } from '../../apps/desktop/renderer/ui/ErrorRecoveryAction';
+export { MeetingWorkspace } from '../../apps/desktop/renderer/workspace/MeetingWorkspace';
 
 export { createAudioWriter, repairWavHeader } from '../../apps/desktop/main/platform/audio-writer';
 export { createRecordingHandlers } from '../../apps/desktop/main/platform/recording';
@@ -85,10 +120,10 @@ export {
 } from '../../apps/desktop/main/services/note-prompt';
 
 export {
-  DeepSeekError,
+  AiRequestError,
   MAX_OUTPUT_TOKENS,
   requestChatCompletion,
-} from '../../apps/desktop/main/services/deepseek';
+} from '../../apps/desktop/main/services/ai-client';
 export {
   CHUNK_CHAR_BUDGET,
   MAX_CHUNKS,
@@ -101,3 +136,13 @@ export {
   buildMergeMessages,
   MERGE_SYSTEM_PROMPT,
 } from '../../apps/desktop/main/services/note-prompt';
+
+export { canAddRecording } from '../../packages/contracts/src/lifecycle';
+export {
+  SYSTEM_AUDIO_NEEDS_PERMISSION,
+  SYSTEM_AUDIO_UNAVAILABLE,
+  systemAudioBlocked,
+  systemAudioWarning,
+} from '../../apps/desktop/renderer/audio/permissions';
+export { permissionSettingsUrl } from '../../apps/desktop/main/platform/permission-settings';
+export { focusMainWindow } from '../../apps/desktop/main/window-focus';

@@ -22,8 +22,8 @@ export function createStorageHandlers(
     const meeting = store.markDeleted(id);
     emit(meeting);
     await releaseMeeting?.(id);
-    const audio = store.getAudio(id);
-    if (audio) {
+    // 每段音频都要删除；任何一段失败都保留墓碑，下次启动继续（已删的文件视为成功）
+    for (const audio of store.getAudios(id)) {
       try {
         removeManagedFile(audioDirectory, audio.filePath);
       } catch {

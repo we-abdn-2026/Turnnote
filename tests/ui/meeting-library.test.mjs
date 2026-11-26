@@ -380,32 +380,91 @@ test('Cmd/Ctrl+Enter confirms the send dialog but never a destructive one', asyn
 test('sidebar width: keyboard resize, persisted, double-click resets', async () => {
   const page = await browser.open();
   const width = `Math.round(document.querySelector('.library').getBoundingClientRect().width)`;
-  assert.equal(await page.eval(width), 264);
+  assert.equal(await page.eval(width), 280);
   await page.eval(`document.querySelector('.sidebar-resizer').focus()`);
   for (let i = 0; i < 3; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 312`);
-  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '312');
+  await page.waitFor(`${width} === 328`);
+  assert.equal(await page.eval(`localStorage.getItem('turnnote.sidebarWidth')`), '328');
   assert.equal(
     await page.eval(`document.querySelector('.sidebar-resizer').getAttribute('aria-valuenow')`),
-    '312',
+    '328',
   );
   for (let i = 0; i < 20; i += 1) await press(page, 'ArrowRight', 'ArrowRight', 39);
-  await page.waitFor(`${width} === 420`);
+  await page.waitFor(`${width} === 360`);
   await page.eval(
     `document.querySelector('.sidebar-resizer').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`,
   );
-  await page.waitFor(`${width} === 264`);
+  await page.waitFor(`${width} === 280`);
   assert.deepEqual(page.errors, []);
 });
 
-test('dark colour scheme swaps the paper tokens without changing the DOM', async () => {
+test('stays light under a dark system preference', async () => {
   const page = await browser.open();
   const paper = `getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()`;
   const light = await page.eval(paper);
   await page.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-color-scheme', value: 'dark' }],
   });
-  await page.waitFor(`${paper} !== ${JSON.stringify(light)}`);
   assert.equal(await page.eval(`matchMedia('(prefers-color-scheme: dark)').matches`), true);
+  // Soft desk 是浅色世界：系统深色不切换 token，界面保持同一套淡蓝纸面
+  assert.equal(await page.eval(paper), light);
+  assert.equal(await page.eval(`getComputedStyle(document.documentElement).colorScheme`), 'light');
+  assert.deepEqual(page.errors, []);
+});
+
+test('every interactive control has a visible affordance; tooltips are custom, not native title', async () => {
+  const page = await browser.open();
+  await openSeeded(page);
+  await page.eval(`__ui.click('定位到转写 00:00:05')`);
+  await page.waitFor(`document.querySelector('.workspace').dataset.drawer === 'open'`);
+  const bare = await page.eval(`(() => {
+    // 无框输入包在带边框的外层里；拖拽手柄和关键词 × 是有意的轻量控件
+    const allowed = ['field-bare', 'sidebar-resizer', 'chip-remove'];
+    const out = [];
+    for (const el of document.querySelectorAll('button, select, input, textarea')) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2 || el.matches('.visually-hidden, [type=checkbox]')) continue;
+      if (allowed.some((c) => el.classList.contains(c))) continue;
+      const cs = getComputedStyle(el);
+      const border = cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px';
+      const fill = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent';
+      if (!border && !fill && cs.boxShadow === 'none')
+        out.push((el.getAttribute('aria-label') || el.textContent || el.id).trim().slice(0, 24));
+    }
+    return out;
+  })()`);
+  assert.deepEqual(bare, [], `controls without a visible affordance: ${bare.join(', ')}`);
+
+  // 图标按钮用 data-tip；原生 title 只允许出现在非交互的说明文字上
+  assert.deepEqual(
+    await page.eval(
+      `[...document.querySelectorAll('button[title]:not(.reel)')].map((b) => b.title)`,
+    ),
+    [],
+  );
+  assert.ok(await page.eval(`document.querySelectorAll('button[data-tip]').length >= 4`));
+  assert.deepEqual(page.errors, []);
+});
+
+test('both switches are styled and show an explicit on/off word', async () => {
+  const page = await browser.open();
+  await page.eval(`__ui.type('#meeting-title', 'Switches')`);
+  await page.eval(`__ui.click('新建会议')`);
+  await page.waitFor(`__ui.status() === '已创建，未开始录音'`);
+  assert.equal(await page.eval(`document.querySelectorAll('.switch .switch-track').length`), 2);
+  assert.equal(await page.eval(`document.querySelectorAll('.switch-lamp').length`), 0);
+  const words = await page.eval(
+    `[...document.querySelectorAll('.switch-state')].map((e) => getComputedStyle(e, '::after').content)`,
+  );
+  assert.equal(words.length, 2);
+  for (const word of words) assert.match(word, /["']?[开关]["']?/);
+  // 切换一个开关后，状态词同步翻转
+  const before = await page.eval(
+    `getComputedStyle(document.querySelector('.doc-foot .switch-state'), '::after').content`,
+  );
+  await page.eval(`document.querySelector('.doc-foot .switch input').click()`);
+  await page.waitFor(
+    `getComputedStyle(document.querySelector('.doc-foot .switch-state'), '::after').content !== ${JSON.stringify(before)}`,
+  );
   assert.deepEqual(page.errors, []);
 });

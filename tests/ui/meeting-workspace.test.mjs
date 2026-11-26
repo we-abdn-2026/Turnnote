@@ -263,6 +263,8 @@ test('workspace reports transcription cancellation and ignores its late progress
 test('updates and failures of other meetings do not change the workspace', async () => {
   const page = await browser.open();
   await createMeeting(page, 'Mine');
+  // 设备检测是异步的；等它落定再记录文本，避免把检测完成当成其他会议造成的变化
+  await page.waitFor(`!__ui.text().includes('正在检测音频设备...')`);
   const before = await page.eval('__ui.text()');
   await page.eval(`(async () => {
     const other = (await __ui.api.meetings.create('Other window')).value;
@@ -457,7 +459,7 @@ test('generation failure is safe and retry requires confirmation', async () => {
       type: 'result',
       once: true,
       error: {
-        code: 'DEEPSEEK_UNAVAILABLE',
+        code: 'AI_UNAVAILABLE',
         message: 'DeepSeek is currently unavailable.'
       }
     }
@@ -645,7 +647,7 @@ test('failed regeneration keeps the existing note and requires confirmation to r
       type: 'result',
       once: true,
       error: {
-        code: 'DEEPSEEK_UNAVAILABLE',
+        code: 'AI_UNAVAILABLE',
         message: 'DeepSeek is currently unavailable.'
       }
     }

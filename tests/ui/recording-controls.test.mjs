@@ -93,13 +93,20 @@ test('recording shows a persistent indicator and only stop; processing is never 
   for (const frame of processing) {
     assert.equal(frame.recording, null, frame.status);
     assert.equal(frame.processing, '录音已结束，正在处理', frame.status);
-    assert.deepEqual(frame.buttons, [], frame.status);
+    // 处理中不能停止，也不能再开一段：最多看到不可用的"继续录音"（并有说明）
+    assert.ok(
+      frame.buttons.every((label) => label.replace(/[()]/g, '') === '继续录音'),
+      `${frame.status}: ${frame.buttons}`,
+    );
+    // 正在转写时一定是不可用的（保存刚完成的瞬间可能还在等待 Main 的响应，不做限定）
+    if (frame.status === '正在转写') assert.deepEqual(frame.buttons, ['(继续录音)']);
   }
+  // 转写完成后可以继续录音
   assert.deepEqual(await page.eval(controls), {
     recording: null,
     processing: null,
     dialog: null,
-    buttons: [],
+    buttons: ['继续录音'],
   });
   assert.deepEqual(page.errors, []);
 });
@@ -118,7 +125,12 @@ test('generating is shown as processing, not recording', async () => {
   const v = await page.eval(controls);
   assert.equal(v.recording, null);
   assert.equal(v.processing, '录音已结束，正在处理');
-  assert.deepEqual(v.buttons, []);
+  // 生成纪要期间不能再录音，按钮不可用并说明原因
+  assert.deepEqual(v.buttons, ['(继续录音)']);
+  assert.equal(
+    await page.eval(`document.querySelector('.dock-hint')?.textContent`),
+    '正在生成纪要，完成后可以继续录音',
+  );
 });
 
 test('pending stop stays visible and disabled; duplicate clicks send one request', async () => {

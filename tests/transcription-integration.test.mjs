@@ -135,6 +135,7 @@ test('workspace capture retries a rolled-back save and launches exactly one auto
         f.progressListeners.add(listener);
         return () => f.progressListeners.delete(listener);
       },
+      onModelStatus: () => () => {},
     },
   };
   const session = createMeetingSession(api, createCaptureRecording(api));

@@ -77,7 +77,10 @@ macOS 权限状态用 `systemPreferences.getMediaAccessStatus('microphone' | 'sc
 
 ## 降级
 
-- 系统音频不可用：只录麦克风，界面提示
+- 系统音频不可用：只录麦克风，界面提示。提示会区分原因：
+  - **macOS 屏幕与系统音频录制权限未授权**（`recording.getPermissions().screen` 为 `denied` / `restricted` / `not-determined`）是最常见的原因。系统音频采集（`electron-audio-loopback`）先要用 `desktopCapturer.getSources` 取一个屏幕源，没有这项权限时它拿不到源，`getDisplayMedia` 以 `AbortError` 失败，浏览器不会给出更具体的原因。此时提示明说需要这项权限，设备面板在开关下面事先给出同样的提示，并提供“打开系统设置”（`recording.openPermissionSettings('screen')`）。授权后需要**重新打开应用**才生效。
+  - Windows 没有这项权限（Main 恒报 `granted`），Linux 无法查询（`unknown`）：这两种情况失败时只显示通用提示。
+  - 开发模式下被授权的是启动 Electron 的程序：`Electron.app`，或启动它的终端应用（取决于 macOS 把权限归给哪个进程）。打包后是 Turnnote 自己。
 - 采集完全不可用：导入本地音频文件（`.wav`、`.mp3`、`.m4a`），复制到应用管理目录后直接交给 sidecar，由 faster-whisper 解码
 
 ## 测试

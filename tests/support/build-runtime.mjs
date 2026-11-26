@@ -13,6 +13,8 @@ export async function buildRuntime() {
     format: 'esm',
     packages: 'external',
     loader: { '.sql': 'text' },
+    // Vite 在应用构建里静态替换它；测试构建里同样替换，组件按生产（非开发）模式渲染
+    define: { 'import.meta.env.DEV': 'false' },
     plugins: [
       {
         name: 'worklet-test-url',

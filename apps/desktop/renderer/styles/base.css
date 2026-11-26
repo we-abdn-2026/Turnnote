@@ -13,11 +13,11 @@ body {
   text-autospace: normal;
   line-break: strict;
   hanging-punctuation: first last;
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--t-ui);
-  line-height: 1.6;
+  line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -51,7 +51,7 @@ textarea {
 }
 
 ::selection {
-  background: var(--accent-wash);
+  background: oklch(0.86 0.09 255 / 0.55);
   color: var(--ink);
 }
 
@@ -71,7 +71,7 @@ textarea {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
+  scrollbar-color: oklch(0.8 0.04 255 / 0.6) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -80,9 +80,15 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
+  background: oklch(0.78 0.05 255 / 0.55);
   border: 3px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-pill);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.68 0.06 255 / 0.7);
+  border: 3px solid transparent;
   background-clip: padding-box;
 }
 
@@ -93,7 +99,10 @@ textarea {
 .numeric,
 .transcript-time,
 .cue time,
-.dock-time {
+.dock-time,
+.reel-time,
+.doc-meta time,
+.recording-stage-time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums slashed-zero;
   letter-spacing: 0;
@@ -115,10 +124,11 @@ time {
   border: 0;
 }
 
-.hint {
+/* 等待中的状态行：次要，不抢视觉重心 */
+.status-line {
   color: var(--ink-3);
   font-size: var(--t-small);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .icon {

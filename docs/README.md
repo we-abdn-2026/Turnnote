@@ -17,6 +17,8 @@
 - [Platform Audio 接口](platform-audio.md)：跨平台音频采集统一接口
 - [纪要生成](note-generation.md)：DeepSeek 请求、prompt 与输出校验、长转写分段合并、关键词引导和来源时间
 
+- [错误处理与恢复](error-handling.md)：共享安全文案、AI 错误码、恢复入口与历史任务迁移
+
 ## 工程操作
 
 - [工程说明](development.md)：目录结构、环境要求、命令和实现约束

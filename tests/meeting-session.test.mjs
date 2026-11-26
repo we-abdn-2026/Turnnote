@@ -517,7 +517,7 @@ test('job progress is scoped to the active meeting and job, monotonic, and clear
     lastError: {
       kind: 'generating',
       jobId: 'generation-current',
-      code: 'DEEPSEEK_UNAVAILABLE',
+      code: 'AI_UNAVAILABLE',
       message: 'DeepSeek is unavailable.',
     },
     updatedAt: new Date(generationAt + 1000).toISOString(),
@@ -572,7 +572,7 @@ test('supported recovery events move failed meetings to ready or deleted', async
   const api = createMockApi({
     seed: false,
     delayMs: 1,
-    generationError: 'DEEPSEEK_UNAVAILABLE',
+    generationError: 'AI_UNAVAILABLE',
   });
   const session = createMeetingSession(api, createMockRecording(api));
   const disconnect = session.connect();
@@ -840,7 +840,7 @@ test('generation failure keeps the transcript and can be retried', async () => {
           return {
             ok: false,
             error: {
-              code: 'DEEPSEEK_UNAVAILABLE',
+              code: 'AI_UNAVAILABLE',
               message: 'DeepSeek is currently unavailable.',
             },
           };
@@ -945,6 +945,7 @@ test('failed Result and rejection report a safe error and keep the last confirme
     meeting: created,
     pending: null,
     error: '当前版本尚未提供这个功能。',
+    failure: { code: 'NOT_IMPLEMENTED', action: 'start' },
     notice: null,
     attempt: 2,
     warning: null,
@@ -1027,13 +1028,21 @@ test('available actions follow meeting status; processing states are never start
   assert.equal(actions(meeting('recording', { activeJobId: 'j' })).create, false);
   for (const status of ['captured', 'transcribing', 'transcribed', 'generating', 'ready']) {
     const a = actions(meeting(status, { activeJobId: 'j' }));
-    assert.equal(a.start, false, status);
+    // 正在转写或生成时不能开始新的一段；已落定的会议可以继续录音（暂停后继续、追加）
+    assert.equal(a.start, ['captured', 'transcribed', 'ready'].includes(status), status);
     assert.equal(a.stop, false, status);
     assert.equal(a.discard, false, status);
     // 已不在录音中，可以新建会议
     assert.equal(a.create, true, status);
     assert.equal(a.keywords, ['captured', 'transcribed', 'ready'].includes(status), status);
   }
+  // 失败的录音必须先丢弃；转写或生成失败的会议可以继续录音
+  const failed = (kind) =>
+    meeting('failed', { lastError: { kind, jobId: 'j', code: 'INTERNAL', message: '' } });
+  assert.equal(actions(failed('recording')).start, false);
+  assert.equal(actions(failed('recording')).discard, true);
+  assert.equal(actions(failed('transcribing')).start, true);
+  assert.equal(actions(failed('generating')).start, true);
   assert.deepEqual(actions(meeting('created'), 'create'), {
     create: false,
     start: false,

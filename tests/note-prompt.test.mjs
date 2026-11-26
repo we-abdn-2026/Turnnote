@@ -21,8 +21,7 @@ const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url
 const { segments: SEGMENTS } = readJson('./fixtures/sample-transcript.json');
 const RESPONSES = readJson('./fixtures/note-responses.json');
 const invalidResponse = (error) =>
-  error.code === 'DEEPSEEK_INVALID_RESPONSE' &&
-  error.message === errorMessages.DEEPSEEK_INVALID_RESPONSE;
+  error.code === 'AI_INVALID_RESPONSE' && error.message === errorMessages.AI_INVALID_RESPONSE;
 
 test('prompt contract names every MeetingNote field, the unspecified rule and a valid example', () => {
   assert.deepEqual(NOTE_RESPONSE_FORMAT, { type: 'json_object' });
@@ -141,6 +140,6 @@ test('rejected model output never reaches note_versions and keeps the previous e
   const latest = store.getLatestNote(meeting.id);
   assert.equal(latest.version, 2);
   assert.equal(latest.note.summary, 'User edit');
-  assert.equal(store.get(meeting.id).lastError.code, 'DEEPSEEK_INVALID_RESPONSE');
+  assert.equal(store.get(meeting.id).lastError.code, 'AI_INVALID_RESPONSE');
   assert.deepEqual(store.getSegments(meeting.id), SEGMENTS);
 });

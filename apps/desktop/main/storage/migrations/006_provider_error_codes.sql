@@ -1,0 +1,11 @@
+-- 历史任务统一为服务商无关的错误码；不改任务状态、时间或会议内容。
+UPDATE processing_jobs SET error_code = CASE error_code
+  WHEN 'DEEPSEEK_UNAUTHORIZED' THEN 'AI_UNAUTHORIZED'
+  WHEN 'DEEPSEEK_RATE_LIMITED' THEN 'AI_RATE_LIMITED'
+  WHEN 'DEEPSEEK_TIMEOUT' THEN 'AI_TIMEOUT'
+  WHEN 'DEEPSEEK_INVALID_RESPONSE' THEN 'AI_INVALID_RESPONSE'
+  WHEN 'DEEPSEEK_UNAVAILABLE' THEN 'AI_UNAVAILABLE'
+  ELSE error_code END
+WHERE error_code LIKE 'DEEPSEEK_%';
+
+-- 读取时由当前共享安全目录生成文案，不向界面暴露历史 error_message。
