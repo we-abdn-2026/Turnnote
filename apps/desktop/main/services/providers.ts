@@ -4,7 +4,7 @@ import type { InvokeHandlers } from '@shared/invoke';
 import { ok, requireCondition, TurnnoteError } from '@shared/result';
 import type { CredentialStore } from '../platform/credentials';
 import type { ProviderCatalog } from './ai-providers';
-import { DeepSeekError, requestChatCompletion, type AiProviderOptions } from './deepseek';
+import { AiRequestError, requestChatCompletion, type AiProviderOptions } from './ai-client';
 
 const TEST_TIMEOUT_MS = 20_000;
 /** 只含固定的探测文字；JSON Output 模式要求提示里出现 "json" 字样 */
@@ -32,7 +32,7 @@ export function createProviderHandlers(
     },
     test: async (id, model) => {
       const service = catalog.get(id);
-      requireCondition(service, 'INVALID_INPUT');
+      requireCondition(service, 'AI_PROVIDER_NOT_CONFIGURED');
       const apiKey = credentials?.get(id)?.trim() || null;
       requireCondition(apiKey || !service.needsKey, 'API_KEY_MISSING');
       try {
@@ -47,10 +47,10 @@ export function createProviderHandlers(
         );
       } catch (error) {
         // 服务返回了 200 但内容不合要求：Key、网址、模型都是对的，探测目的已达到
-        if (error instanceof DeepSeekError && error.code === 'DEEPSEEK_INVALID_RESPONSE') {
+        if (error instanceof AiRequestError && error.code === 'AI_INVALID_RESPONSE') {
           return ok(null);
         }
-        throw error instanceof DeepSeekError ? new TurnnoteError(error.code) : error;
+        throw error instanceof AiRequestError ? new TurnnoteError(error.code) : error;
       }
       return ok(null);
     },

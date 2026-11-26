@@ -172,9 +172,9 @@ test('provider failures keep prior notes and segments; export failures leave rec
   );
 
   for (const [mode, code] of [
-    ['rate-limit', 'DEEPSEEK_RATE_LIMITED'],
-    ['invalid-json', 'DEEPSEEK_INVALID_RESPONSE'],
-    ['server-error', 'DEEPSEEK_UNAVAILABLE'],
+    ['rate-limit', 'AI_RATE_LIMITED'],
+    ['invalid-json', 'AI_INVALID_RESPONSE'],
+    ['server-error', 'AI_UNAVAILABLE'],
   ]) {
     env.setMode(mode);
     const started = value(await env.api.notes.generate(id));
@@ -210,7 +210,7 @@ test('provider failures keep prior notes and segments; export failures leave rec
   timed.setMode('timeout', 5_000);
   value(await timed.api.notes.generate(tid));
   await until(() => timed.status(tid) === 'failed', 'timeout→failed', 3_000);
-  assert.equal(timed.store.get(tid).lastError.code, 'DEEPSEEK_TIMEOUT');
+  assert.equal(timed.store.get(tid).lastError.code, 'AI_TIMEOUT');
   assert.equal(value(await timed.api.notes.getLatest(tid)).note.summary, 'Saved before timeout');
 
   // 导出取消 / 写入失败：先恢复到 ready，再写回用户编辑作为最新版本

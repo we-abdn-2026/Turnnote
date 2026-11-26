@@ -294,7 +294,7 @@ function handleInvalidJsonMode(res) {
 }
 
 /**
- * Server error mode: Return 503 so the client maps DEEPSEEK_UNAVAILABLE
+ * Server error mode: Return 503 so the client maps AI_UNAVAILABLE
  */
 function handleServerErrorMode(res) {
   res.writeHead(503, { 'Content-Type': 'application/json' });

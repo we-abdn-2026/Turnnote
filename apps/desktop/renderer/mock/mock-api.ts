@@ -337,6 +337,7 @@ export function createMockApi({
         return fail('INVALID_STATE');
       if (kind === 'transcribing' && model.state !== 'ready') return fail('MODEL_NOT_READY');
       const service = providerList().find((item) => item.id === settings.noteProvider);
+      if (kind === 'generating' && !service) return fail('AI_PROVIDER_NOT_CONFIGURED');
       if (kind === 'generating' && service && !service.ready) return fail('API_KEY_MISSING');
       const { job, meeting: snapshot } = begin(id, kind);
       void runJob(id, job);
@@ -557,18 +558,22 @@ export function createMockApi({
       },
       test: async (id) => {
         const service = providerList().find((item) => item.id === id);
-        if (!service) return fail('INVALID_INPUT');
+        if (!service) return fail('AI_PROVIDER_NOT_CONFIGURED');
         return service.ready ? ok(null) : fail('API_KEY_MISSING');
       },
     },
     settings: {
       get: async () => ok(structuredClone(settings)),
       update: async (patch: Partial<AppSettings>) => {
+        if (patch.noteProvider && !providerList().some((item) => item.id === patch.noteProvider))
+          return fail('AI_PROVIDER_NOT_CONFIGURED');
         settings = { ...settings, ...structuredClone(patch) };
         return ok(structuredClone(settings));
       },
       hasApiKey: async (provider: string) => ok(apiKeys.has(provider)),
       setApiKey: async (provider: string, apiKey: string) => {
+        if (!providerList().some((item) => item.id === provider))
+          return fail('AI_PROVIDER_NOT_CONFIGURED');
         apiKeys.set(provider, apiKey);
         return ok(null);
       },

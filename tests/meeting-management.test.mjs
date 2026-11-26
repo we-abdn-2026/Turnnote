@@ -55,7 +55,7 @@ test('every error code has Chinese copy and unknown errors fall back safely', ()
   assert.equal(describeError(null), '操作失败，请重试。');
   assert.equal(
     describeError({ code: 'FUTURE_CODE', message: 'Safe main text.' }),
-    'Safe main text.',
+    errorMessages.INTERNAL,
   );
 });
 

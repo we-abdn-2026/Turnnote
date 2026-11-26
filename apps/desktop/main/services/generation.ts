@@ -4,7 +4,7 @@ import type { ErrorCode, JobProgress, MeetingDetail } from '@shared/contracts';
 import { canStartJob } from '@shared/lifecycle';
 import { ok, requireCondition, TurnnoteError } from '@shared/result';
 import type { MeetingStore, ProcessingJob } from '../storage/database';
-import { DeepSeekError, requestChatCompletion, type AiProviderOptions } from './deepseek';
+import { AiRequestError, requestChatCompletion, type AiProviderOptions } from './ai-client';
 import { generateNote, type ChunkLimits } from './note-pipeline';
 import type { CredentialStore } from '../platform/credentials';
 import type { ProviderCatalog, ProviderDefinition } from './ai-providers';
@@ -36,7 +36,7 @@ export function createGenerationService(store: MeetingStore, options: Generation
     }
   }
   function failureCode(error: unknown): ErrorCode {
-    if (error instanceof DeepSeekError || error instanceof TurnnoteError) return error.code;
+    if (error instanceof AiRequestError || error instanceof TurnnoteError) return error.code;
     return 'INTERNAL';
   }
   async function run(
@@ -96,7 +96,7 @@ export function createGenerationService(store: MeetingStore, options: Generation
     const { noteProvider, noteModel } = store.getSettings();
     const service = options.catalog.get(noteProvider);
     // 当前服务商已不存在（例如被删除后设置被外部改坏）：让用户回设置检查，不落成意外错误
-    requireCondition(service, 'AI_REQUEST_REJECTED');
+    requireCondition(service, 'AI_PROVIDER_NOT_CONFIGURED');
     // 本机服务（Ollama）可以不需要 Key；需要 Key 的服务缺 Key 时在启动任务前拒绝
     const apiKey = options.credentials?.get(service.id)?.trim() || null;
     requireCondition(apiKey || !service.needsKey, 'API_KEY_MISSING');

@@ -159,7 +159,7 @@ test('mock deletion from a progress callback invalidates the run before any part
 });
 
 test('mock failure/retry obeys stage boundaries and preserves transcript and user note', async () => {
-  const api = createMockApi({ seed: false, delayMs: 1, generationError: 'DEEPSEEK_TIMEOUT' });
+  const api = createMockApi({ seed: false, delayMs: 1, generationError: 'AI_TIMEOUT' });
   const id = value(await api.meetings.importAudio()).id;
   value(await api.transcription.start(id));
   await until(api, id, 'transcribed');

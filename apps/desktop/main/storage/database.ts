@@ -16,7 +16,7 @@ import type {
   TranscriptSegment,
 } from '@shared/contracts';
 import { canCancelRecording, canEditNote, canStartJob } from '@shared/lifecycle';
-import { errorMessages, requireCondition } from '@shared/result';
+import { errorInfo, errorMessages, requireCondition } from '@shared/result';
 import {
   defaultSettings,
   errorCodeSchema,
@@ -187,8 +187,8 @@ export class MeetingStore {
           ? {
               kind: failed.kind,
               jobId: failed.id,
-              code: failed.error_code,
-              message: errorMessages[failed.error_code],
+              code: errorInfo(failed.error_code).code,
+              message: errorInfo(failed.error_code).message,
             }
           : null,
     };
@@ -374,8 +374,8 @@ export class MeetingStore {
           status: row.status,
           attempt: row.attempt,
           baseNoteVersion: row.base_note_version,
-          errorCode: row.error_code,
-          errorMessage: row.error_message,
+          errorCode: row.error_code ? errorInfo(row.error_code).code : null,
+          errorMessage: row.error_code ? errorInfo(row.error_code).message : null,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }

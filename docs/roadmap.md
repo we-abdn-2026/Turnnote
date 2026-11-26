@@ -49,7 +49,7 @@ Phase 3 结束后只修缺陷，不加功能。
 **验收**：录制 30 秒音频保存为 WAV，sidecar 返回带时间戳的转写片段，存入数据库。
 
 ### Phase 3 · W2
-- [ ] 实现 DeepSeek API 客户端（`services/deepseek.ts`）
+- [ ] 实现 DeepSeek API 客户端（`services/ai-client.ts`）
 - [ ] 实现 prompt 模板和结构化输出 schema 校验
 - [ ] 实现长文本分段和中间摘要合并
 - [ ] 实现 API 重试、限流、超时处理

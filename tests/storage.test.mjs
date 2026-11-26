@@ -361,7 +361,7 @@ test('cancel/retry invalidates old job results and progress identity, and retrie
   const retry = store.beginTranscription(id);
   store.completeTranscription(retry.id, SEGMENTS);
   const generation = store.beginGeneration(id);
-  store.failJob(generation.id, 'DEEPSEEK_TIMEOUT');
+  store.failJob(generation.id, 'AI_TIMEOUT');
   assert.throws(() => store.beginTranscription(id), errorCode('INVALID_STATE'));
   assert.deepEqual(store.getSegments(id), SEGMENTS);
   assert.equal(store.beginGeneration(id).attempt, 2);
@@ -403,8 +403,8 @@ test('note generation rollback, failure and retry preserve all previous user ver
   assert.equal(store.getJob(job.id).status, 'running');
   assert.equal(store.get(id).status, 'generating');
   db.exec('DROP TRIGGER reject_note');
-  store.failJob(job.id, 'DEEPSEEK_INVALID_RESPONSE');
-  assert.equal(store.get(id).lastError.code, 'DEEPSEEK_INVALID_RESPONSE');
+  store.failJob(job.id, 'AI_INVALID_RESPONSE');
+  assert.equal(store.get(id).lastError.code, 'AI_INVALID_RESPONSE');
   assert.equal(store.getLatestNote(id).note.summary, 'Reviewed');
   const retry = store.beginGeneration(id);
   store.completeGeneration(retry.id, NOTE);
